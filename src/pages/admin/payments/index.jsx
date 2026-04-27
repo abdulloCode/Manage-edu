@@ -274,7 +274,7 @@ export default function PaymentsPage() {
         // Bu ID bo'lishi kerak
       } else if (typeof typeId === 'string') {
         // Bu name bo'lishi mumkin, ID topish kerak
-        const typeObj = paymentTypes.find(t => t._id === typeId || t.id === typeId)
+        let typeObj = paymentTypes.find(t => t._id === typeId || t.id === typeId)
         if (!typeObj) {
           typeObj = paymentTypes.find(t => t.name === typeId)
         }
