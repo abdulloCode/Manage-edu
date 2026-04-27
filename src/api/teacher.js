@@ -13,6 +13,5 @@ export const updateTeacher     = (id, data)  => api.put(`/teachers/${id}`, data)
 
 export const deleteTeacher     = (id)        => api.delete(`/teachers/${id}`)
 
-// ── Bo'sh o'qituvchilarni topish 
 export const getAvailableTeachers = ({ days, time }) =>
   api.get('/teachers/hastime', { params: { days, time } })

@@ -1,155 +1,57 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import {
-  getAllTeachers,
-  createTeacher,
-  updateTeacher,
-  deleteTeacher,
-} from '../../../api/teacher'
+  useTeachers,
+  useTeacherForm,
+  saveTeacher,
+  removeTeacher,
+  getInitials,
+  getAvatarColor
+} from './hooks'
 
-const TeachersPage = () => {
-  // ─── State ─────────────────────────────────────────────────────
-  const [teachers, setTeachers] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [showModal, setShowModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [editingTeacher, setEditingTeacher] = useState(null)
-  const [teacherToDelete, setTeacherToDelete] = useState(null)
+export default function TeachersPage() {
+  const {
+    teachers,
+    loading,
+    search,
+    setSearch,
+    page,
+    setPage,
+    totalPages,
+    paginatedTeachers,
+    loadTeachers
+  } = useTeachers()
 
-  // Form data
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    password: '',
-    qualification: '',
-    salaryPercentage: '',
-    email: ''
-  })
+  const {
+    showModal,
+    showDeleteModal,
+    editingTeacher,
+    teacherToDelete,
+    formData,
+    setFormData,
+    openAddModal,
+    openEditModal,
+    openDeleteModal,
+    closeModals
+  } = useTeacherForm()
 
-  // Search
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const itemsPerPage = 10
-
-  // ─── Load Data ──────────────────────────────────────────────────
-  const loadTeachers = async () => {
-    setLoading(true)
-    try {
-      const res = await getAllTeachers({ search })
-      setTeachers(res.data.data || res.data || [])
-    } catch (err) {
-      console.error('O\'qituvchilar yuklanmadi:', err)
-    } finally {
-      setLoading(false)
+  const handleSaveTeacher = async () => {
+    const success = await saveTeacher(editingTeacher, formData, loadTeachers)
+    if (success) {
+      closeModals()
+      loadTeachers()
     }
-  }
-
-  useEffect(() => {
-    loadTeachers()
-  }, [search])
-
-  // ─── Handlers ───────────────────────────────────────────────────
-  const handleAddTeacher = () => {
-    setEditingTeacher(null)
-    setFormData({
-      name: '',
-      phone: '',
-      password: '',
-      qualification: '',
-      salaryPercentage: '',
-      email: ''
-    })
-    setShowModal(true)
-  }
-
-  const handleEditTeacher = (teacher) => {
-    setEditingTeacher(teacher)
-    setFormData({
-      name: teacher.name || '',
-      phone: teacher.phone || '',
-      password: '',
-      qualification: teacher.qualification || '',
-      salaryPercentage: teacher.salaryPercentage || '',
-      email: teacher.email || ''
-    })
-    setShowModal(true)
-  }
-
-  const handleDeleteTeacher = (teacher) => {
-    setTeacherToDelete(teacher)
-    setShowDeleteModal(true)
   }
 
   const confirmDelete = async () => {
     if (!teacherToDelete) return
-    try {
-      await deleteTeacher(teacherToDelete.id)
+    const success = await removeTeacher(teacherToDelete, loadTeachers)
+    if (success) {
       setShowDeleteModal(false)
       setTeacherToDelete(null)
       loadTeachers()
-    } catch (err) {
-      console.error('O\'chirish xatolik:', err)
     }
   }
 
-  const handleSaveTeacher = async () => {
-    try {
-      const dataToSave = {
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        qualification: formData.qualification,
-        salaryPercentage: formData.salaryPercentage,
-      }
-
-      if (editingTeacher) {
-        if (formData.password) {
-          dataToSave.password = formData.password
-        }
-        await updateTeacher(editingTeacher.id, dataToSave)
-      } else {
-        dataToSave.password = formData.password
-        await createTeacher(dataToSave)
-      }
-      setShowModal(false)
-      loadTeachers()
-    } catch (err) {
-      console.error('Saqlash xatolik:', err)
-      alert('Xatolik yuz berdi')
-    }
-  }
-
-  // Avatar initials
-  const getInitials = (name) => {
-    return name
-      ?.split(' ')
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase() ?? '?'
-  }
-
-  const getAvatarColor = (name) => {
-    const colors = [
-      'bg-blue-500',
-      'bg-green-500',
-      'bg-purple-500',
-      'bg-pink-500',
-      'bg-indigo-500',
-      'bg-teal-500',
-      'bg-orange-500',
-      'bg-cyan-500',
-    ]
-    return colors[name?.charCodeAt(0) % colors.length] ?? colors[0]
-  }
-
-  // Pagination
-  const totalPages = Math.ceil(teachers.length / itemsPerPage)
-  const paginatedTeachers = teachers.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage
-  )
-
-  // ─── Render ─────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6 p-1">
       {/* ── Header ── */}
@@ -161,7 +63,7 @@ const TeachersPage = () => {
           </p>
         </div>
         <button
-          onClick={handleAddTeacher}
+          onClick={openAddModal}
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -178,7 +80,7 @@ const TeachersPage = () => {
         </svg>
         <input
           type="text"
-          placeholder="Ism yoki telefon bo'yicha qidirish…"
+          placeholder="Ism yoki telefon bo'yicha qidirash…"
           className="flex-1 bg-transparent outline-none text-sm text-gray-700 placeholder:text-gray-400"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -238,7 +140,7 @@ const TeachersPage = () => {
                   className="hover:bg-gray-50 transition-colors"
                 >
                   <td className="px-4 py-3 text-sm text-gray-400 font-mono">
-                    {(page - 1) * itemsPerPage + idx + 1}
+                    {(page - 1) * 10 + idx + 1}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -263,7 +165,7 @@ const TeachersPage = () => {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
-                        onClick={() => handleEditTeacher(teacher)}
+                        onClick={() => openEditModal(teacher)}
                         className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Tahrirlash"
                       >
@@ -272,7 +174,7 @@ const TeachersPage = () => {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleDeleteTeacher(teacher)}
+                        onClick={() => openDeleteModal(teacher)}
                         className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="O'chirish"
                       >
@@ -292,7 +194,7 @@ const TeachersPage = () => {
         {!loading && teachers.length > 0 && totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
             <span className="text-xs text-gray-500">
-              {(page - 1) * itemsPerPage + 1}–{Math.min(page * itemsPerPage, teachers.length)} / {teachers.length} ta
+              {(page - 1) * 10 + 1}–{Math.min(page * 10, teachers.length)} / {teachers.length} ta
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -447,7 +349,7 @@ const TeachersPage = () => {
                 Saqlash
               </button>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={closeModals}
                 className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               >
                 Bekor qilish
@@ -497,5 +399,3 @@ const TeachersPage = () => {
     </div>
   )
 }
-
-export default TeachersPage

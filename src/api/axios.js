@@ -1,20 +1,16 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL + '/api',
-  withCredentials: true, // send refresh cookie automatically
+  baseURL: import.meta.env.VITE_API_BASE_URL + "/api",
+  withCredentials: true,
   headers: {
-  'Content-Type': 'application/json',
-},
-    'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true',
+    "Content-Type": "application/json",
+    // "ngrok-skip-browser-warning": "true",  ← o'chirildi
   },
-})
-
+});
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('accessToken')
-    const token = localStorage.getItem('access_token')
     if (token) config.headers.Authorization = `Bearer ${token}`
     return config
   },
@@ -54,13 +50,13 @@ api.interceptors.response.use(
           { withCredentials: true, headers: { 'ngrok-skip-browser-warning': 'true' } }
         )
         const newToken = data.accessToken
-        localStorage.setItem('access_token', newToken)
+        localStorage.setItem('accessToken', newToken)
         api.defaults.headers.common.Authorization = `Bearer ${newToken}`
         processQueue(null, newToken)
         return api(original)
       } catch (refreshError) {
         processQueue(refreshError, null)
-        localStorage.removeItem('access_token')
+        localStorage.removeItem('accessToken')
         localStorage.removeItem('user')
         window.location.href = '/login'
         return Promise.reject(refreshError)

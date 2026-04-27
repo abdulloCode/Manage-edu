@@ -1,1463 +1,769 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  getAllGroups,
-  createGroup,
-  updateGroup,
-  deleteGroup,
-  getAllRooms,
-  createRoom,
-  updateRoom,
-  deleteRoom,
-  getGroupById
-} from '../../../api/groups'
-import { getAllTeachers } from '../../../api/teacher'
-import { getAllCourses } from '../../../api/courses'
+  Users, Building2, Search, Edit3, Trash2, X, Calendar,
+  Clock, UserPlus, GraduationCap, BookOpen, DoorOpen, AlertTriangle,
+  ChevronRight, ChevronLeft, MapPin, Wallet, Users2
+} from 'lucide-react'
+import {
+  useGroups, useGroupForm, saveGroup, saveRoom, removeItem,
+  addStudentToGroupApi, fetchAllStudents
+} from './hooks'
+import { getGroupById } from '../../../api/groups'
 
-const GroupsPage = () => {
-  // ─── State ─────────────────────────────────────────────────────
-  const [groups, setGroups] = useState([])
-  const [rooms, setRooms] = useState([])
-  const [teachers, setTeachers] = useState([])
-  const [courses, setCourses] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [showModal, setShowModal] = useState(false)
-  const [showRoomModal, setShowRoomModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [showStudentsView, setShowStudentsView] = useState(false)
-  const [selectedGroup, setSelectedGroup] = useState(null)
-  const [groupStudents, setGroupStudents] = useState([])
-  const [loadingStudents, setLoadingStudents] = useState(false)
-  const [editingGroup, setEditingGroup] = useState(null)
-  const [editingRoom, setEditingRoom] = useState(null)
-  const [itemToDelete, setItemToDelete] = useState(null)
-  const [deleteType, setDeleteType] = useState('group') // 'group' or 'room'
-  const [activeTab, setActiveTab] = useState('groups')
-
-  // Group form data
-  const [formData, setFormData] = useState({
-    name: '',
-    courseId: null,
-    teacherId: null,
-    roomId: null,
-    startDate: '',
-    endDate: '',
-    maxStudents: '',
-    monthlyFeePerStudent: '',
-    schedule: {
-      days: [],
-      fromHour: '',
-      toHour: ''
-    }
-  })
-
-  // Room form data
-  const [roomFormData, setRoomFormData] = useState({
-    name: '',
-    number: '',
-    capacity: '',
-    equipment: ''
-  })
-
-  // Search & pagination
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const itemsPerPage = 9
-
-  // ─── Load Data ──────────────────────────────────────────────────
-  const loadGroups = async () => {
-    setLoading(true)
-    try {
-      const res = await getAllGroups({ search })
-      setGroups(res.data.data || res.data || [])
-    } catch (err) {
-      console.error('Guruhlar yuklanmadi:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadRooms = async () => {
-    try {
-      const res = await getAllRooms()
-      setRooms(res.data.data || res.data || [])
-    } catch (err) {
-      console.error('Xonalar yuklanmadi:', err)
-    }
-  }
-
-  const loadTeachers = async () => {
-    try {
-      const res = await getAllTeachers()
-      setTeachers(res.data.data || res.data || [])
-    } catch (err) {
-      console.error('O\'qituvchilar yuklanmadi:', err)
-    }
-  }
-
-  const loadCourses = async () => {
-    try {
-      const res = await getAllCourses()
-      setCourses(res.data.data || res.data || [])
-    } catch (err) {
-      console.error('Kurslar yuklanmadi:', err)
-    }
-  }
-
-  useEffect(() => {
-    if (activeTab === 'groups') {
-      loadGroups()
-      loadTeachers()
-      loadCourses()
-      loadRooms()
-    } else {
-      loadRooms()
-    }
-  }, [activeTab, search])
-
-  // ─── Group Handlers ─────────────────────────────────────────────
-  const handleAddGroup = () => {
-    setEditingGroup(null)
-    setFormData({
-      name: '',
-      courseId: null,
-      teacherId: null,
-      roomId: null,
-      startDate: '',
-      endDate: '',
-      maxStudents: '',
-      monthlyFeePerStudent: '',
-      schedule: {
-        days: [],
-        fromHour: '',
-        toHour: ''
-      }
-    })
-    setShowModal(true)
-  }
-
-  useEffect(() => {
-    if (activeTab === 'groups') {
-      loadTeachers()
-      loadCourses()
-      loadRooms()
-    }
-  }, [activeTab])
-
-  const handleEditGroup = (group) => {
-    setEditingGroup(group)
-    setFormData({
-      name: group.name || '',
-      courseId: group.courseId || '',
-      teacherId: group.teacherId || '',
-      roomId: group.roomId || '',
-      startDate: group.startDate || '',
-      endDate: group.endDate || '',
-      maxStudents: group.maxStudents || '',
-      monthlyFeePerStudent: group.monthlyFeePerStudent || '',
-      schedule: group.schedule || {
-        days: [],
-        fromHour: '',
-        toHour: ''
-      }
-    })
-    setShowModal(true)
-  }
-
-  const handleDeleteGroup = (group) => {
-    setItemToDelete(group)
-    setDeleteType('group')
-    setShowDeleteModal(true)
-  }
-
-  const handleDeleteRoom = (room) => {
-    setItemToDelete(room)
-    setDeleteType('room')
-    setShowDeleteModal(true)
-  }
-
-  const handleViewStudents = async (group) => {
-    setSelectedGroup(group)
-    setShowStudentsView(true)
-    setLoadingStudents(true)
-
-    try {
-      const res = await getGroupById(group.id, { includeStudents: true })
-      const groupData = res.data.data || res.data
-
-      let students = []
-
-      if (groupData.students && Array.isArray(groupData.students)) {
-        students = groupData.students
-      } else if (groupData.studentsData && Array.isArray(groupData.studentsData)) {
-        students = groupData.studentsData
-      } else if (groupData.studentIds && Array.isArray(groupData.studentIds)) {
-        students = groupData.studentIds.map(id => ({ id, name: 'O\'quvchi', phone: '—', balance: 0 }))
-      } else if (groupData.students && typeof groupData.students === 'object') {
-        students = Object.values(groupData.students)
-      }
-
-      if (students.length === 0 && group.students) {
-        students = Array.isArray(group.students) ? group.students : [group.students]
-      }
-
-      setGroupStudents(students)
-    } catch (err) {
-      console.error('O\'quvchilarni yuklashda xatolik:', err)
-      if (group.students) {
-        const students = Array.isArray(group.students) ? group.students : [group.students]
-        setGroupStudents(students)
-      } else {
-        setGroupStudents([])
-      }
-    } finally {
-      setLoadingStudents(false)
-    }
-  }
-
-  const handleBackToGroups = () => {
-    setShowStudentsView(false)
-    setSelectedGroup(null)
-    setGroupStudents([])
-  }
-
-  const confirmDelete = async () => {
-    if (!itemToDelete) return
-    try {
-      if (deleteType === 'group') {
-        await deleteGroup(itemToDelete.id)
-      } else {
-        await deleteRoom(itemToDelete.id)
-      }
-      setShowDeleteModal(false)
-      setItemToDelete(null)
-      if (activeTab === 'groups') {
-        loadGroups()
-      } else {
-        loadRooms()
-      }
-    } catch (err) {
-      console.error('O\'chirish xatolik:', err)
-    }
-  }
-
-  const handleSaveGroup = async () => {
-    try {
-      // Build data object - only include fields that have values
-      const dataToSend = {
-        name: formData.name,
-      }
-
-      // Add optional fields only if they have values
-      if (formData.courseId) dataToSend.courseId = formData.courseId
-      if (formData.teacherId) dataToSend.teacherId = formData.teacherId
-      if (formData.roomId) dataToSend.roomId = formData.roomId
-      if (formData.startDate) dataToSend.startDate = formData.startDate
-      if (formData.endDate) dataToSend.endDate = formData.endDate
-      if (formData.maxStudents) dataToSend.maxStudents = formData.maxStudents
-      if (formData.monthlyFeePerStudent) dataToSend.monthlyFeePerStudent = formData.monthlyFeePerStudent
-
-      // Only add schedule if at least one day is selected
-      if (formData.schedule.days.length > 0) {
-        dataToSend.schedule = {
-          days: formData.schedule.days,
-          fromHour: formData.schedule.fromHour,
-          toHour: formData.schedule.toHour
-        }
-      }
-
-      if (editingGroup) {
-        await updateGroup(editingGroup.id, dataToSend)
-      } else {
-        await createGroup(dataToSend)
-      }
-      setShowModal(false)
-      loadGroups()
-    } catch (err) {
-      console.error('Saqlash xatolik:', err)
-      alert('Xatolik yuz berdi: ' + (err.response?.data?.error ?? err.message ?? "Noma'lum xatolik"))
-    }
-  }
-
-  const handleDayToggle = (day) => {
-    const newDays = formData.schedule.days.includes(day)
-      ? formData.schedule.days.filter(d => d !== day)
-      : [...formData.schedule.days, day]
-    setFormData({
-      ...formData,
-      schedule: { ...formData.schedule, days: newDays }
-    })
-  }
-
-  // ─── Room Handlers ───────────────────────────────────────────────
-  const handleAddRoom = () => {
-    setEditingRoom(null)
-    setRoomFormData({
-      name: '',
-      number: '',
-      capacity: '',
-      equipment: ''
-    })
-    setShowRoomModal(true)
-  }
-
-  const handleEditRoom = (room) => {
-    setEditingRoom(room)
-    setRoomFormData({
-      name: room.name || '',
-      number: room.number || '',
-      capacity: room.capacity || '',
-      equipment: room.equipment ? room.equipment.join(', ') : ''
-    })
-    setShowRoomModal(true)
-  }
-
-  const handleSaveRoom = async () => {
-    try {
-      const data = {
-        ...roomFormData,
-        equipment: roomFormData.equipment ? roomFormData.equipment.split(',').map(e => e.trim()) : []
-      }
-      if (editingRoom) {
-        await updateRoom(editingRoom.id, data)
-      } else {
-        await createRoom(data)
-      }
-      setShowRoomModal(false)
-      loadRooms()
-    } catch (err) {
-      console.error('Saqlash xatolik:', err)
-      alert('Xatolik yuz berdi')
-    }
-  }
-
-  // Helper functions
-  const getGroupIcon = (name) => {
-    const icons = [
-      { emoji: '👥', bg: 'bg-purple-100', color: 'text-purple-600' },
-      { emoji: '🎓', bg: 'bg-blue-100', color: 'text-blue-600' },
-      { emoji: '💼', bg: 'bg-green-100', color: 'text-green-600' },
-      { emoji: '🏫', bg: 'bg-orange-100', color: 'text-orange-600' },
-      { emoji: '📚', bg: 'bg-pink-100', color: 'text-pink-600' },
-      { emoji: '⭐', bg: 'bg-yellow-100', color: 'text-yellow-600' },
-    ]
-    return icons[name?.charCodeAt(0) % icons.length] ?? icons[0]
-  }
-
-  const getRoomIcon = (name) => {
-    const icons = [
-      { emoji: '🚪', bg: 'bg-indigo-100', color: 'text-indigo-600' },
-      { emoji: '🏠', bg: 'bg-cyan-100', color: 'text-cyan-600' },
-      { emoji: '🏢', bg: 'bg-teal-100', color: 'text-teal-600' },
-      { emoji: '🏛️', bg: 'bg-amber-100', color: 'text-amber-600' },
-    ]
-    return icons[name?.charCodeAt(0) % icons.length] ?? icons[0]
-  }
-
-  // Pagination
-  const getPaginatedItems = (items) => {
-    return items.slice(
-      (page - 1) * itemsPerPage,
-      page * itemsPerPage
-    )
-  }
-
-  const paginatedGroups = getPaginatedItems(groups)
-  const paginatedRooms = getPaginatedItems(rooms)
-  const totalPages = activeTab === 'groups'
-    ? Math.ceil(groups.length / itemsPerPage)
-    : Math.ceil(rooms.length / itemsPerPage)
-
-  // ─── Render ─────────────────────────────────────────────────────
-  const days = ['Du', 'Se', 'Chor', 'Pa', 'Ju', 'Sha', 'Yak']
-
-  // Show students view instead of groups
-  if (showStudentsView && selectedGroup) {
-    return (
-      <div className="flex flex-col gap-6 p-1">
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleBackToGroups}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Orqaga
-          </button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900">{selectedGroup.name} - O'quvchilar</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Jami: {groupStudents.length} ta o'quvchi
-            </p>
-          </div>
-        </div>
-
-        {/* Group Info */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Guruh</p>
-            <p className="font-semibold text-gray-900">{selectedGroup.name}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">O'qituvchi</p>
-            <p className="font-semibold text-gray-900">
-              {teachers.find(t => t.id === selectedGroup.teacherId)?.name || '—'}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Kurs</p>
-            <p className="font-semibold text-gray-900">
-              {courses.find(c => c.id === selectedGroup.courseId)?.name || '—'}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Xona</p>
-            <p className="font-semibold text-gray-900">
-              {rooms.find(r => r.id === selectedGroup.roomId)?.name || '—'}
-            </p>
-          </div>
-        </div>
-
-        {/* Students Table */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          {loadingStudents ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="flex flex-col items-center gap-3 text-gray-400">
-                <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm">Yuklanmoqda…</span>
-              </div>
-            </div>
-          ) : groupStudents.length === 0 ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="flex flex-col items-center gap-2 text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
-                </svg>
-                <p className="text-sm font-medium text-gray-500">O'quvchilar yo'q</p>
-              </div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table table-sm w-full">
-                <thead>
-                  <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                    <th className="w-10">#</th>
-                    <th>O'quvchi</th>
-                    <th>Telefon</th>
-                    <th>Parol</th>
-                    <th className="text-right">Balans</th>
-                    <th>Email</th>
-                    <th>Mutaxassislik</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupStudents.map((student, idx) => {
-                    const balance = student.balance?.balance ?? student.balance ?? 0
-                    return (
-                      <tr key={student.id || student._id || idx} className="hover:bg-gray-50">
-                        <td className="text-xs text-gray-400 font-mono">{idx + 1}</td>
-                        <td>
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-xs">
-                              {student.name?.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase() || '?'}
-                            </div>
-                            <span className="font-medium text-sm">{student.name}</span>
-                          </div>
-                        </td>
-                        <td className="text-xs text-gray-600 font-mono">{student.phone}</td>
-                        <td className="text-xs text-gray-600">••••••</td>
-                        <td className="text-right">
-                          <span className={`text-sm font-semibold ${balance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {Number(balance).toLocaleString()} so'm
-                          </span>
-                        </td>
-                        <td className="text-xs text-gray-600">{student.email || '—'}</td>
-                        <td className="text-xs text-gray-600">{student.specialization || '—'}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Group, Room, Delete modals still need to be accessible */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {editingGroup ? 'Guruhni Tahrirlash' : 'Yangi Guruh'}
-                </h2>
-              </div>
-              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Guruh nomi <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Kurs <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.courseId}
-                      onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                      required
-                    >
-                      <option value="">Tanlang</option>
-                      {courses.map((course) => (
-                        <option key={course.id} value={course.id}>{course.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      O'qituvchi <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.teacherId}
-                      onChange={(e) => setFormData({ ...formData, teacherId: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                      required
-                    >
-                      <option value="">Tanlang</option>
-                      {teachers.map((teacher) => (
-                        <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Xona <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.roomId}
-                      onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                      required
-                    >
-                      <option value="">Tanlang</option>
-                      {rooms.map((room) => (
-                        <option key={room.id} value={room.id}>{room.name} (#{room.number})</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Boshlanish sanasi <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Tugash sanasi <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Maksimal talabalar <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.maxStudents}
-                      onChange={(e) => setFormData({ ...formData, maxStudents: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Oylik to'lov (so'm) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.monthlyFeePerStudent}
-                      onChange={(e) => setFormData({ ...formData, monthlyFeePerStudent: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Dars kunlari</label>
-                  <div className="flex flex-wrap gap-2">
-                    {days.map((day) => (
-                      <button
-                        key={day}
-                        type="button"
-                        onClick={() => handleDayToggle(day)}
-                        className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                          formData.schedule.days.includes(day)
-                            ? 'bg-purple-600 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {day}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Boshlanish vaqti</label>
-                    <input
-                      type="time"
-                      value={formData.schedule.fromHour}
-                      onChange={(e) => setFormData({ ...formData, schedule: { ...formData.schedule, fromHour: e.target.value } })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Tugash vaqti</label>
-                    <input
-                      type="time"
-                      value={formData.schedule.toHour}
-                      onChange={(e) => setFormData({ ...formData, schedule: { ...formData.schedule, toHour: e.target.value } })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex gap-3">
-                <button onClick={handleSaveGroup} className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">Saqlash</button>
-                <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">Bekor qilish</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showRoomModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {editingRoom ? 'Xonani Tahrirlash' : 'Yangi Xona'}
-                </h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Xona nomi <span className="text-red-500">*</span></label>
-                  <input type="text" value={roomFormData.name} onChange={(e) => setRoomFormData({ ...roomFormData, name: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Raqami <span className="text-red-500">*</span></label>
-                  <input type="text" value={roomFormData.number} onChange={(e) => setRoomFormData({ ...roomFormData, number: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Sig'imi <span className="text-red-500">*</span></label>
-                  <input type="number" value={roomFormData.capacity} onChange={(e) => setRoomFormData({ ...roomFormData, capacity: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Jihozlar (vergul bilan)</label>
-                  <input type="text" value={roomFormData.equipment} onChange={(e) => setRoomFormData({ ...roomFormData, equipment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all" placeholder="Proyektor, Kompyuter, Doska" />
-                </div>
-              </div>
-              <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex gap-3">
-                <button onClick={handleSaveRoom} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">Saqlash</button>
-                <button onClick={() => setShowRoomModal(false)} className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">Bekor qilish</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showDeleteModal && itemToDelete && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-              <div className="p-6">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-center text-gray-900 mb-2">
-                  {deleteType === 'group' ? 'Guruhni' : 'Xonani'} o'chirish
-                </h3>
-                <p className="text-sm text-gray-600 text-center mb-6">
-                  <strong>{itemToDelete.name}</strong> {deleteType === 'group' ? 'guruhini' : 'xonasini'} o'chirilsinmi? Bu amal qaytarib bo'lmaydi.
-                </p>
-                <div className="flex gap-3">
-                  <button onClick={() => { setShowDeleteModal(false); setItemToDelete(null) }} className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">Bekor qilish</button>
-                  <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">O'chirish</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
+// ── 24h Time Picker ───────────────────────────────────────────
+function TimePicker24({ value, onChange, label }) {
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
+  const minutes = ['00', '15', '30', '45']
+  const parts = (value || '09:00').split(':') 
+  const h = parts[0] || '09'
+  const m = parts[1] || '00'
 
   return (
-    <div className="flex flex-col gap-6 p-1">
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Guruhlar va Xonalar</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Guruhlar, dars jadvali va xonalarni boshqarish
-          </p>
-        </div>
-        <button
-          onClick={activeTab === 'groups' ? handleAddGroup : handleAddRoom}
-          className={`inline-flex items-center gap-2 px-4 py-2 text-white rounded-lg transition-colors shadow-sm ${
-            activeTab === 'groups'
-              ? 'bg-purple-600 hover:bg-purple-700'
-              : 'bg-indigo-600 hover:bg-indigo-700'
-          }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          {activeTab === 'groups' ? 'Qo\'shish' : 'Qo\'shish'}
-        </button>
+    <div>
+      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
+      <div className="flex gap-2">
+        <select value={h} onChange={e => onChange(`${e.target.value}:${m}`)}
+          className="flex-1 px-3 py-2.5 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-violet-500 focus:bg-white transition-all cursor-pointer">
+          {hours.map(hr => <option key={hr} value={hr}>{hr}:00</option>)}
+        </select>
+        <select value={m} onChange={e => onChange(`${h}:${e.target.value}`)}
+          className="w-24 px-3 py-2.5 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-violet-500 focus:bg-white transition-all cursor-pointer">
+          {minutes.map(min => <option key={min} value={min}>:{min}</option>)}
+        </select>
       </div>
-
-      {/* ── Tabs ── */}
-      <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200">
-        <button
-          onClick={() => {
-            setActiveTab('groups')
-            setPage(1)
-          }}
-          className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-            activeTab === 'groups'
-              ? 'bg-purple-600 text-white shadow-sm'
-              : 'text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Guruhlar
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab('rooms')
-            setPage(1)
-          }}
-          className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-            activeTab === 'rooms'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Xonalar
-        </button>
-      </div>
-
-      {/* ── Search ── */}
-      <label className={`relative flex items-center gap-2 px-4 py-2.5 border rounded-lg w-full max-w-sm transition-all ${
-        activeTab === 'groups'
-          ? 'focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20'
-          : 'focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20'
-      } border-gray-200`}>
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          placeholder={activeTab === 'groups' ? 'Guruh nomi bo\'yicha qidirish…' : 'Xona nomi bo\'yicha qidirish…'}
-          className="flex-1 bg-transparent outline-none text-sm text-gray-700 placeholder:text-gray-400"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        {search && (
-          <button
-            onClick={() => setSearch('')}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </label>
-
-      {/* ── Groups Tab ── */}
-      {activeTab === 'groups' && (
-        <>
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="flex flex-col items-center gap-3 text-gray-400">
-                <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm">Yuklanmoqda…</span>
-              </div>
-            </div>
-          ) : groups.length === 0 ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="flex flex-col items-center gap-2 text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
-                </svg>
-                <p className="text-sm font-medium text-gray-500">Guruhlar yo'q</p>
-                {search && <p className="text-xs">"{search}" bo'yicha natija yo'q</p>}
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {paginatedGroups.map((group, idx) => {
-                  const icon = getGroupIcon(group.name)
-                  const course = courses.find(c => c.id === group.courseId)
-                  const teacher = teachers.find(t => t.id === group.teacherId)
-                  const room = rooms.find(r => r.id === group.roomId)
-
-                  return (
-                    <div
-                      key={group.id}
-                      className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow group cursor-pointer"
-                      onClick={() => handleViewStudents(group)}
-                    >
-                      {/* Icon & Title */}
-                      <div className="flex items-start gap-3 mb-4">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0 ${icon.bg}`}>
-                          {icon.emoji}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 line-clamp-1">{group.name}</h3>
-                          <span className="text-xs text-gray-400 font-mono">
-                            #{(page - 1) * itemsPerPage + idx + 1}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Details */}
-                      <div className="space-y-2.5 mb-4">
-                        <div className="flex items-center gap-2 text-sm">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path d="M12 14l9-5-9-5-9 5 9 5z" />
-                            <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" />
-                          </svg>
-                          <span className="text-gray-600 line-clamp-1">{course?.name || '—'}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                          <span className="text-gray-600 line-clamp-1">{teacher?.name || '—'}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
-                          <span className="text-gray-600 line-clamp-1">{room?.name || '—'}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
-                          </svg>
-                          <span className="text-gray-600">
-                            {group.currentStudents || group.students?.length || 0}/{group.maxStudents}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span className="text-gray-600 font-medium">
-                            {Number(group.monthlyFeePerStudent).toLocaleString()} so'm
-                          </span>
-                        </div>
-
-                        {group.schedule?.days?.length > 0 && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span className="text-gray-600 text-xs">
-                              {group.schedule.days.slice(0, 3).join(', ')}{group.schedule.days.length > 3 ? '...' : ''} · {group.schedule.fromHour}-{group.schedule.toHour}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex flex-col gap-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                        <div className="text-xs text-gray-400 flex items-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          O'quvchilarni ko'rish uchun karta ustiga bosing
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEditGroup(group)}
-                            className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-purple-50 hover:text-purple-600 transition-colors"
-                          >
-                            Tahrirlash
-                          </button>
-                          <button
-                            onClick={() => handleDeleteGroup(group)}
-                            className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
-                          >
-                            O'chirish
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* ── Pagination ── */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm">
-                  <span className="text-xs text-gray-500">
-                    {(page - 1) * itemsPerPage + 1}–{Math.min(page * itemsPerPage, groups.length)} / {groups.length} ta
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-2 py-1 text-sm border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      ‹
-                    </button>
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                      const pageNum = i + 1
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setPage(pageNum)}
-                          className={`px-3 py-1 text-sm border rounded transition-colors ${
-                            page === pageNum
-                              ? 'bg-purple-600 text-white border-purple-600'
-                              : 'border-gray-200 hover:bg-gray-100'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      )
-                    })}
-                    {totalPages > 5 && (
-                      <>
-                        <span className="px-2 text-gray-400">…</span>
-                        <button
-                          onClick={() => setPage(totalPages)}
-                          className={`px-3 py-1 text-sm border rounded transition-colors ${
-                            page === totalPages
-                              ? 'bg-purple-600 text-white border-purple-600'
-                              : 'border-gray-200 hover:bg-gray-100'
-                          }`}
-                        >
-                          {totalPages}
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className="px-2 py-1 text-sm border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      ›
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
-
-      {/* ── Rooms Tab ── */}
-      {activeTab === 'rooms' && (
-        <>
-          {rooms.length === 0 ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="flex flex-col items-center gap-2 text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-                <p className="text-sm font-medium text-gray-500">Xonalar yo'q</p>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {paginatedRooms.map((room, idx) => {
-                  const icon = getRoomIcon(room.name)
-                  return (
-                    <div
-                      key={room.id}
-                      className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow group"
-                    >
-                      {/* Icon & Title */}
-                      <div className="flex items-start gap-3 mb-4">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0 ${icon.bg}`}>
-                          {icon.emoji}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 line-clamp-1">{room.name}</h3>
-                          <span className="text-xs text-gray-400 font-mono">
-                            #{room.number}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Details */}
-                      <div className="space-y-2.5 mb-4">
-                        <div className="flex items-center gap-2 text-sm">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
-                          </svg>
-                          <span className="text-gray-600">
-                            {room.capacity} kishi sig'imi
-                          </span>
-                        </div>
-
-                        {room.equipment && room.equipment.length > 0 && (
-                          <div className="flex items-start gap-2 text-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426-1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            <div className="flex flex-wrap gap-1">
-                              {room.equipment.slice(0, 3).map((eq, i) => (
-                                <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                                  {eq}
-                                </span>
-                              ))}
-                              {room.equipment.length > 3 && (
-                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                                  +{room.equipment.length - 3}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2 pt-3 border-t border-gray-100">
-                        <button
-                          onClick={() => handleEditRoom(room)}
-                          className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
-                        >
-                          Tahrirlash
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRoom(room)}
-                          className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors"
-                        >
-                          O'chirish
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* ── Pagination ── */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm">
-                  <span className="text-xs text-gray-500">
-                    {(page - 1) * itemsPerPage + 1}–{Math.min(page * itemsPerPage, rooms.length)} / {rooms.length} ta
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-2 py-1 text-sm border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      ‹
-                    </button>
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                      const pageNum = i + 1
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setPage(pageNum)}
-                          className={`px-3 py-1 text-sm border rounded transition-colors ${
-                            page === pageNum
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'border-gray-200 hover:bg-gray-100'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      )
-                    })}
-                    {totalPages > 5 && (
-                      <>
-                        <span className="px-2 text-gray-400">…</span>
-                        <button
-                          onClick={() => setPage(totalPages)}
-                          className={`px-3 py-1 text-sm border rounded transition-colors ${
-                            page === totalPages
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'border-gray-200 hover:bg-gray-100'
-                          }`}
-                        >
-                          {totalPages}
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className="px-2 py-1 text-sm border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      ›
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </>
-      )}
-
-      {/* ── Group Modal ── */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {editingGroup ? 'Guruhni Tahrirlash' : 'Yangi Guruh'}
-              </h2>
-            </div>
-
-            {/* Body */}
-            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Guruh nomi <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Kurs <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.courseId}
-                    onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    required
-                  >
-                    <option value="">Tanlang</option>
-                    {courses.map((course) => (
-                      <option key={course.id} value={course.id}>{course.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    O'qituvchi <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.teacherId}
-                    onChange={(e) => setFormData({ ...formData, teacherId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    required
-                  >
-                    <option value="">Tanlang</option>
-                    {teachers.map((teacher) => (
-                      <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Xona <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.roomId}
-                    onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    required
-                  >
-                    <option value="">Tanlang</option>
-                    {rooms.map((room) => (
-                      <option key={room.id} value={room.id}>{room.name} (#{room.number})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Boshlanish sanasi <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Tugash sanasi <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.endDate}
-                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Maksimal talabalar <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.maxStudents}
-                    onChange={(e) => setFormData({ ...formData, maxStudents: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Oylik to'lov (so'm) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.monthlyFeePerStudent}
-                    onChange={(e) => setFormData({ ...formData, monthlyFeePerStudent: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Dars kunlari</label>
-                <div className="flex flex-wrap gap-2">
-                  {days.map((day) => (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => handleDayToggle(day)}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                        formData.schedule.days.includes(day)
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {day}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Boshlanish vaqti</label>
-                  <input
-                    type="time"
-                    value={formData.schedule.fromHour}
-                    onChange={(e) => setFormData({ ...formData, schedule: { ...formData.schedule, fromHour: e.target.value } })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Tugash vaqti</label>
-                  <input
-                    type="time"
-                    value={formData.schedule.toHour}
-                    onChange={(e) => setFormData({ ...formData, schedule: { ...formData.schedule, toHour: e.target.value } })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex gap-3">
-              <button
-                onClick={handleSaveGroup}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-              >
-                Saqlash
-              </button>
-              <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-              >
-                Bekor qilish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Room Modal ── */}
-      {showRoomModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {editingRoom ? 'Xonani Tahrirlash' : 'Yangi Xona'}
-              </h2>
-            </div>
-
-            {/* Body */}
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Xona nomi <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={roomFormData.name}
-                  onChange={(e) => setRoomFormData({ ...roomFormData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Raqami <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={roomFormData.number}
-                  onChange={(e) => setRoomFormData({ ...roomFormData, number: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Sig'imi <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={roomFormData.capacity}
-                  onChange={(e) => setRoomFormData({ ...roomFormData, capacity: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Jihozlar (vergul bilan)</label>
-                <input
-                  type="text"
-                  value={roomFormData.equipment}
-                  onChange={(e) => setRoomFormData({ ...roomFormData, equipment: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                  placeholder="Proyektor, Kompyuter, Doska"
-                />
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex gap-3">
-              <button
-                onClick={handleSaveRoom}
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
-              >
-                Saqlash
-              </button>
-              <button
-                onClick={() => setShowRoomModal(false)}
-                className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-              >
-                Bekor qilish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Delete Confirmation Modal ── */}
-      {showDeleteModal && itemToDelete && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="p-6">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-center text-gray-900 mb-2">
-                {deleteType === 'group' ? 'Guruhni' : 'Xonani'} o'chirish
-              </h3>
-              <p className="text-sm text-gray-600 text-center mb-6">
-                <strong>{itemToDelete.name}</strong> {deleteType === 'group' ? 'guruhini' : 'xonasini'} o'chirilsinmi? Bu amal qaytarib bo'lmaydi.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false)
-                    setItemToDelete(null)
-                  }}
-                  className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Bekor qilish
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                >
-                  O'chirish
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      <p className="text-[11px] text-slate-400 mt-1 ml-1">Tanlangan: {h}:{m}</p>
     </div>
   )
 }
 
-export default GroupsPage
+// ── Group Card ────────────────────────────────────────────────
+const COLORS = [
+  { from: 'from-violet-500', to: 'to-purple-600', light: 'bg-violet-50', text: 'text-violet-600' },
+  { from: 'from-blue-500', to: 'to-indigo-600', light: 'bg-blue-50', text: 'text-blue-600' },
+  { from: 'from-emerald-500', to: 'to-teal-600', light: 'bg-emerald-50', text: 'text-emerald-600' },
+  { from: 'from-rose-500', to: 'to-pink-600', light: 'bg-rose-50', text: 'text-rose-600' },
+  { from: 'from-amber-500', to: 'to-orange-500', light: 'bg-amber-50', text: 'text-amber-600' },
+  { from: 'from-sky-500', to: 'to-cyan-600', light: 'bg-sky-50', text: 'text-sky-600' },
+]
+
+function GroupCard({ group, idx, teachers, courses, rooms, openEditGroupModal, openDeleteModal, onAddStudent, onViewStudents, page, itemsPerPage }) {
+  const col = COLORS[idx % COLORS.length]
+  const course = courses.find(c => c.id === group.courseId)
+  const teacher = teachers.find(t => t.id === group.teacherId)
+  const room = rooms.find(r => r.id === group.roomId)
+  const students = group.students || []
+  const filled = group.currentStudents || students.length || 0
+  const max = group.maxStudents || 1
+  const pct = Math.min(100, Math.round((filled / max) * 100))
+
+  return (
+    <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ delay: idx * 0.04, type: 'spring', stiffness: 280, damping: 26 }}
+      className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-xl hover:border-transparent transition-all duration-300 cursor-pointer"
+      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+      onClick={() => onViewStudents(group)}>
+
+      <div className={`h-1.5 bg-gradient-to-r ${col.from} ${col.to}`} />
+
+      <div className="p-5">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl ${col.light} flex items-center justify-center`}>
+              <Users className={`w-5 h-5 ${col.text}`} />
+            </div>
+            <div>
+              <h3 className="font-black text-slate-800 text-sm">{group.name}</h3>
+              <span className="text-[10px] text-slate-400 font-mono">#{(page - 1) * itemsPerPage + idx + 1}</span>
+            </div>
+          </div>
+          <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${group.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+            {group.status === 'active' ? '● Faol' : '○ Nofaol'}
+          </span>
+        </div>
+
+        <div className="space-y-1.5 mb-4 text-xs text-slate-500">
+          {course && <div className="flex items-center gap-2"><BookOpen className="w-3.5 h-3.5" /><span className="truncate font-medium">{course.name}</span></div>}
+          {teacher && <div className="flex items-center gap-2"><GraduationCap className="w-3.5 h-3.5" /><span className="truncate">{teacher.name}</span></div>}
+          {room && <div className="flex items-center gap-2"><DoorOpen className="w-3.5 h-3.5" /><span className="truncate">{room.name}</span></div>}
+          {group.schedule?.days?.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5" />
+              <span>{group.schedule.days.slice(0, 3).join(', ')} · {group.schedule.fromHour}–{group.schedule.toHour}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[11px] text-slate-400 flex items-center gap-1"><Users2 className="w-3 h-3" /> Talabalar</span>
+            <span className="text-[11px] font-black text-slate-700">{filled}/{max}</span>
+          </div>
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className={`h-full bg-gradient-to-r ${col.from} ${col.to} transition-all`} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+
+        <div className={`${col.light} rounded-xl px-3 py-2 mb-4`}>
+          <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1"><Wallet className="w-3 h-3" /> Oylik to'lov</p>
+          <p className={`text-sm font-black ${col.text}`}>{Number(group.monthlyFeePerStudent).toLocaleString()} <span className="text-xs font-medium text-slate-400">so'm</span></p>
+        </div>
+
+        <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+          <button onClick={() => openEditGroupModal(group)} className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-violet-50 hover:text-violet-600 rounded-xl transition-colors flex items-center justify-center gap-1">
+            <Edit3 className="w-3 h-3" /> Tahrirlash
+          </button>
+          <button onClick={() => onAddStudent(group)} className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center justify-center gap-1">
+            <UserPlus className="w-3 h-3" /> Qo'shish
+          </button>
+          <button onClick={() => openDeleteModal(group, 'group')} className="px-3 py-2 text-xs text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ── Room Card ─────────────────────────────────────────────────
+function RoomCard({ room, idx, openEditRoomModal, openDeleteModal }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+      className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-lg transition-all" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center">
+          <Building2 className="w-6 h-6 text-indigo-600" />
+        </div>
+        <div>
+          <h3 className="font-black text-slate-800">{room.name}</h3>
+          <span className="text-xs text-slate-400 font-mono flex items-center gap-1"><MapPin className="w-3 h-3" /> #{room.number}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-indigo-50 rounded-xl">
+        <Users className="w-4 h-4 text-indigo-600" />
+        <span className="text-sm font-bold text-indigo-700">{room.capacity} kishi</span>
+      </div>
+      {room.equipment?.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {room.equipment.slice(0, 4).map((eq, i) => (
+            <span key={i} className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg font-medium">{eq}</span>
+          ))}
+          {room.equipment.length > 4 && <span className="text-[11px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-lg">+{room.equipment.length - 4}</span>}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button onClick={() => openEditRoomModal(room)} className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors flex items-center justify-center gap-1">
+          <Edit3 className="w-3 h-3" /> Tahrirlash
+        </button>
+        <button onClick={() => openDeleteModal(room, 'room')} className="px-3 py-2 text-xs text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
+// ── Group Modal ───────────────────────────────────────────────
+function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGroup, handleSaveGroup, closeModals }) {
+  const days = ['Du', 'Se', 'Chor', 'Pa', 'Ju', 'Sha', 'Yak']
+  const [errors, setErrors] = useState({})
+
+  const validate = () => {
+    const newErrors = {}
+    if (!formData.name?.trim()) newErrors.name = 'Guruh nomini kiriting'
+    if (!formData.courseId) newErrors.courseId = 'Kursni tanlang'
+    if (!formData.teacherId) newErrors.teacherId = "O'qituvchini tanlang"
+    if (!formData.roomId) newErrors.roomId = 'Xonani tanlang'
+    if (!formData.startDate) newErrors.startDate = 'Boshlanish sanasini kiriting'
+    if (!formData.endDate) newErrors.endDate = 'Tugash sanasini kiriting'
+    if (!formData.maxStudents) newErrors.maxStudents = 'Maksimal talabalar sonini kiriting'
+    if (!formData.monthlyFeePerStudent) newErrors.monthlyFeePerStudent = "Oylik to'lovni kiriting"
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = () => {
+    if (validate()) handleSaveGroup()
+  }
+
+  const toggleDay = (day) => {
+    const cur = formData.schedule?.days || []
+    const next = cur.includes(day) ? cur.filter(d => d !== day) : [...cur, day]
+    setFormData({ ...formData, schedule: { ...formData.schedule, days: next } })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={closeModals} />
+      <motion.div initial={{ opacity: 0, scale: 0.92, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]">
+
+        <div className="bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-5 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl"><Users className="w-5 h-5 text-white" /></div>
+            <h2 className="font-black text-white text-lg">{editingGroup ? 'Guruhni Tahrirlash' : 'Yangi Guruh'}</h2>
+          </div>
+          <button onClick={closeModals} className="p-2 hover:bg-white/20 rounded-xl transition-colors text-white"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Guruh nomi *</label>
+            <input value={formData.name || ''} onChange={e => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: null }) }}
+              className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors.name ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}
+              placeholder="Masalan: Frontend Guruh A" />
+            {errors.name && <p className="text-xs text-red-500 mt-1 font-medium">{errors.name}</p>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { key: 'courseId', label: 'Kurs *', list: courses, nameKey: 'name' },
+              { key: 'teacherId', label: "O'qituvchi *", list: teachers, nameKey: 'name' }
+            ].map(({ key, label, list, nameKey }) => (
+              <div key={key}>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
+                <select value={formData[key] || ''} onChange={e => { setFormData({ ...formData, [key]: e.target.value }); setErrors({ ...errors, [key]: null }) }}
+                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors[key] ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}>
+                  <option value="">Tanlang</option>
+                  {list.map(i => <option key={i.id} value={i.id}>{i[nameKey]}</option>)}
+                </select>
+                {errors[key] && <p className="text-xs text-red-500 mt-1 font-medium">{errors[key]}</p>}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Xona *</label>
+              <select value={formData.roomId || ''} onChange={e => { setFormData({ ...formData, roomId: e.target.value }); setErrors({ ...errors, roomId: null }) }}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors.roomId ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}>
+                <option value="">Tanlang</option>
+                {rooms.map(r => <option key={r.id} value={r.id}>{r.name} (#{r.number})</option>)}
+              </select>
+              {errors.roomId && <p className="text-xs text-red-500 mt-1 font-medium">{errors.roomId}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Oylik to'lov *</label>
+              <input type="number" value={formData.monthlyFeePerStudent || ''} placeholder="500000"
+                onChange={e => { setFormData({ ...formData, monthlyFeePerStudent: e.target.value }); setErrors({ ...errors, monthlyFeePerStudent: null }) }}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors.monthlyFeePerStudent ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`} />
+              {errors.monthlyFeePerStudent && <p className="text-xs text-red-500 mt-1 font-medium">{errors.monthlyFeePerStudent}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { key: 'startDate', label: 'Boshlanish *', type: 'date' },
+              { key: 'endDate', label: 'Tugash *', type: 'date' },
+              { key: 'maxStudents', label: 'Max talaba *', type: 'number', placeholder: '20' }
+            ].map(({ key, label, type, placeholder }) => (
+              <div key={key}>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
+                <input type={type} value={formData[key] || ''} placeholder={placeholder}
+                  onChange={e => { setFormData({ ...formData, [key]: e.target.value }); setErrors({ ...errors, [key]: null }) }}
+                  className={`w-full px-3 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors[key] ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`} />
+                {errors[key] && <p className="text-xs text-red-500 mt-1 font-medium">{errors[key]}</p>}
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-violet-50 rounded-2xl p-4 space-y-4 border border-violet-100">
+            <p className="text-xs font-black text-violet-700 uppercase tracking-wider flex items-center gap-2">
+              <Calendar className="w-3.5 h-3.5" /> Dars jadvali
+            </p>
+            <div>
+              <p className="text-xs text-slate-500 font-medium mb-2">Dars kunlari</p>
+              <div className="flex flex-wrap gap-2">
+                {days.map(day => (
+                  <button key={day} type="button" onClick={() => toggleDay(day)}
+                    className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all ${
+                      formData.schedule?.days?.includes(day)
+                        ? 'bg-violet-600 text-white shadow-md shadow-violet-200'
+                        : 'bg-white text-slate-500 hover:bg-violet-100 border border-slate-200'
+                    }`}>
+                    {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <TimePicker24 label="Boshlanish vaqti" value={formData.schedule?.fromHour || '09:00'}
+                onChange={v => setFormData({ ...formData, schedule: { ...formData.schedule, fromHour: v } })} />
+              <TimePicker24 label="Tugash vaqti" value={formData.schedule?.toHour || '11:00'}
+                onChange={v => setFormData({ ...formData, schedule: { ...formData.schedule, toHour: v } })} />
+            </div>
+          </div>
+        </div>
+
+        {Object.keys(errors).length > 0 && (
+          <div className="px-6 py-3 bg-red-50 border-t border-red-100">
+            <p className="text-xs text-red-600 font-bold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> Iltimos, barcha maydonlarni to'ldiring
+            </p>
+          </div>
+        )}
+
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0">
+          <button onClick={closeModals} className="flex-1 py-3 text-sm font-bold text-slate-500 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-colors">Bekor</button>
+          <button onClick={handleSubmit} className="flex-1 py-3 text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 rounded-2xl shadow-lg shadow-violet-200 hover:opacity-90 transition-opacity">
+            {editingGroup ? '✓ Saqlash' : '+ Yaratish'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Room Modal ────────────────────────────────────────────────
+function RoomModal({ roomFormData, setRoomFormData, editingRoom, handleSaveRoom, closeModals }) {
+  const [errors, setErrors] = useState({})
+
+  const validate = () => {
+    const newErrors = {}
+    if (!roomFormData.name?.trim()) newErrors.name = 'Xona nomini kiriting'
+    if (!roomFormData.number?.trim()) newErrors.number = 'Raqamni kiriting'
+    if (!roomFormData.capacity) newErrors.capacity = "Sig'imni kiriting"
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = () => {
+    if (validate()) handleSaveRoom()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={closeModals} />
+      <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden z-10">
+        <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl"><Building2 className="w-5 h-5 text-white" /></div>
+            <h2 className="font-black text-white text-lg">{editingRoom ? 'Xonani Tahrirlash' : 'Yangi Xona'}</h2>
+          </div>
+          <button onClick={closeModals} className="p-2 hover:bg-white/20 rounded-xl text-white transition-colors"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {[
+            { label: 'Xona nomi *', key: 'name', type: 'text', placeholder: 'Asosiy zal' },
+            { label: 'Raqami *', key: 'number', type: 'text', placeholder: '101' },
+            { label: "Sig'imi (kishi) *", key: 'capacity', type: 'number', placeholder: '20' },
+            { label: 'Jihozlar (vergul bilan)', key: 'equipment', type: 'text', placeholder: 'Proyektor, Doska, Kompyuter' },
+          ].map(({ label, key, type, placeholder }) => (
+            <div key={key}>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
+              <input type={type} value={roomFormData[key] || ''} placeholder={placeholder}
+                onChange={e => { setRoomFormData({ ...roomFormData, [key]: e.target.value }); setErrors({ ...errors, [key]: null }) }}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors[key] ? 'border-red-400' : 'border-transparent focus:border-indigo-500'}`} />
+              {errors[key] && <p className="text-xs text-red-500 mt-1 font-medium">{errors[key]}</p>}
+            </div>
+          ))}
+        </div>
+
+        {Object.keys(errors).length > 0 && (
+          <div className="px-6 py-3 bg-red-50 border-t border-red-100">
+            <p className="text-xs text-red-600 font-bold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> Iltimos, barcha maydonlarni to'ldiring
+            </p>
+          </div>
+        )}
+
+        <div className="px-6 pb-6 flex gap-3">
+          <button onClick={closeModals} className="flex-1 py-3 text-sm font-bold text-slate-500 bg-slate-100 rounded-2xl hover:bg-slate-200 transition-colors">Bekor</button>
+          <button onClick={handleSubmit} className="flex-1 py-3 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl shadow-lg shadow-indigo-200 hover:opacity-90 transition-opacity">
+            {editingRoom ? '✓ Saqlash' : '+ Yaratish'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Delete Modal ──────────────────────────────────────────────
+function DeleteModal({ itemToDelete, deleteType, confirmDelete, closeModals }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={closeModals} />
+      <motion.div initial={{ opacity: 0, scale: 0.88 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+        className="relative bg-white w-full max-w-sm rounded-3xl shadow-2xl p-8 text-center z-10">
+        <motion.div animate={{ rotate: [0, -8, 8, -4, 0] }} transition={{ delay: 0.2, duration: 0.5 }}
+          className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
+          <AlertTriangle className="w-8 h-8 text-red-500" />
+        </motion.div>
+        <h3 className="text-xl font-black text-slate-900 mb-2">O'chirilsinmi?</h3>
+        <p className="text-slate-500 text-sm mb-1 font-medium">"{itemToDelete?.name}"</p>
+        <p className="text-slate-400 text-xs mb-7">{deleteType === 'group' ? 'Guruh' : 'Xona'} o'chirilsa qaytarib bo'lmaydi.</p>
+        <div className="flex gap-3">
+          <button onClick={closeModals} className="flex-1 py-3 bg-slate-100 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">Yo'q</button>
+          <button onClick={confirmDelete} className="flex-1 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-red-100 hover:opacity-90 transition-opacity">Ha, o'chir</button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Add Student Modal ─────────────────────────────────────────
+function AddStudentModal({ group, onClose, onAdded }) {
+  const [students, setStudents] = useState([])
+  const [selectedId, setSelectedId] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(true)
+  const [errors, setErrors] = useState({})
+
+  useEffect(() => {
+    fetchAllStudents()
+      .then(all => {
+        setStudents(all.filter(s => !(s.group && (s.group._id === group._id || s.group.id === group._id))))
+        setFetching(false)
+      })
+      .catch(() => { setErrors({ submit: 'Yuklanmadi' }); setFetching(false) })
+  }, [group])
+
+  const validate = () => {
+    const newErrors = {}
+    if (!selectedId) newErrors.selectedId = 'Studentni tanlang'
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleAdd = async () => {
+    if (!validate()) return
+    setLoading(true)
+    const ok = await addStudentToGroupApi(group._id || group.id, selectedId)
+    if (ok) { onAdded(); onClose() } else { setErrors({ submit: "Qo'shishda xatolik" }); setLoading(false) }
+  }
+
+  const sel = students.find(s => s._id === selectedId || s.id === selectedId)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
+      <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden z-10">
+        <div className="bg-gradient-to-r from-blue-600 to-sky-500 px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-xl"><UserPlus className="w-5 h-5 text-white" /></div>
+            <h2 className="font-black text-white">Student Qo'shish</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl text-white transition-colors"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="bg-blue-50 rounded-2xl px-4 py-3 border border-blue-100">
+            <p className="font-bold text-blue-800 text-sm">{group.name}</p>
+            <p className="text-xs text-blue-400">{group.currentStudents || 0}/{group.maxStudents} talaba</p>
+          </div>
+
+          {fetching ? (
+            <div className="flex justify-center py-8"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Studentni tanlang *</label>
+                <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setErrors({ ...errors, selectedId: null }) }}
+                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors.selectedId ? 'border-red-400' : 'border-transparent focus:border-blue-500'}`}>
+                  <option value="">Tanlang...</option>
+                  {students.map(s => <option key={s._id || s.id} value={s._id || s.id}>{s.name} — {s.phone}</option>)}
+                </select>
+                {errors.selectedId && <p className="text-xs text-red-500 mt-1 font-medium">{errors.selectedId}</p>}
+              </div>
+              {sel && (
+                <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
+                  {[['Ism', sel.name], ['Telefon', sel.phone], ['Balans', `${Number(sel.balance || 0).toLocaleString()} UZS`]].map(([k, v]) => (
+                    <div key={k} className="flex justify-between text-sm">
+                      <span className="text-slate-400">{k}</span>
+                      <span className="font-bold text-slate-700">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {errors.submit && (
+          <div className="px-6 py-3 bg-red-50 border-t border-red-100">
+            <p className="text-xs text-red-600 font-bold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> {errors.submit}
+            </p>
+          </div>
+        )}
+
+        <div className="px-6 pb-6 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold text-slate-500 bg-slate-100 rounded-2xl hover:bg-slate-200 transition-colors">Bekor</button>
+          <button onClick={handleAdd} disabled={loading}
+            className="flex-1 py-3 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-sky-500 rounded-2xl shadow-lg shadow-blue-200 hover:opacity-90 transition-opacity disabled:opacity-50">
+            {loading ? "Qo'shilmoqda..." : "+ Qo'shish"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── Main GroupsPage ───────────────────────────────────────────
+export default function GroupsPage() {
+  const {
+    groups, rooms, teachers, courses, loading, activeTab, setActiveTab,
+    search, setSearch, page, setPage, itemsPerPage, totalPages,
+    paginatedGroups, paginatedRooms, loadGroups, loadRooms
+  } = useGroups()
+
+  const {
+    showModal, showRoomModal, showDeleteModal, editingGroup, editingRoom,
+    itemToDelete, deleteType, formData, setFormData, roomFormData, setRoomFormData,
+    openAddGroupModal, openEditGroupModal, openAddRoomModal, openEditRoomModal,
+    openDeleteModal, closeModals
+  } = useGroupForm(teachers, courses, rooms)
+
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false)
+  const [selectedGroupForStudent, setSelectedGroupForStudent] = useState(null)
+  const [selectedGroup, setSelectedGroup] = useState(null)
+  const [groupStudents, setGroupStudents] = useState([])
+  const [loadingStudents, setLoadingStudents] = useState(false)
+
+  const handleSaveGroup = async () => {
+    const ok = await saveGroup(editingGroup, formData)
+    if (ok) {
+      closeModals()
+      loadGroups()
+    }
+  }
+
+  const handleSaveRoom = async () => {
+    const ok = await saveRoom(editingRoom, roomFormData)
+    if (ok) {
+      closeModals()
+      loadRooms()
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return
+    const ok = await removeItem(itemToDelete, deleteType)
+    if (ok) {
+      closeModals()
+      activeTab === 'groups' ? loadGroups() : loadRooms()
+    }
+  }
+
+  const handleGroupClick = async (group) => {
+    if (selectedGroup?.id === group.id || selectedGroup?._id === group._id) {
+      setSelectedGroup(null)
+      setGroupStudents([])
+    } else {
+      setSelectedGroup(group)
+      setLoadingStudents(true)
+      try {
+        const res = await getGroupById(group.id || group._id, { includeStudents: true })
+        const groupData = res.data.data || res.data
+        let students = groupData.students || []
+        setGroupStudents(students)
+      } catch (err) {
+        console.error(err)
+        setGroupStudents([])
+      } finally {
+        setLoadingStudents(false)
+      }
+    }
+  }
+
+  const handleBack = () => {
+    setSelectedGroup(null)
+    setGroupStudents([])
+  }
+
+  const handleAddStudentSuccess = () => {
+    setShowAddStudentModal(false)
+    setSelectedGroupForStudent(null)
+    loadGroups()
+    if (selectedGroup) handleGroupClick(selectedGroup)
+  }
+
+  const openAddStudentModal = (group) => {
+    setSelectedGroupForStudent(group)
+    setShowAddStudentModal(true)
+  }
+
+  return (
+    <div className="p-4 md:p-6 space-y-6">
+      {/* Tablar va Qidiruv */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex bg-slate-100 p-1 rounded-2xl">
+          {[['groups', 'Guruhlar', Users], ['rooms', 'Xonalar', Building2]].map(([tab, label, Icon]) => (
+            <button
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab)
+                setPage(1)
+                setSelectedGroup(null)
+              }}
+              className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
+                activeTab === tab
+                  ? tab === 'groups' ? 'bg-violet-600 text-white shadow-md' : 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Icon className="w-4 h-4" /> {label}
+            </button>
+          ))}
+        </div>
+
+        {!selectedGroup && (
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Qidirish..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:border-violet-400 w-56"
+              />
+            </div>
+            <button
+              onClick={activeTab === 'groups' ? openAddGroupModal : openAddRoomModal}
+              className={`px-4 py-2.5 text-sm font-bold text-white rounded-2xl shadow-md flex items-center gap-2 ${
+                activeTab === 'groups'
+                  ? 'bg-gradient-to-r from-violet-600 to-purple-600'
+                  : 'bg-gradient-to-r from-indigo-600 to-blue-600'
+              }`}
+            >
+              + {activeTab === 'groups' ? 'Guruh' : 'Xona'}
+            </button>
+          </div>
+        )}
+
+        {selectedGroup && (
+          <button onClick={handleBack} className="px-4 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 flex items-center gap-2">
+            ← Barcha guruhlar
+          </button>
+        )}
+      </div>
+
+      {/* ASOSIY KONTENT */}
+      {loading ? (
+        <div className="flex justify-center py-24">
+          <div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : activeTab === 'groups' ? (
+        <>
+          {!selectedGroup ? (
+            <>
+              {paginatedGroups.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24">
+                  <div className="w-16 h-16 rounded-2xl bg-violet-50 flex items-center justify-center">
+                    <Users className="w-8 h-8 text-violet-400" />
+                  </div>
+                  <p className="text-slate-500 font-bold mt-3">Guruhlar yo'q</p>
+                  <button onClick={openAddGroupModal} className="text-violet-600 text-sm font-bold hover:underline mt-2">
+                    + Birinchi guruhni yarating
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <AnimatePresence mode="popLayout">
+                    {paginatedGroups.map((group, i) => (
+                      <div key={group.id || group._id} onClick={() => handleGroupClick(group)} className="cursor-pointer">
+                        <GroupCard
+                          group={group}
+                          idx={i}
+                          teachers={teachers}
+                          courses={courses}
+                          rooms={rooms}
+                          openEditGroupModal={openEditGroupModal}
+                          openDeleteModal={openDeleteModal}
+                          onAddStudent={openAddStudentModal}
+                          onViewStudents={handleGroupClick}
+                          page={page}
+                          itemsPerPage={itemsPerPage}
+                        />
+                      </div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                  <span className="text-xs text-slate-400">{(page - 1) * itemsPerPage + 1}–{Math.min(page * itemsPerPage, groups.length)} / {groups.length}</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-2 border rounded-xl hover:bg-slate-100 disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
+                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(n => (
+                      <button key={n} onClick={() => setPage(n)} className={`px-3 py-1.5 rounded-xl border ${page === n ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 hover:bg-slate-100'}`}>{n}</button>
+                    ))}
+                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-2 border rounded-xl hover:bg-slate-100 disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-lg">
+              <div className="bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-white/20 rounded-xl"><Users className="w-6 h-6 text-white" /></div>
+                    <div>
+                      <h3 className="font-black text-white text-xl">{selectedGroup.name}</h3>
+                      <p className="text-sm text-white/70">{groupStudents.length} ta o'quvchi</p>
+                    </div>
+                  </div>
+                  <button onClick={() => openAddStudentModal(selectedGroup)} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-white text-sm font-bold flex items-center gap-2">
+                    <UserPlus className="w-4 h-4" /> O'quvchi qo'shish
+                  </button>
+                </div>
+              </div>
+              {loadingStudents ? (
+                <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
+              ) : groupStudents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <Users className="w-16 h-16 text-slate-200" />
+                  <p className="font-medium mt-3">Bu guruhda hali o'quvchilar yo'q</p>
+                  <button onClick={() => openAddStudentModal(selectedGroup)} className="mt-3 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold flex items-center gap-2">
+                    <UserPlus className="w-4 h-4" /> Birinchi o'quvchini qo'shing
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b">
+                      <tr><th className="px-5 py-3 text-left text-xs font-bold">#</th><th className="px-5 py-3 text-left text-xs font-bold">O'quvchi</th><th className="px-5 py-3 text-left text-xs font-bold">Telefon</th><th className="px-5 py-3 text-left text-xs font-bold">Balans</th><th className="px-5 py-3 text-left text-xs font-bold">Qo'shilgan sana</th></tr>
+                    </thead>
+                    <tbody>
+                      {groupStudents.map((s, i) => (
+                        <tr key={s.id || s._id || i} className="border-b hover:bg-violet-50/40">
+                          <td className="px-5 py-3.5 text-slate-400 text-xs">{i+1}</td>
+                          <td className="px-5 py-3.5 font-bold text-slate-800">{s.name}</td>
+                          <td className="px-5 py-3.5 text-slate-500 text-xs">{s.phone || '—'}</td>
+                          <td className="px-5 py-3.5"><span className={`font-bold ${(s.balance || 0) < 0 ? 'text-red-500' : 'text-emerald-600'}`}>{(s.balance || 0).toLocaleString()} so'm</span></td>
+                          <td className="px-5 py-3.5 text-slate-500 text-xs">{s.createdAt ? new Date(s.createdAt).toLocaleDateString('uz-UZ') : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-6 py-3 bg-slate-50 border-t flex justify-between">
+                    <span className="text-xs text-slate-400">Jami {groupStudents.length} ta o'quvchi</span>
+                    <span className="text-emerald-600 text-xs">✓ {groupStudents.filter(s => (s.balance || 0) >= 0).length} to'lagan</span>
+                    <span className="text-red-500 text-xs">✗ {groupStudents.filter(s => (s.balance || 0) < 0).length} qarzdor</span>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {paginatedRooms.map((room, i) => (
+            <RoomCard key={room.id || room._id} room={room} idx={i} openEditRoomModal={openEditRoomModal} openDeleteModal={openDeleteModal} />
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showModal && <GroupModal formData={formData} setFormData={setFormData} teachers={teachers} courses={courses} rooms={rooms} editingGroup={editingGroup} handleSaveGroup={handleSaveGroup} closeModals={closeModals} />}
+        {showRoomModal && <RoomModal roomFormData={roomFormData} setRoomFormData={setRoomFormData} editingRoom={editingRoom} handleSaveRoom={handleSaveRoom} closeModals={closeModals} />}
+        {showDeleteModal && <DeleteModal itemToDelete={itemToDelete} deleteType={deleteType} confirmDelete={confirmDelete} closeModals={closeModals} />}
+        {showAddStudentModal && selectedGroupForStudent && <AddStudentModal group={selectedGroupForStudent} onClose={() => setShowAddStudentModal(false)} onAdded={handleAddStudentSuccess} />}
+      </AnimatePresence>
+    </div>
+  )
+}

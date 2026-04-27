@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
     setError(null)
     try {
       const { data } = await api.post('/auth/login', credentials)
-      localStorage.setItem('access_token', data.accessToken)
+      localStorage.setItem('accessToken', data.accessToken)
       localStorage.setItem('user', JSON.stringify(data.user))
       setUser(data.user)
       return data.user
@@ -36,12 +36,12 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try { await api.post('/auth/logout') } catch { /* ignore */ }
-    localStorage.removeItem('access_token')
+    localStorage.removeItem('accessToken')
     localStorage.removeItem('user')
     setUser(null)
   }, [])
 
-  const isAuthenticated = !!user && !!localStorage.getItem('access_token')
+  const isAuthenticated = !!user && !!localStorage.getItem('accessToken')
 
   return (
     <AuthContext.Provider value={{ user, loading, error, login, logout, isAuthenticated }}>

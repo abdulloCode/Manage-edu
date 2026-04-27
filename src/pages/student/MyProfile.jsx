@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useFetch } from '../../hooks/useFetch'
 import { getMe, updateMe } from '../../api/auth'
 import { getMyStudentData } from '../../api/students'
+import { getMyGroups } from '../../api/groups'
 import { LoadingState, ErrorState } from '../../components/PageShell'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -85,18 +86,20 @@ function EditModal({ user, onClose, onSaved }) {
 export default function MyProfile() {
   const { data: profile, loading: pLoading, error: pError } = useFetch(getMe)
   const { data: studentData, loading: sLoading } = useFetch(getMyStudentData)
+  const { data: groupsData, loading: gLoading } = useFetch(getMyGroups)
   const { theme, setTheme, themes } = useTheme()
   const [editOpen, setEditOpen] = useState(false)
   const [localUser, setLocalUser] = useState(null)
 
-  if (pLoading || sLoading) return <LoadingState />
+  const groups = Array.isArray(groupsData) ? groupsData : (groupsData?.groups ?? [])
+  const enrolledGroups = groups.filter(g => g.isEnrolled)
+
+  if (pLoading || sLoading || gLoading) return <LoadingState />
   if (pError) return <ErrorState message={pError} />
 
   const user     = localUser ?? profile
   const bal      = studentData ?? {}
   const balance  = Number(bal.balance  ?? user?.balance?.balance  ?? 0)
-  const debit    = Number(bal.debit    ?? user?.balance?.debit    ?? 0)
-  const credit   = Number(bal.credit   ?? user?.balance?.credit   ?? 0)
   const expected = Number(bal.expectedPayments ?? user?.balance?.expectedPayments ?? 0)
   const actual   = Number(bal.actualPayments   ?? user?.balance?.actualPayments   ?? 0)
   const unpaid   = bal.unpaidMonths ?? user?.balance?.unpaidMonths ?? []
@@ -157,6 +160,50 @@ export default function MyProfile() {
         </div>
       </div>
 
+      {/* ── My Groups Section ──────────────────────────────── */}
+      {enrolledGroups.length > 0 && (
+        <div className="rounded-2xl bg-base-100 border border-base-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-semibold text-base-content/40 uppercase tracking-widest">My Groups</p>
+            <span className="text-xs text-base-content/50">{enrolledGroups.length} group{enrolledGroups.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {enrolledGroups.map((group) => {
+              const status = group.status === 'active' ? 'bg-success' : 'bg-base-content/30'
+              return (
+                <div key={group._id || group.id} className="flex items-center gap-3 p-3 rounded-xl bg-base-50 border border-base-200">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-base-content truncate">{group.name}</p>
+                      <span className={`w-1.5 h-1.5 rounded-full ${status}`} />
+                    </div>
+
+                    {group.course && (
+                      <p className="text-xs text-base-content/50 truncate">
+                        {group.course.title}
+                      </p>
+                    )}
+
+                    {group.teacher && (
+                      <p className="text-xs text-base-content/50 truncate">
+                        👨‍🏫 {group.teacher.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Two-column row ────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -172,13 +219,11 @@ export default function MyProfile() {
             <span className="text-sm text-base-content/30 font-medium">UZS</span>
           </div>
 
-          {/* 4-stat grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-base-200">
+          {/* 2-stat grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 pt-4 border-t border-base-200">
             {[
               { label: 'Expected', value: expected, color: 'text-base-content' },
               { label: 'Paid',     value: actual,   color: 'text-success' },
-              { label: 'Debit',    value: debit,    color: 'text-error' },
-              { label: 'Credit',   value: credit,   color: 'text-success' },
             ].map(({ label, value, color }) => (
               <div key={label} className="flex flex-col gap-0.5">
                 <p className="text-xs text-base-content/40">{label}</p>
