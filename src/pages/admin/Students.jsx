@@ -8,12 +8,13 @@ import {
   deleteStudent,
   assignStudentGroup,
 } from '../../api/students'
+import { getAllGroups } from '../../api/groups'
 import { useDebounce } from '../../hooks/useDebounce'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('ru-RU')
-
+const getId = (item) => item?._id || item?.id || null 
 const STATUS_BADGE = {
   active: 'badge-success',
   inactive: 'badge-warning',
@@ -68,8 +69,6 @@ function DetailModal({ student, onClose }) {
             </span>
           }
         />
-        <InfoRow label="Debit" value={`${fmt(student.debit)} UZS`} />
-        <InfoRow label="Credit" value={`${fmt(student.credit)} UZS`} />
         <InfoRow
           label="Balance"
           value={
@@ -81,6 +80,24 @@ function DetailModal({ student, onClose }) {
         <InfoRow label="Expected Payments" value={`${fmt(student.expectedPayments)} UZS`} />
         <InfoRow label="Actual Payments" value={`${fmt(student.actualPayments)} UZS`} />
       </div>
+
+      {/* Group Information */}
+      {student.group && (
+        <div className="mt-4">
+          <p className="text-xs text-base-content/50 uppercase tracking-wider mb-2">Group Information</p>
+          <div className="bg-base-200 rounded-lg p-3 space-y-2">
+            <InfoRow label="Group" value={student.group.name} />
+            {student.group.course && (
+              <InfoRow label="Course" value={student.group.course.title} />
+            )}
+            {student.group.teacher && (
+              <InfoRow label="Teacher" value={student.group.teacher.name} />
+            )}
+            <InfoRow label="Students" value={`${student.group.currentStudents}/${student.group.maxStudents}`} />
+          </div>
+        </div>
+      )}
+
       {student.unpaidMonths?.length > 0 && (
         <div className="mt-4">
           <p className="text-xs text-base-content/50 uppercase tracking-wider mb-2">Unpaid Months</p>
@@ -105,10 +122,26 @@ function InfoRow({ label, value }) {
 }
 
 function CreateModal({ onClose, onCreated }) {
-  const [mode, setMode] = useState('new') // 'new' | 'link'
-  const [form, setForm] = useState({ name: '', phone: '', password: '', userId: '' })
+  const [form, setForm] = useState({ name: '', phone: '', password: '', courseId: '' })
+  const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(true)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const { getAllCourses } = await import('../../api/courses')
+        const res = await getAllCourses()
+        setCourses(res.data.data || res.data || [])
+      } catch (err) {
+        console.error('Kurslarni yuklashda xatolik:', err)
+      } finally {
+        setFetching(false)
+      }
+    }
+    fetchCourses()
+  }, [])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -117,10 +150,7 @@ function CreateModal({ onClose, onCreated }) {
     setLoading(true)
     setError(null)
     try {
-      const payload = mode === 'link'
-        ? { userId: form.userId }
-        : { name: form.name, phone: form.phone, password: form.password }
-      const { data } = await createStudent(payload)
+      const { data } = await createStudent(form)
       onCreated(data)
       onClose()
     } catch (err) {
@@ -131,26 +161,7 @@ function CreateModal({ onClose, onCreated }) {
   }
 
   return (
-    <Modal onClose={onClose} title="Add Student">
-      <div role="tablist" className="tabs tabs-boxed mb-4">
-        <button
-          role="tab"
-          className={`tab ${mode === 'new' ? 'tab-active' : ''}`}
-          onClick={() => setMode('new')}
-          type="button"
-        >
-          Create New
-        </button>
-        <button
-          role="tab"
-          className={`tab ${mode === 'link' ? 'tab-active' : ''}`}
-          onClick={() => setMode('link')}
-          type="button"
-        >
-          Link Existing User
-        </button>
-      </div>
-
+    <Modal onClose={onClose} title="Yangi o'quvchi qo'shish" wide>
       {error && (
         <div className="alert alert-error py-2 text-sm mb-3">
           <span>{error}</span>
@@ -158,27 +169,40 @@ function CreateModal({ onClose, onCreated }) {
       )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        {mode === 'new' ? (
-          <>
-            <FormField label="Full Name" required>
-              <input className="input input-bordered w-full" value={form.name} onChange={set('name')} required placeholder="Ali Karimov" />
-            </FormField>
-            <FormField label="Phone" required>
-              <input className="input input-bordered w-full" value={form.phone} onChange={set('phone')} required placeholder="+998901234567" />
-            </FormField>
-            <FormField label="Password" required>
-              <input type="password" className="input input-bordered w-full" value={form.password} onChange={set('password')} required placeholder="••••••••" />
-            </FormField>
-          </>
-        ) : (
-          <FormField label="User ID" required>
-            <input className="input input-bordered w-full font-mono text-sm" value={form.userId} onChange={set('userId')} required placeholder="64f3a2b1c9e77e001f3a4d12" />
-          </FormField>
-        )}
+        <FormField label="To'liq ismi *" required>
+          <input className="input input-bordered w-full" value={form.name} onChange={set('name')} required placeholder="Ali Karimov" />
+        </FormField>
+        <FormField label="Telefon *" required>
+          <input className="input input-bordered w-full" value={form.phone} onChange={set('phone')} required placeholder="+998901234567" />
+        </FormField>
+        <FormField label="Parol *" required>
+          <input type="password" className="input input-bordered w-full" value={form.password} onChange={set('password')} required placeholder="••••••••" />
+        </FormField>
+        <FormField label="Kurs (ixtiyoriy)">
+          {fetching ? (
+            <div className="flex items-center gap-2">
+              <span className="loading loading-spinner loading-sm"></span>
+              <span className="text-sm text-base-content/50">Kurslar yuklanmoqda...</span>
+            </div>
+          ) : (
+            <select
+              className="select select-bordered w-full"
+              value={form.courseId}
+              onChange={set('courseId')}
+            >
+              <option value="">Kursni tanlang...</option>
+              {courses.map((course) => (
+                <option key={course._id || course.id} value={course._id || course.id}>
+                  {course.name || course.title}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
         <div className="modal-action mt-1">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Bekor qilish</button>
           <button type="submit" className={`btn btn-primary btn-sm ${loading ? 'loading' : ''}`} disabled={loading}>
-            Add Student
+            Qo'shish
           </button>
         </div>
       </form>
@@ -202,7 +226,7 @@ function EditModal({ student, onClose, onUpdated }) {
     setLoading(true)
     setError(null)
     try {
-      const { data } = await updateStudent(student.id, form)
+      const { data } = await updateStudent(getId(student), form)
       onUpdated(data)
       onClose()
     } catch (err) {
@@ -213,47 +237,104 @@ function EditModal({ student, onClose, onUpdated }) {
   }
 
   return (
-    <Modal onClose={onClose} title="Edit Student">
+    <Modal onClose={onClose} title="O'quvchini tahrirlash" wide>
       {error && (
         <div className="alert alert-error py-2 text-sm mb-3"><span>{error}</span></div>
       )}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <FormField label="Full Name">
-          <input className="input input-bordered w-full" value={form.name} onChange={set('name')} placeholder="Ali Karimov" />
-        </FormField>
-        <FormField label="Phone">
-          <input className="input input-bordered w-full" value={form.phone} onChange={set('phone')} placeholder="+998901234567" />
-        </FormField>
-        <FormField label="Status">
-          <select className="select select-bordered w-full" value={form.status} onChange={set('status')}>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-            ))}
-          </select>
-        </FormField>
-        <div className="modal-action mt-1">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-          <button type="submit" className={`btn btn-primary btn-sm ${loading ? 'loading' : ''}`} disabled={loading}>
-            Save Changes
-          </button>
+
+      {/* Student Info */}
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-base-content/70 mb-3">Asosiy ma'lumotlar</h3>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <FormField label="To'liq ismi">
+            <input className="input input-bordered w-full" value={form.name} onChange={set('name')} placeholder="Ali Karimov" />
+          </FormField>
+          <FormField label="Telefon">
+            <input className="input input-bordered w-full" value={form.phone} onChange={set('phone')} placeholder="+998901234567" />
+          </FormField>
+          <FormField label="Holati">
+            <select className="select select-bordered w-full" value={form.status} onChange={set('status')}>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              ))}
+            </select>
+          </FormField>
+
+          <div className="modal-action mt-1">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Bekor qilish</button>
+            <button type="submit" className={`btn btn-primary btn-sm ${loading ? 'loading' : ''}`} disabled={loading}>
+              Saqlash
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Group & Course Info - Shows assignment button */}
+      <div className="mt-4 pt-4 border-t border-base-200">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-base-content/70">Guruh va kurs ma'lumotlari</h3>
         </div>
-      </form>
+
+        {student.group ? (
+          <div className="bg-base-200 rounded-lg p-3 space-y-2">
+            <InfoRow label="Guruh" value={student.group.name} />
+            {student.group.course && (
+              <InfoRow label="Kurs" value={student.group.course.title} />
+            )}
+            {student.group.teacher && (
+              <InfoRow label="O'qituvchi" value={student.group.teacher.name} />
+            )}
+            <InfoRow label="O'quvchilar" value={`${student.group.currentStudents || 0}/${student.group.maxStudents}`} />
+          </div>
+        ) : (
+          <div className="alert alert-info py-2 text-sm">
+            <span>O'quvchi hech qaysi guruhga biriktirilmagan</span>
+          </div>
+        )}
+
+        <p className="text-xs text-base-content/50 mt-2">
+          Guruhni o'zgartirish uchun quyidagi "Guruh" tugmasini bosing
+        </p>
+      </div>
     </Modal>
   )
 }
 
 function AssignGroupModal({ student, onClose, onAssigned }) {
-  const [groupId, setGroupId] = useState('')
+  const [groupId, setGroupId] = useState(student.group?.id || student.group?._id || '')
+  const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(true)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const fetchGroups = async () => {
+      setFetching(true)
+      try {
+        const { data } = await getAllGroups()
+        setGroups(data.data || data || [])
+      } catch (err) {
+        console.error('Failed to load groups:', err)
+      } finally {
+        setFetching(false)
+      }
+    }
+    fetchGroups()
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!groupId) return
     setLoading(true)
     setError(null)
     try {
-      const { data } = await assignStudentGroup(student.id, groupId)
-      onAssigned(data)
+      const { data } = await assignStudentGroup(getId(student), groupId)
+      // Include the selected group info in the response
+      const selectedGroup = groups.find(g => (g._id || g.id) === groupId)
+      onAssigned({
+        ...data,
+        group: selectedGroup
+      })
       onClose()
     } catch (err) {
       setError(err.response?.data?.error ?? 'Failed to assign group')
@@ -262,28 +343,95 @@ function AssignGroupModal({ student, onClose, onAssigned }) {
     }
   }
 
+  const selectedGroup = groups.find(g => (g._id || g.id) === groupId)
+
   return (
-    <Modal onClose={onClose} title={`Assign Group — ${student.name}`}>
+    <Modal onClose={onClose} title={`Guruhga biriktirish — ${student.name}`} wide>
       {error && (
         <div className="alert alert-error py-2 text-sm mb-3"><span>{error}</span></div>
       )}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <FormField label="Group ID" required>
-          <input
-            className="input input-bordered w-full font-mono text-sm"
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-            required
-            placeholder="64f3a2b1c9e77e001f3a4d99"
-          />
-        </FormField>
-        <div className="modal-action mt-1">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-          <button type="submit" className={`btn btn-primary btn-sm ${loading ? 'loading' : ''}`} disabled={loading}>
-            Assign
-          </button>
+
+      {fetching ? (
+        <div className="flex justify-center py-8">
+          <span className="loading loading-spinner loading-md text-primary" />
         </div>
-      </form>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <FormField label="Guruhni tanlang *" required>
+            <select
+              className="select select-bordered w-full"
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              required
+            >
+              <option value="">Guruhni tanlang...</option>
+              {groups.map((g) => {
+                const studentCount = g.currentStudents || g.students?.length || 0
+                const isFull = studentCount >= g.maxStudents
+                return (
+                  <option key={g._id || g.id} value={g._id || g.id} disabled={isFull}>
+                    {g.name} {g.course ? `(${g.course.title || g.course.name})` : ''} {g.teacher ? `- ${g.teacher.name}` : ''} [{studentCount}/{g.maxStudents} ta]
+                    {isFull && " - TO'LA"}
+                  </option>
+                )
+              })}
+            </select>
+          </FormField>
+
+          {selectedGroup && (
+            <div className="bg-base-200 rounded-lg p-4 space-y-3">
+              <p className="text-sm font-semibold text-base-content/70">Guruh haqida ma'lumot:</p>
+              <div className="grid grid-cols-2 gap-3">
+                <InfoRow label="Guruh nomi" value={selectedGroup.name} />
+                <InfoRow label="O'quvchilar" value={`${selectedGroup.currentStudents || selectedGroup.students?.length || 0}/${selectedGroup.maxStudents}`} />
+                {selectedGroup.course && (
+                  <InfoRow label="Kurs" value={selectedGroup.course.title || selectedGroup.course.name} />
+                )}
+                {selectedGroup.teacher && (
+                  <InfoRow label="O'qituvchi" value={selectedGroup.teacher.name} />
+                )}
+                {selectedGroup.schedule?.days?.length > 0 && (
+                  <InfoRow
+                    label="Dars kunlari"
+                    value={`${selectedGroup.schedule.days.slice(0, 3).join(', ')}${selectedGroup.schedule.days.length > 3 ? '...' : ''}`}
+                  />
+                )}
+                {selectedGroup.schedule?.fromHour && (
+                  <InfoRow
+                    label="Vaqt"
+                    value={`${selectedGroup.schedule.fromHour} - ${selectedGroup.schedule.toHour}`}
+                  />
+                )}
+                <InfoRow
+                  label="Oylik to'lov"
+                  value={`${Number(selectedGroup.monthlyFeePerStudent || 0).toLocaleString()} UZS`}
+                />
+              </div>
+
+              {/* Show students in this group */}
+              {selectedGroup.students && selectedGroup.students.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-base-300">
+                  <p className="text-xs font-semibold text-base-content/70 mb-2">Guruhdagi o'quvchilar:</p>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {selectedGroup.students.map((s, i) => (
+                      <div key={s.id || s._id || i} className="text-xs py-1 px-2 bg-base-300 rounded">
+                        {s.name} {s.phone ? `(${s.phone})` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="modal-action mt-1">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Bekor qilish</button>
+            <button type="submit" className={`btn btn-primary btn-sm ${loading ? 'loading' : ''}`} disabled={loading || !groupId}>
+              Biriktirish
+            </button>
+          </div>
+        </form>
+      )}
     </Modal>
   )
 }
@@ -296,8 +444,8 @@ function DeleteConfirmModal({ student, onClose, onDeleted }) {
     setLoading(true)
     setError(null)
     try {
-      await deleteStudent(student.id)
-      onDeleted(student.id)
+      await deleteStudent(getId(student))
+onDeleted(getId(student))
       onClose()
     } catch (err) {
       setError(err.response?.data?.error ?? 'Failed to delete student')
@@ -411,16 +559,22 @@ export default function StudentsPage() {
   }
 
   const handleUpdated = (updated) => {
-    setStudents((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)))
+    const updatedId = getId(updated)
+    setStudents((prev) => prev.map((s) => (getId(s) === updatedId ? { ...s, ...updated } : s)))
   }
 
-  const handleDeleted = (id) => {
-    setStudents((prev) => prev.filter((s) => s.id !== id))
-  }
-
-  const handleAssigned = (updated) => {
-    setStudents((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)))
-  }
+  
+const handleDeleted = (id) => {
+  setStudents((prev) => prev.filter((s) => getId(s) !== id))
+}
+const handleAssigned = (updated) => {
+  const updatedId = getId(updated)
+  setStudents((prev) => prev.map((s) =>
+    getId(s) === updatedId
+      ? { ...s, ...updated, group: updated.group || s.group }
+      : s
+  ))
+}
 
   const open = (type, student = null) => setModal({ type, student })
   const closeModal = () => setModal(null)
@@ -477,24 +631,22 @@ export default function StudentsPage() {
                 <tr className="text-xs text-base-content/50 uppercase bg-base-200/50">
                   <th>Name</th>
                   <th>Phone</th>
-                  <th>Status</th>
                   <th className="text-right">Balance</th>
-                  <th className="text-right">Debit</th>
-                  <th className="text-right">Credit</th>
-                  <th>Unpaid</th>
+                  <th>Course</th>
+                  <th>Created At</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12">
+                    <td colSpan={6} className="text-center py-12">
                       <span className="loading loading-spinner loading-md text-primary" />
                     </td>
                   </tr>
                 ) : students.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12 text-base-content/30">
+                    <td colSpan={6} className="text-center py-12 text-base-content/30">
                       No students found
                     </td>
                   </tr>
@@ -505,22 +657,22 @@ export default function StudentsPage() {
                         <div className="font-medium text-sm">{s.name}</div>
                       </td>
                       <td className="text-base-content/60 text-xs font-mono">{s.phone}</td>
-                      <td>
-                        <span className={`badge badge-sm capitalize ${STATUS_BADGE[s.status] ?? 'badge-ghost'}`}>
-                          {s.status}
-                        </span>
-                      </td>
                       <td className="text-right"><BalanceCell value={s.balance} /></td>
-                      <td className="text-right text-sm">{fmt(s.debit)}</td>
-                      <td className="text-right text-sm">{fmt(s.credit)}</td>
                       <td>
-                        {s.unpaidMonths?.length > 0 ? (
-                          <div className="tooltip" data-tip={s.unpaidMonths.join(', ')}>
-                            <span className="badge badge-error badge-sm">{s.unpaidMonths.length} mo</span>
-                          </div>
+                        {s.group?.course ? (
+                          <span className="text-xs text-base-content">{s.group.course.title}</span>
                         ) : (
                           <span className="text-base-content/20 text-xs">—</span>
                         )}
+                      </td>
+                      <td>
+                        <span className="text-xs text-base-content/70">
+                          {s.createdAt ? new Date(s.createdAt).toLocaleDateString('uz-UZ', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                          }) : '—'}
+                        </span>
                       </td>
                       <td className="text-right">
                         <div className="flex items-center justify-end gap-1">

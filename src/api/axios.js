@@ -2,15 +2,13 @@ import axios from "axios";
 import { accessTokenAtom, userAtom, authStore } from "../store/auth";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL + "/api", // relative → Vite proxy forwards to the real server
+  baseURL: import.meta.env.VITE_API_BASE_URL + "/api",
   withCredentials: true,
   headers: {
-    // headers: {
     "Content-Type": "application/json",
-    "ngrok-skip-browser-warning": "true",
+    // "ngrok-skip-browser-warning": "true",  ← o'chirildi
   },
 });
-
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
@@ -59,10 +57,43 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
-    // Refresh call itself failed — just reject, let the caller decide what to do
-    // Never redirect here to avoid infinite reload loops
-    if (original?._isRefresh) {
-      return Promise.reject(error);
+    if (error.response?.status === 401 && !original._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) =>
+          failedQueue.push({ resolve, reject }),
+        ).then((token) => {
+          original.headers.Authorization = `Bearer ${token}`;
+          return api(original);
+        });
+      }
+
+      original._retry = true;
+      isRefreshing = true;
+
+      try {
+        // refresh cookie is sent automatically via withCredentials
+        const { data } = await axios.post(
+          `${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`,
+          {},
+          {
+            withCredentials: true,
+            headers: { "ngrok-skip-browser-warning": "true" },
+          },
+        );
+        const newToken = data.accessToken;
+        localStorage.setItem("accessToken", newToken);
+        api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+        processQueue(null, newToken);
+        return api(original);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
 
     if (error.response?.status !== 401 || original._retry) {
