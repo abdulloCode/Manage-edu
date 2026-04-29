@@ -6,7 +6,7 @@ const api = axios.create({
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
-    // "ngrok-skip-browser-warning": "true",  ← o'chirildi
+    "ngrok-skip-browser-warning": "true", // ← o'chirildi
   },
 });
 api.interceptors.request.use(
@@ -57,6 +57,11 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
+    // Don't try to refresh or redirect for login/refresh endpoint failures
+    if (original?._isRefresh || original?._isLogin) {
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !original._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) =>
@@ -80,9 +85,12 @@ api.interceptors.response.use(
             headers: { "ngrok-skip-browser-warning": "true" },
           },
         );
+
+        console.log(data);
         const newToken = data.accessToken;
         localStorage.setItem("accessToken", newToken);
         api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+
         processQueue(null, newToken);
         return api(original);
       } catch (refreshError) {

@@ -19,7 +19,7 @@ export const getMyRatings = () => api.get("/ratings/me/ratings");
 
 // ── Guruh oylik baho kalendari ───────────────────────────────
 export const getGroupRatingCalendar = (groupId, { year, month }) =>
-  api.get(`/ratings/group/${groupId}/calendar`, { params: { year, month } });
+  api.get(`/ratings/group/${groupId}`, { params: { year, month } });
 
 // ── Kunlik baho qo'yish
 export const upsertDayRating = (

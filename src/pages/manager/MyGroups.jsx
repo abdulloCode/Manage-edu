@@ -67,7 +67,10 @@ export default function MyGroups() {
                         </p>
                       )}
                       {g.schedule && (
-                        <p className="text-xs text-base-content/40 mt-0.5">{g.schedule}</p>
+                        <p className="text-xs text-base-content/40 mt-0.5">
+                          {Array.isArray(g.schedule.days) ? g.schedule.days.join(', ') : g.schedule.days}
+                          {g.schedule.fromHour && g.schedule.toHour && ` · ${g.schedule.fromHour}–${g.schedule.toHour}`}
+                        </p>
                       )}
                     </div>
                   </div>

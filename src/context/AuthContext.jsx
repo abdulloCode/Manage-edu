@@ -1,6 +1,8 @@
+// @refresh reset
 import { createContext, useContext, useEffect, useCallback } from "react";
 import { useAtom } from "jotai";
 import api, { callRefresh } from "../api/axios";
+import { getMe } from "../api/auth";
 import {
   accessTokenAtom,
   userAtom,
@@ -21,10 +23,20 @@ export function AuthProvider({ children }) {
   // Silently restore session on every page load via the httpOnly refresh cookie
   useEffect(() => {
     callRefresh()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         setAccessToken(data.accessToken);
-        if (data.user) setUser(data.user);
         api.defaults.headers.common.Authorization = `Bearer ${data.accessToken}`;
+        if (data.user) {
+          setUser(data.user);
+        } else {
+          // Refresh didn't return user — fetch profile separately
+          try {
+            const { data: me } = await getMe();
+            setUser(me);
+          } catch {
+            setUser(null);
+          }
+        }
       })
       .catch(() => {
         // No valid cookie — user needs to log in manually, no redirect here
@@ -41,7 +53,7 @@ export function AuthProvider({ children }) {
       setLoading(true);
       setError(null);
       try {
-        const { data } = await api.post("/auth/login", credentials);
+        const { data } = await api.post("/auth/login", credentials, { _isLogin: true });
         setAccessToken(data.accessToken);
         localStorage.setItem("accessToken", data.accessToken);
         localStorage.setItem("user", JSON.stringify(data.user));
