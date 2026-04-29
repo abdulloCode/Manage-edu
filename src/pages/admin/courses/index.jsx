@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Edit3, Trash2, BookOpen,
@@ -36,8 +36,8 @@ function CourseCard({ course, index, onEdit, onDelete }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92 }}
       transition={{ delay: index * 0.05, type: 'spring', stiffness: 300, damping: 28 }}
-      className="group relative bg-white rounded-3xl overflow-hidden border border-slate-100 hover:border-transparent hover:shadow-2xl transition-all duration-300"
-      style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+      className="group relative bg-white rounded-3xl overflow-hidden border border-slate-200 hover:border-transparent hover:shadow-2xl transition-all duration-300"
+      style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
     >
       {/* Gradient Header */}
       <div className={`relative bg-gradient-to-br ${grad} p-6 overflow-hidden`}>
@@ -50,13 +50,13 @@ function CourseCard({ course, index, onEdit, onDelete }) {
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
             <button
               onClick={() => onEdit(course)}
-              className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-xl text-white transition-colors"
+              className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-xl text-white transition-colors font-bold"
             >
               <Edit3 className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => onDelete(course)}
-              className="p-2 bg-white/20 hover:bg-red-400/60 backdrop-blur-sm rounded-xl text-white transition-colors"
+              className="p-2 bg-white/20 hover:bg-red-400/60 backdrop-blur-sm rounded-xl text-white transition-colors font-bold"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -71,20 +71,20 @@ function CourseCard({ course, index, onEdit, onDelete }) {
 
       {/* Body */}
       <div className="p-5">
-        <p className="text-slate-400 text-xs leading-relaxed line-clamp-2 mb-4 min-h-[2rem]">
+        <p className="text-slate-500 text-sm font-medium leading-relaxed line-clamp-2 mb-4 min-h-[2.5rem]">
           {course.description || "Tavsif yo'q"}
         </p>
 
         <div className="flex items-center justify-between">
           <div className={`flex items-center gap-1.5 px-2.5 py-1.5 ${bg} rounded-lg`}>
-            <Clock className="w-3 h-3 text-slate-500" />
-            <span className="text-[11px] font-bold text-slate-600">{course.duration || '—'}</span>
+            <Clock className="w-3 h-3 text-slate-600" />
+            <span className="text-xs font-bold text-slate-700">{course.duration || '—'}</span>
           </div>
           <div className="text-right">
-            <div className="text-[11px] text-slate-400 font-medium">Narxi</div>
+            <div className="text-xs font-bold text-slate-500">Narxi</div>
             <div className="text-base font-black text-slate-900">
               {Number(course.price || 0).toLocaleString()}
-              <span className="text-[10px] font-medium text-slate-400 ml-1">UZS</span>
+              <span className="text-xs font-bold text-slate-500 ml-1">UZS</span>
             </div>
           </div>
         </div>
@@ -111,15 +111,15 @@ function StatsBar({ courses }) {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.08 }}
-          className="bg-white rounded-2xl p-4 border border-slate-100 flex items-center gap-3"
-          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+          className="bg-white rounded-2xl p-5 border border-slate-200 flex items-center gap-4 hover:shadow-lg transition-shadow"
+          style={{ boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)' }}
         >
-          <div className={`p-2.5 ${stat.bg} rounded-xl`}>
-            <stat.icon className={`w-4 h-4 ${stat.color}`} />
+          <div className={`p-3 ${stat.bg} rounded-xl`}>
+            <stat.icon className={`w-5 h-5 ${stat.color}`} />
           </div>
           <div>
-            <div className="text-xs text-slate-400 font-medium">{stat.label}</div>
-            <div className="text-base font-black text-slate-800">{stat.value}</div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{stat.label}</div>
+            <div className="text-lg font-black text-slate-900">{stat.value}</div>
           </div>
         </motion.div>
       ))}
@@ -127,7 +127,7 @@ function StatsBar({ courses }) {
   );
 }
 
-function CourseModal({ show, onClose, editingCourse, formData, setFormData, onSave }) {
+function CourseModal({ show, onClose, editingCourse, formData, setFormData, onSave, isSubmitting }) {
   return (
     <AnimatePresence>
       {show && (
@@ -166,11 +166,11 @@ function CourseModal({ show, onClose, editingCourse, formData, setFormData, onSa
             {/* Form */}
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                   Kurs Nomi
                 </label>
                 <input
-                  className="w-full px-4 py-3 bg-slate-50 rounded-2xl text-sm font-medium outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all placeholder:text-slate-300"
+                  className="w-full px-4 py-3 bg-slate-50 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all placeholder:text-slate-400"
                   placeholder="Masalan: Full-Stack Web Development"
                   value={formData.name || formData.title || ''}
                   onChange={e => setFormData({ ...formData, name: e.target.value, title: e.target.value })}
@@ -179,23 +179,23 @@ function CourseModal({ show, onClose, editingCourse, formData, setFormData, onSa
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                     Narxi (UZS)
                   </label>
                   <input
                     type="number"
-                    className="w-full px-4 py-3 bg-slate-50 rounded-2xl text-sm font-medium outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all placeholder:text-slate-300"
+                    className="w-full px-4 py-3 bg-slate-50 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all placeholder:text-slate-400"
                     placeholder="800000"
                     value={formData.price}
                     onChange={e => setFormData({ ...formData, price: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                     Davomiyligi
                   </label>
                   <input
-                    className="w-full px-4 py-3 bg-slate-50 rounded-2xl text-sm font-medium outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all placeholder:text-slate-300"
+                    className="w-full px-4 py-3 bg-slate-50 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all placeholder:text-slate-400"
                     placeholder="6 oy"
                     value={formData.duration}
                     onChange={e => setFormData({ ...formData, duration: e.target.value })}
@@ -204,11 +204,11 @@ function CourseModal({ show, onClose, editingCourse, formData, setFormData, onSa
               </div>
 
               <div>
-                <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                   Tavsif
                 </label>
                 <textarea
-                  className="w-full px-4 py-3 bg-slate-50 rounded-2xl text-sm font-medium outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all resize-none h-24 placeholder:text-slate-300"
+                  className="w-full px-4 py-3 bg-slate-50 rounded-2xl text-sm font-bold outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white transition-all resize-none h-24 placeholder:text-slate-400"
                   placeholder="Kurs haqida qisqacha..."
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
@@ -219,16 +219,27 @@ function CourseModal({ show, onClose, editingCourse, formData, setFormData, onSa
             <div className="px-6 pb-6 flex gap-3">
               <button
                 onClick={onClose}
-                className="flex-1 py-3 rounded-2xl text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors"
+                disabled={isSubmitting}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Bekor
               </button>
               <button
                 onClick={onSave}
-                className="flex-1 py-3 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 transition-opacity shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+                disabled={isSubmitting}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-90 transition-opacity shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {editingCourse ? 'Saqlash' : 'Yaratish'}
-                <ChevronRight className="w-4 h-4" />
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saqlashmoqda...
+                  </>
+                ) : (
+                  <>
+                    {editingCourse ? 'Saqlash' : 'Yaratish'}
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
           </motion.div>
@@ -298,9 +309,28 @@ export default function CoursesPage() {
     openDeleteModal, closeModals
   } = useAdminCourseForm();
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
   const handleSave = async () => {
-    const success = await saveAdminCourse(editingCourse, formData, loadCourses);
-    if (success) { closeModals(); loadCourses(); }
+    setIsSubmitting(true);
+    try {
+      const success = await saveAdminCourse(editingCourse, formData, loadCourses);
+      if (success) {
+        const message = editingCourse ? 'Kurs muvaffaqiyatli yangilandi!' : 'Kurs muvaffaqiyatli yaratildi!'
+        setSuccessMessage(message);
+
+        // Success message ni 3 sekund ko'rsatish
+        setTimeout(() => {
+          setSuccessMessage('')
+        }, 3000)
+
+        closeModals();
+        loadCourses();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -326,7 +356,7 @@ export default function CoursesPage() {
               Kurslar Boshqaruvi
             </h1>
           </div>
-          <p className="text-slate-400 text-sm font-medium ml-1">Coding Club IT markazi</p>
+          <p className="text-slate-500 text-sm font-bold ml-1">Coding Club IT markazi</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -335,7 +365,7 @@ export default function CoursesPage() {
             <input
               type="text"
               placeholder="Qidirish..."
-              className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all w-52 font-medium"
+              className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all w-52 font-bold"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -343,7 +373,7 @@ export default function CoursesPage() {
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={openAddModal}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-indigo-200 hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-indigo-200 hover:opacity-90 transition-opacity"
           >
             <Plus className="w-4 h-4" /> Yangi Kurs
           </motion.button>
@@ -401,6 +431,7 @@ export default function CoursesPage() {
         formData={formData}
         setFormData={setFormData}
         onSave={handleSave}
+        isSubmitting={isSubmitting}
       />
 
       <DeleteModal
@@ -409,6 +440,21 @@ export default function CoursesPage() {
         onClose={closeModals}
         onConfirm={handleDelete}
       />
+
+      {/* Success Message Toast */}
+      <AnimatePresence>
+        {successMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-6 right-6 bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50"
+          >
+            <CheckCircle className="w-6 h-6" />
+            <span className="font-bold">{successMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

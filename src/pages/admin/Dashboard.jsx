@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Users,
   UserCheck,
@@ -60,6 +61,7 @@ const getDk = (payment) => {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState("Sha");
   const [viewMode, setViewMode] = useState("room");
   const [activeSection, setActiveSection] = useState("schedule"); // schedule, absent, rating, payments
@@ -728,12 +730,12 @@ export default function Dashboard() {
 
                         // API dan o'quvchilar ma'lumotlari
                         const groupStudents = groupsStudentsData[group._id || group.id] || [];
-                        const currentStudentsCount = groupStudents.length;
+                        const currentStudentsCount = groupStudents.length || group.currentStudents || 0;
                         const maxStudents = group.maxStudents || 12;
 
                         // Guruh o'qituvchisi ma'lumotlari
                         const teacher = data.teachers.find(t => (t._id || t.id) === group.teacherId);
-                        const teacherName = "No ma'lum";
+                        const teacherName = teacher?.name || group.teacherName || "Noma'lum";
 
                         // Bugungi attendance ma'lumotlari (agar guruh uchun bo'lsa)
                         const today = new Date().toISOString().split('T')[0];
@@ -775,8 +777,9 @@ export default function Dashboard() {
                           <td
                             key={`${colId}-${slotIdx}`}
                             rowSpan={span}
-                            className={`p-3 align-top border-[3px] border-white shadow-md z-10 rounded-[18px] transition-all hover:scale-[1.02] ${getGroupStyles(group.name)}`}
+                            className={`p-3 align-top border-[3px] border-white shadow-md z-10 rounded-[18px] transition-all hover:scale-[1.02] cursor-pointer ${getGroupStyles(group.name)}`}
                             style={{ minWidth: "160px" }}
+                            onClick={() => navigate(`/admin/groups?groupId=${group._id || group.id}`)}
                           >
                             <div className="flex flex-col h-full justify-between">
                               {/* Yuqori qism: Guruh va Vaqt */}

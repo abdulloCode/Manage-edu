@@ -62,11 +62,11 @@ function GroupCard({ group, idx, teachers, courses, rooms, openEditGroupModal, o
   return (
     <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
       transition={{ delay: idx * 0.04, type: 'spring', stiffness: 280, damping: 26 }}
-      className="bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-xl hover:border-transparent transition-all duration-300 cursor-pointer"
-      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+      className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl hover:border-transparent transition-all duration-300 cursor-pointer"
+      style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}
       onClick={() => onViewStudents(group)}>
 
-      <div className={`h-1.5 bg-gradient-to-r ${col.from} ${col.to}`} />
+      <div className={`h-2 bg-gradient-to-r ${col.from} ${col.to}`} />
 
       <div className="p-5">
         <div className="flex items-start justify-between mb-4">
@@ -75,50 +75,50 @@ function GroupCard({ group, idx, teachers, courses, rooms, openEditGroupModal, o
               <Users className={`w-5 h-5 ${col.text}`} />
             </div>
             <div>
-              <h3 className="font-black text-slate-800 text-sm">{group.name}</h3>
-              <span className="text-[10px] text-slate-400 font-mono">#{(page - 1) * itemsPerPage + idx + 1}</span>
+              <h3 className="font-black text-slate-900 text-sm">{group.name}</h3>
+              <span className="text-[10px] font-bold text-slate-500 font-mono">#{(page - 1) * itemsPerPage + idx + 1}</span>
             </div>
           </div>
-          <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${group.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+          <span className={`text-[10px] font-black px-2 py-1 rounded-full ${group.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
             {group.status === 'active' ? '● Faol' : '○ Nofaol'}
           </span>
         </div>
 
-        <div className="space-y-1.5 mb-4 text-xs text-slate-500">
-          {course && <div className="flex items-center gap-2"><BookOpen className="w-3.5 h-3.5" /><span className="truncate font-medium">{course.name}</span></div>}
-          {teacher && <div className="flex items-center gap-2"><GraduationCap className="w-3.5 h-3.5" /><span className="truncate">{teacher.name}</span></div>}
-          {room && <div className="flex items-center gap-2"><DoorOpen className="w-3.5 h-3.5" /><span className="truncate">{room.name}</span></div>}
+        <div className="space-y-1.5 mb-4 text-sm font-medium text-slate-600">
+          {course && <div className="flex items-center gap-2"><BookOpen className="w-3.5 h-3.5" /><span className="truncate font-bold">{course.name}</span></div>}
+          {teacher && <div className="flex items-center gap-2"><GraduationCap className="w-3.5 h-3.5" /><span className="truncate font-bold">{teacher.name}</span></div>}
+          {room && <div className="flex items-center gap-2"><DoorOpen className="w-3.5 h-3.5" /><span className="truncate font-bold">{room.name}</span></div>}
           {group.schedule?.days?.length > 0 && (
             <div className="flex items-center gap-2">
               <Clock className="w-3.5 h-3.5" />
-              <span>{group.schedule.days.slice(0, 3).join(', ')} · {group.schedule.fromHour}–{group.schedule.toHour}</span>
+              <span className="font-bold">{group.schedule.days.slice(0, 3).join(', ')} · {group.schedule.fromHour}–{group.schedule.toHour}</span>
             </div>
           )}
         </div>
 
         <div className="mb-4">
           <div className="flex justify-between items-center mb-1">
-            <span className="text-[11px] text-slate-400 flex items-center gap-1"><Users2 className="w-3 h-3" /> Talabalar</span>
-            <span className="text-[11px] font-black text-slate-700">{filled}/{max}</span>
+            <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><Users2 className="w-3 h-3" /> Talabalar</span>
+            <span className="text-xs font-black text-slate-700">{filled}/{max}</span>
           </div>
-          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div className={`h-full bg-gradient-to-r ${col.from} ${col.to} transition-all`} style={{ width: `${pct}%` }} />
           </div>
         </div>
 
         <div className={`${col.light} rounded-xl px-3 py-2 mb-4`}>
-          <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1"><Wallet className="w-3 h-3" /> Oylik to'lov</p>
-          <p className={`text-sm font-black ${col.text}`}>{Number(group.monthlyFeePerStudent).toLocaleString()} <span className="text-xs font-medium text-slate-400">so'm</span></p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Wallet className="w-3 h-3" /> Oylik to'lov</p>
+          <p className={`text-sm font-black ${col.text}`}>{Number(group.monthlyFeePerStudent).toLocaleString()} <span className="text-xs font-bold text-slate-500">so'm</span></p>
         </div>
 
         <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-          <button onClick={() => openEditGroupModal(group)} className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-violet-50 hover:text-violet-600 rounded-xl transition-colors flex items-center justify-center gap-1">
+          <button onClick={() => openEditGroupModal(group)} className="flex-1 py-2 text-xs font-black text-slate-600 bg-slate-50 hover:bg-violet-50 hover:text-violet-600 rounded-xl transition-colors flex items-center justify-center gap-1">
             <Edit3 className="w-3 h-3" /> Tahrirlash
           </button>
-          <button onClick={() => onAddStudent(group)} className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center justify-center gap-1">
+          <button onClick={() => onAddStudent(group)} className="flex-1 py-2 text-xs font-black text-slate-600 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center justify-center gap-1">
             <UserPlus className="w-3 h-3" /> Qo'shish
           </button>
-          <button onClick={() => openDeleteModal(group, 'group')} className="px-3 py-2 text-xs text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
+          <button onClick={() => openDeleteModal(group, 'group')} className="px-3 py-2 text-xs font-black text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -131,33 +131,33 @@ function GroupCard({ group, idx, teachers, courses, rooms, openEditGroupModal, o
 function RoomCard({ room, idx, openEditRoomModal, openDeleteModal }) {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
-      className="bg-white rounded-2xl border border-slate-100 p-5 hover:shadow-lg transition-all" style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+      className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-lg transition-all" style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}>
       <div className="flex items-center gap-3 mb-4">
         <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center">
           <Building2 className="w-6 h-6 text-indigo-600" />
         </div>
         <div>
-          <h3 className="font-black text-slate-800">{room.name}</h3>
-          <span className="text-xs text-slate-400 font-mono flex items-center gap-1"><MapPin className="w-3 h-3" /> #{room.number}</span>
+          <h3 className="font-black text-slate-900">{room.name}</h3>
+          <span className="text-xs font-bold text-slate-500 font-mono flex items-center gap-1"><MapPin className="w-3 h-3" /> #{room.number}</span>
         </div>
       </div>
       <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-indigo-50 rounded-xl">
         <Users className="w-4 h-4 text-indigo-600" />
-        <span className="text-sm font-bold text-indigo-700">{room.capacity} kishi</span>
+        <span className="text-sm font-black text-indigo-700">{room.capacity} kishi</span>
       </div>
       {room.equipment?.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-4">
           {room.equipment.slice(0, 4).map((eq, i) => (
-            <span key={i} className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg font-medium">{eq}</span>
+            <span key={i} className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg font-bold">{eq}</span>
           ))}
-          {room.equipment.length > 4 && <span className="text-[11px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-lg">+{room.equipment.length - 4}</span>}
+          {room.equipment.length > 4 && <span className="text-[11px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg font-bold">+{room.equipment.length - 4}</span>}
         </div>
       )}
       <div className="flex gap-2">
-        <button onClick={() => openEditRoomModal(room)} className="flex-1 py-2 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors flex items-center justify-center gap-1">
+        <button onClick={() => openEditRoomModal(room)} className="flex-1 py-2 text-xs font-black text-slate-600 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors flex items-center justify-center gap-1">
           <Edit3 className="w-3 h-3" /> Tahrirlash
         </button>
-        <button onClick={() => openDeleteModal(room, 'room')} className="px-3 py-2 text-xs text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
+        <button onClick={() => openDeleteModal(room, 'room')} className="px-3 py-2 text-xs font-black text-slate-400 bg-slate-50 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -166,7 +166,7 @@ function RoomCard({ room, idx, openEditRoomModal, openDeleteModal }) {
 }
 
 // ── Group Modal ───────────────────────────────────────────────
-function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGroup, handleSaveGroup, closeModals }) {
+function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGroup, handleSaveGroup, closeModals, isSubmittingGroup }) {
   const days = ['Du', 'Se', 'Chor', 'Pa', 'Ju', 'Sha', 'Yak']
   const [errors, setErrors] = useState({})
 
@@ -185,7 +185,7 @@ function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGr
   }
 
   const handleSubmit = () => {
-    if (validate()) handleSaveGroup()
+    if (validate() && !isSubmittingGroup) handleSaveGroup()
   }
 
   const toggleDay = (day) => {
@@ -213,9 +213,9 @@ function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGr
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Guruh nomi *</label>
             <input value={formData.name || ''} onChange={e => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: null }) }}
-              className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors.name ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}
+              className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-white transition-all ${errors.name ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}
               placeholder="Masalan: Frontend Guruh A" />
-            {errors.name && <p className="text-xs text-red-500 mt-1 font-medium">{errors.name}</p>}
+            {errors.name && <p className="text-xs text-red-500 mt-1 font-bold">{errors.name}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -226,11 +226,11 @@ function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGr
               <div key={key}>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
                 <select value={formData[key] || ''} onChange={e => { setFormData({ ...formData, [key]: e.target.value }); setErrors({ ...errors, [key]: null }) }}
-                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors[key] ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}>
+                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white transition-all ${errors[key] ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}>
                   <option value="">Tanlang</option>
-                  {list.map(i => <option key={i.id} value={i.id}>{i[nameKey]}</option>)}
+                  {list.map(i => <option key={i.id} value={i.id} className="text-slate-900">{i[nameKey]}</option>)}
                 </select>
-                {errors[key] && <p className="text-xs text-red-500 mt-1 font-medium">{errors[key]}</p>}
+                {errors[key] && <p className="text-xs text-red-500 mt-1 font-bold">{errors[key]}</p>}
               </div>
             ))}
           </div>
@@ -239,18 +239,18 @@ function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGr
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Xona *</label>
               <select value={formData.roomId || ''} onChange={e => { setFormData({ ...formData, roomId: e.target.value }); setErrors({ ...errors, roomId: null }) }}
-                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors.roomId ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}>
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-white transition-all ${errors.roomId ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`}>
                 <option value="">Tanlang</option>
                 {rooms.map(r => <option key={r.id} value={r.id}>{r.name} (#{r.number})</option>)}
               </select>
-              {errors.roomId && <p className="text-xs text-red-500 mt-1 font-medium">{errors.roomId}</p>}
+              {errors.roomId && <p className="text-xs text-red-500 mt-1 font-bold">{errors.roomId}</p>}
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Oylik to'lov *</label>
               <input type="number" value={formData.monthlyFeePerStudent || ''} placeholder="500000"
                 onChange={e => { setFormData({ ...formData, monthlyFeePerStudent: e.target.value }); setErrors({ ...errors, monthlyFeePerStudent: null }) }}
-                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors.monthlyFeePerStudent ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`} />
-              {errors.monthlyFeePerStudent && <p className="text-xs text-red-500 mt-1 font-medium">{errors.monthlyFeePerStudent}</p>}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-white transition-all ${errors.monthlyFeePerStudent ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`} />
+              {errors.monthlyFeePerStudent && <p className="text-xs text-red-500 mt-1 font-bold">{errors.monthlyFeePerStudent}</p>}
             </div>
           </div>
 
@@ -264,8 +264,8 @@ function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGr
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
                 <input type={type} value={formData[key] || ''} placeholder={placeholder}
                   onChange={e => { setFormData({ ...formData, [key]: e.target.value }); setErrors({ ...errors, [key]: null }) }}
-                  className={`w-full px-3 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors[key] ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`} />
-                {errors[key] && <p className="text-xs text-red-500 mt-1 font-medium">{errors[key]}</p>}
+                  className={`w-full px-3 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-white transition-all ${errors[key] ? 'border-red-400' : 'border-transparent focus:border-violet-500'}`} />
+                {errors[key] && <p className="text-xs text-red-500 mt-1 font-bold">{errors[key]}</p>}
               </div>
             ))}
           </div>
@@ -307,9 +307,14 @@ function GroupModal({ formData, setFormData, teachers, courses, rooms, editingGr
         )}
 
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0">
-          <button onClick={closeModals} className="flex-1 py-3 text-sm font-bold text-slate-500 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-colors">Bekor</button>
-          <button onClick={handleSubmit} className="flex-1 py-3 text-sm font-bold text-white bg-gradient-to-r from-violet-600 to-purple-600 rounded-2xl shadow-lg shadow-violet-200 hover:opacity-90 transition-opacity">
-            {editingGroup ? '✓ Saqlash' : '+ Yaratish'}
+          <button onClick={closeModals} disabled={isSubmittingGroup} className="flex-1 py-3 text-sm font-black text-slate-500 bg-white border border-slate-200 rounded-2xl hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Bekor</button>
+          <button onClick={handleSubmit} disabled={isSubmittingGroup} className="flex-1 py-3 text-sm font-black text-white bg-gradient-to-r from-violet-600 to-purple-600 rounded-2xl shadow-lg shadow-violet-200 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            {isSubmittingGroup ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Saqlashmoqda...
+              </>
+            ) : editingGroup ? '✓ Saqlash' : '+ Yaratish'}
           </button>
         </div>
       </motion.div>
@@ -606,12 +611,27 @@ export default function GroupsPage() {
   const [groupStudents, setGroupStudents] = useState([])
   const [loadingStudents, setLoadingStudents] = useState(false)
   const [studentPayments, setStudentPayments] = useState({})
+  const [isSubmittingGroup, setIsSubmittingGroup] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
   const handleSaveGroup = async () => {
-    const ok = await saveGroup(editingGroup, formData)
-    if (ok) {
-      closeModals()
-      loadGroups()
+    setIsSubmittingGroup(true)
+    try {
+      const ok = await saveGroup(editingGroup, formData)
+      if (ok) {
+        const message = editingGroup ? 'Guruh muvaffaqiyatli yangilandi!' : 'Guruh muvaffaqiyatli yaratildi!'
+        setSuccessMessage(message)
+
+        // Success message ni 3 sekund ko'rsatish
+        setTimeout(() => {
+          setSuccessMessage('')
+        }, 3000)
+
+        closeModals()
+        loadGroups()
+      }
+    } finally {
+      setIsSubmittingGroup(false)
     }
   }
 
@@ -777,7 +797,7 @@ export default function GroupsPage() {
                 setSelectedGroup(null)
                 setStudentPayments({})
               }}
-              className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
+              className={`px-5 py-2 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${
                 activeTab === tab
                   ? tab === 'groups' ? 'bg-violet-600 text-white shadow-md' : 'bg-indigo-600 text-white shadow-md'
                   : 'text-slate-500 hover:text-slate-700'
@@ -797,12 +817,12 @@ export default function GroupsPage() {
                 placeholder="Qidirish..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:border-violet-400 w-56"
+                className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-violet-400 w-56"
               />
             </div>
             <button
               onClick={activeTab === 'groups' ? openAddGroupModal : openAddRoomModal}
-              className={`px-4 py-2.5 text-sm font-bold text-white rounded-2xl shadow-md flex items-center gap-2 ${
+              className={`px-4 py-2.5 text-sm font-black text-white rounded-2xl shadow-md flex items-center gap-2 ${
                 activeTab === 'groups'
                   ? 'bg-gradient-to-r from-violet-600 to-purple-600'
                   : 'bg-gradient-to-r from-indigo-600 to-blue-600'
@@ -843,21 +863,20 @@ export default function GroupsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <AnimatePresence mode="popLayout">
                     {paginatedGroups.map((group, i) => (
-                      <div key={group.id || group._id} onClick={() => handleGroupClick(group)} className="cursor-pointer">
-                        <GroupCard
-                          group={group}
-                          idx={i}
-                          teachers={teachers}
-                          courses={courses}
-                          rooms={rooms}
-                          openEditGroupModal={openEditGroupModal}
-                          openDeleteModal={openDeleteModal}
-                          onAddStudent={openAddStudentModal}
-                          onViewStudents={handleGroupClick}
-                          page={page}
-                          itemsPerPage={itemsPerPage}
-                        />
-                      </div>
+                      <GroupCard
+                        key={group.id || group._id}
+                        group={group}
+                        idx={i}
+                        teachers={teachers}
+                        courses={courses}
+                        rooms={rooms}
+                        openEditGroupModal={openEditGroupModal}
+                        openDeleteModal={openDeleteModal}
+                        onAddStudent={openAddStudentModal}
+                        onViewStudents={handleGroupClick}
+                        page={page}
+                        itemsPerPage={itemsPerPage}
+                      />
                     ))}
                   </AnimatePresence>
                 </div>
@@ -876,17 +895,17 @@ export default function GroupsPage() {
               )}
             </>
           ) : (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-lg">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-lg">
               <div className="bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="p-2 bg-white/20 rounded-xl"><Users className="w-6 h-6 text-white" /></div>
                     <div>
                       <h3 className="font-black text-white text-xl">{selectedGroup.name}</h3>
-                      <p className="text-sm text-white/70">{groupStudents.length} ta o'quvchi</p>
+                      <p className="text-sm text-white/70 font-bold">{groupStudents.length} ta o'quvchi</p>
                     </div>
                   </div>
-                  <button onClick={() => openAddStudentModal(selectedGroup)} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-white text-sm font-bold flex items-center gap-2">
+                  <button onClick={() => openAddStudentModal(selectedGroup)} className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-white text-sm font-black flex items-center gap-2">
                     <UserPlus className="w-4 h-4" /> O'quvchi qo'shish
                   </button>
                 </div>
@@ -896,8 +915,8 @@ export default function GroupsPage() {
               ) : groupStudents.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                   <Users className="w-16 h-16 text-slate-200" />
-                  <p className="font-medium mt-3">Bu guruhda hali o'quvchilar yo'q</p>
-                  <button onClick={() => openAddStudentModal(selectedGroup)} className="mt-3 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold flex items-center gap-2">
+                  <p className="font-bold mt-3">Bu guruhda hali o'quvchilar yo'q</p>
+                  <button onClick={() => openAddStudentModal(selectedGroup)} className="mt-3 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-black flex items-center gap-2">
                     <UserPlus className="w-4 h-4" /> Birinchi o'quvchini qo'shing
                   </button>
                 </div>
@@ -906,13 +925,13 @@ export default function GroupsPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-bold">#</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold">O'quvchi</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold">Telefon</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold">Qo'shilgan sana</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold">Oxirgi to'lov sanasi</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold">Oxirgi to'lov summasi</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold">To'lov holati</th>
+                        <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider">#</th>
+                        <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider">O'quvchi</th>
+                        <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider">Telefon</th>
+                        <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider">Qo'shilgan sana</th>
+                        <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider">Oxirgi to'lov sanasi</th>
+                        <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider">Oxirgi to'lov summasi</th>
+                        <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider">To'lov holati</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -925,56 +944,56 @@ export default function GroupsPage() {
 
                         return (
                           <tr key={studentId || i} className="border-b hover:bg-violet-50/40">
-                            <td className="px-4 py-3.5 text-slate-400 text-xs font-medium">{i+1}</td>
+                            <td className="px-4 py-3.5 text-slate-500 text-xs font-bold">{i+1}</td>
                             <td className="px-4 py-3.5">
                               <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-xs">
+                                <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 font-black text-xs">
                                   {s.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??'}
                                 </div>
                                 <div>
-                                  <div className="font-bold text-slate-800">{s.name}</div>
-                                  <div className="text-xs text-slate-400">{s.role || 'student'}</div>
+                                  <div className="font-black text-slate-900">{s.name}</div>
+                                  <div className="text-xs font-bold text-slate-500">{s.role || 'student'}</div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-3.5 text-slate-600 text-xs font-medium">{s.phone || '—'}</td>
-                            <td className="px-4 py-3.5 text-slate-500 text-xs">
+                            <td className="px-4 py-3.5 text-slate-600 text-xs font-bold">{s.phone || '—'}</td>
+                            <td className="px-4 py-3.5 text-slate-500 text-xs font-bold">
                               {s.createdAt ? new Date(s.createdAt).toLocaleDateString('uz-UZ') : '—'}
                             </td>
-                            <td className="px-4 py-3.5 text-slate-600 text-xs">
+                            <td className="px-4 py-3.5 text-slate-600 text-xs font-bold">
                               {lastPayment ? (
                                 <div className="flex items-center gap-2">
                                   <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>{new Date(lastPayment.date).toLocaleDateString('uz-UZ')}</span>
+                                  <span className="font-bold">{new Date(lastPayment.date).toLocaleDateString('uz-UZ')}</span>
                                 </div>
                               ) : (
-                                <span className="text-slate-300">—</span>
+                                <span className="text-slate-300 font-bold">—</span>
                               )}
                             </td>
                             <td className="px-4 py-3.5">
                               {lastPayment ? (
                                 <div className="flex items-center gap-2">
                                   <Wallet className="w-3.5 h-3.5 text-emerald-500" />
-                                  <span className="font-bold text-emerald-600">
-                                    {Number(lastPayment.amount).toLocaleString('uz-UZ')} <span className="text-xs font-medium text-slate-400">so'm</span>
+                                  <span className="font-black text-emerald-600">
+                                    {Number(lastPayment.amount).toLocaleString('uz-UZ')} <span className="text-xs font-bold text-slate-500">so'm</span>
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-slate-300">—</span>
+                                <span className="text-slate-300 font-bold">—</span>
                               )}
                             </td>
                             <td className="px-4 py-3.5">
                               {paymentCount > 0 ? (
                                 <div className="flex items-center gap-2">
                                   <CheckCircle className="w-4 h-4 text-emerald-500" />
-                                  <span className="text-xs font-medium text-emerald-600">
+                                  <span className="text-xs font-bold text-emerald-600">
                                     {paymentCount} ta to'lov
                                   </span>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2">
                                   <XCircle className="w-4 h-4 text-red-400" />
-                                  <span className="text-xs font-medium text-red-400">
+                                  <span className="text-xs font-bold text-red-400">
                                     To'lov yo'q
                                   </span>
                                 </div>
@@ -988,12 +1007,12 @@ export default function GroupsPage() {
                   <div className="px-6 py-4 bg-slate-50 border-t">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="flex flex-wrap gap-4">
-                        <span className="text-xs text-slate-500 font-medium">Jami: <span className="text-slate-800 font-bold">{groupStudents.length}</span> ta o'quvchi</span>
-                        <span className="text-xs text-emerald-600 font-medium">✓ {Object.values(studentPayments).filter(p => p.paymentCount > 0).length} ta to'lov qilgan</span>
-                        <span className="text-xs text-red-500 font-medium">✗ {Object.values(studentPayments).filter(p => p.paymentCount === 0).length} ta to'lov qilmagan</span>
+                        <span className="text-xs font-bold text-slate-500">Jami: <span className="text-slate-900 font-black">{groupStudents.length}</span> ta o'quvchi</span>
+                        <span className="text-xs font-bold text-emerald-600">✓ {Object.values(studentPayments).filter(p => p.paymentCount > 0).length} ta to'lov qilgan</span>
+                        <span className="text-xs font-bold text-red-500">✗ {Object.values(studentPayments).filter(p => p.paymentCount === 0).length} ta to'lov qilmagan</span>
                       </div>
-                      <div className="text-xs text-slate-400">
-                        Jami to'lov: <span className="font-bold text-emerald-600">
+                      <div className="text-xs font-bold text-slate-500">
+                        Jami to'lov: <span className="font-black text-emerald-600">
                           {Object.values(studentPayments).reduce((sum, p) => sum + p.totalPaid, 0).toLocaleString('uz-UZ')} so'm
                         </span>
                       </div>
@@ -1013,10 +1032,25 @@ export default function GroupsPage() {
       )}
 
       <AnimatePresence>
-        {showModal && <GroupModal formData={formData} setFormData={setFormData} teachers={teachers} courses={courses} rooms={rooms} editingGroup={editingGroup} handleSaveGroup={handleSaveGroup} closeModals={closeModals} />}
+        {showModal && <GroupModal formData={formData} setFormData={setFormData} teachers={teachers} courses={courses} rooms={rooms} editingGroup={editingGroup} handleSaveGroup={handleSaveGroup} closeModals={closeModals} isSubmittingGroup={isSubmittingGroup} />}
         {showRoomModal && <RoomModal roomFormData={roomFormData} setRoomFormData={setRoomFormData} editingRoom={editingRoom} handleSaveRoom={handleSaveRoom} closeModals={closeModals} />}
         {showDeleteModal && <DeleteModal itemToDelete={itemToDelete} deleteType={deleteType} confirmDelete={confirmDelete} closeModals={closeModals} />}
         {showAddStudentModal && selectedGroupForStudent && <AddStudentModal group={selectedGroupForStudent} onClose={() => setShowAddStudentModal(false)} onAdded={handleAddStudentSuccess} existingStudents={groupStudents} />}
+      </AnimatePresence>
+
+      {/* Success Message Toast */}
+      <AnimatePresence>
+        {successMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-6 right-6 bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50"
+          >
+            <CheckCircle className="w-6 h-6" />
+            <span className="font-bold">{successMessage}</span>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   )

@@ -100,7 +100,7 @@ export default function PaymentsPage() {
   });
   const [staffPhoneDisplay, setStaffPhoneDisplay] = useState('');
 
-  // ── Load teachers/students/groups for recipient selection ──
+  // ── Load teachers/students/groups/staff for recipient selection ──
   useEffect(() => {
     if (showPaymentModal) {
       const loadData = async () => {
@@ -111,13 +111,15 @@ export default function PaymentsPage() {
           setTeachers(teachersRes.data.data || teachersRes.data || []);
           setStudents(studentsRes.data.data || studentsRes.data || []);
           setGroups(groupsRes.data.data || groupsRes.data || []);
+          // Load staff data for payment modal
+          loadStaff();
         } catch (err) {
           console.error("Ma'lumotlarni yuklashda xatolik:", err);
         }
       };
       loadData();
     }
-  }, [showPaymentModal]);
+  }, [showPaymentModal, loadStaff]);
 
   useEffect(() => {
     if (selectedGroup) {
@@ -376,20 +378,20 @@ const netBalance = totalIncome - totalExpense;
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold text-slate-900 tracking-tight flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg">
                 <Wallet className="w-6 h-6 text-white" />
               </div>
               To'lovlar Boshqaruvi
             </h1>
-            <p className="text-slate-500 mt-2 ml-15">Moliyaviy operatsiyalar va hisobotlar</p>
+            <p className="text-slate-500 mt-2 ml-15 font-medium">Moliyaviy operatsiyalar va hisobotlar</p>
           </div>
           <div className="flex items-center gap-3 w-full md:w-auto">
             <div className="relative flex-1 md:w-72">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text" placeholder="Qidirish..."
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
@@ -405,8 +407,8 @@ const netBalance = totalIncome - totalExpense;
                 <DollarSign className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-slate-900">{payments.length}</p>
-                <p className="text-sm text-slate-500">Jami to'lovlar</p>
+                <p className="text-2xl font-bold text-slate-900">{payments.length}</p>
+                <p className="text-sm font-medium text-slate-500">Jami to'lovlar</p>
               </div>
             </div>
           </div>
@@ -418,10 +420,10 @@ const netBalance = totalIncome - totalExpense;
                 <ArrowUpCircle className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-emerald-600">
+                <p className="text-2xl font-bold text-emerald-600">
                   +{Number(totalIncome).toLocaleString()}
                 </p>
-                <p className="text-sm text-slate-500">Kirim (UZS)</p>
+                <p className="text-sm font-medium text-slate-500">Kirim (UZS)</p>
               </div>
             </div>
           </div>
@@ -433,10 +435,10 @@ const netBalance = totalIncome - totalExpense;
                 <ArrowDownCircle className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-red-600">
+                <p className="text-2xl font-bold text-red-600">
                   -{Number(totalExpense).toLocaleString()}
                 </p>
-                <p className="text-sm text-slate-500">Chiqim (UZS)</p>
+                <p className="text-sm font-medium text-slate-500">Chiqim (UZS)</p>
               </div>
             </div>
           </div>
@@ -448,10 +450,10 @@ const netBalance = totalIncome - totalExpense;
                 <BarChart3 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className={`text-2xl font-semibold ${netBalance >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                <p className={`text-2xl font-bold ${netBalance >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                   {netBalance >= 0 ? "+" : ""}{Number(netBalance).toLocaleString()}
                 </p>
-                <p className="text-sm text-slate-500">Sof Balans (UZS)</p>
+                <p className="text-sm font-medium text-slate-500">Sof Balans (UZS)</p>
               </div>
             </div>
           </div>
@@ -464,7 +466,7 @@ const netBalance = totalIncome - totalExpense;
           {/* Payment Category Tabs */}
           <div className="border-b border-slate-200">
             <div className="px-4 py-3 bg-slate-50">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">To'lovlar Bo'limi</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">To'lovlar Bo'limi</p>
               <div className="flex gap-2 flex-wrap">
                 {[
                   { id: "all", label: "Barcha", icon: Wallet },
@@ -473,7 +475,7 @@ const netBalance = totalIncome - totalExpense;
                   { id: "staff", label: "Xodimlar", icon: Building2 },
                 ].map((tab) => (
                   <button key={tab.id} onClick={() => setPaymentCategory(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all ${
                       paymentCategory === tab.id
                         ? "bg-blue-600 text-white shadow-md"
                         : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
@@ -482,7 +484,7 @@ const netBalance = totalIncome - totalExpense;
                     <tab.icon className="w-4 h-4" />
                     {tab.label}
                     {tab.id !== "all" && (
-                      <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-white/20">
+                      <span className="ml-1 px-2 py-0.5 text-xs font-bold rounded-full bg-white/20">
                         {payments.filter(p => getRecipientType(p) === tab.id).length}
                       </span>
                     )}
@@ -500,7 +502,7 @@ const netBalance = totalIncome - totalExpense;
               { id: "reports", label: "Hisobotlar", icon: FileText },
             ].map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium transition-all ${
+                className={`flex-1 flex items-center justify-center gap-2 px-6 py-4 text-sm font-bold transition-all ${
                   activeTab === tab.id
                     ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50/50"
                     : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
@@ -522,12 +524,12 @@ const netBalance = totalIncome - totalExpense;
                    paymentCategory === "teacher" ? "O'qituvchilar To'lovi" :
                    "Xodimlar To'lovi"}
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">
+                <p className="text-sm font-medium text-slate-500 mt-1">
                   {filteredPayments.length} ta to'lov {paymentCategory !== "all" && `• ${paymentCategory === "student" ? "O'quvchilar" : paymentCategory === "teacher" ? "O'qituvchilar" : "Xodimlar"}`}
                 </p>
               </div>
               <button onClick={() => { resetPaymentModal(); setShowPaymentModal(true); }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-200 transition-all font-medium">
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-200 transition-all font-bold">
                 <Plus className="w-4 h-4" /> Yangi To'lov
               </button>
             </div>
@@ -616,16 +618,16 @@ const netBalance = totalIncome - totalExpense;
                         <table className="w-full">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200">
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Sana</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Turi</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Kim uchun</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Sana</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Turi</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Kim uchun</th>
                               {paymentCategory === "all" && (
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Tur</th>
+                                <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Tur</th>
                               )}
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Oy</th>
-                              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Summa</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Izoh</th>
-                              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Amallar</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Oy</th>
+                              <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Summa</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Izoh</th>
+                              <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Amallar</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -649,11 +651,11 @@ const netBalance = totalIncome - totalExpense;
                                 return (
                                 <tr key={payment._id || payment.id}
                                   className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
-                                  <td className="px-4 py-3 text-sm text-slate-600">
+                                  <td className="px-4 py-3 text-sm font-medium text-slate-600">
                                     {new Date(payment.date).toLocaleDateString("uz-UZ")}
                                   </td>
                                   <td className="px-4 py-3">
-                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 w-fit ${
+                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 w-fit ${
                                       payment.type?.dk === "credit"
                                         ? "bg-emerald-100 text-emerald-700"
                                         : "bg-red-100 text-red-700"
@@ -664,14 +666,14 @@ const netBalance = totalIncome - totalExpense;
                                       {payment.type?.name || payment.type?.code || "—"}
                                     </span>
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-slate-700">
+                                  <td className="px-4 py-3 text-sm font-medium text-slate-700">
                                     {typeof payment.toWho === "object"
                                       ? payment.toWho?.name || "—"
                                       : payment.toWho || "—"}
                                   </td>
                                   {paymentCategory === "all" && (
                                     <td className="px-4 py-3">
-                                      <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                                      <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
                                         recipientType === "student" ? "bg-blue-100 text-blue-700" :
                                         recipientType === "teacher" ? "bg-violet-100 text-violet-700" :
                                         recipientType === "staff" ? "bg-orange-100 text-orange-700" :
@@ -683,14 +685,14 @@ const netBalance = totalIncome - totalExpense;
                                       </span>
                                     </td>
                                   )}
-                                  <td className="px-4 py-3 text-sm text-slate-600">{payment.month || "—"}</td>
-                                  <td className={`px-4 py-3 text-sm font-semibold text-right ${
+                                  <td className="px-4 py-3 text-sm font-medium text-slate-600">{payment.month || "—"}</td>
+                                  <td className={`px-4 py-3 text-sm font-bold text-right ${
                                     payment.type?.dk === "credit" ? "text-emerald-600" : "text-red-600"
                                   }`}>
                                     {payment.type?.dk === "credit" ? "+" : "-"}
                                     {Number(payment.amount || 0).toLocaleString()} UZS
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate">
+                                  <td className="px-4 py-3 text-sm font-medium text-slate-600 max-w-xs truncate">
                                     {payment.comment || "—"}
                                   </td>
                                   <td className="px-4 py-3 text-right">
@@ -764,7 +766,7 @@ const netBalance = totalIncome - totalExpense;
                         setSelectedStaff(null);
                         setStaffPhoneDisplay('');
                         setShowStaffModal(true);
-                      }} className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all font-medium shadow-lg shadow-purple-500/20">
+                      }} className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all font-bold shadow-lg shadow-purple-500/20">
                         <Plus className="w-4 h-4" /> Xodim Qo'shish
                       </button>
                     </div>
@@ -774,12 +776,12 @@ const netBalance = totalIncome - totalExpense;
                         <table className="w-full">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200">
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Xodim</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Lavozim</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Role</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Telefon</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Holat</th>
-                              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Amallar</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Xodim</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Lavozim</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Role</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Telefon</th>
+                              <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Holat</th>
+                              <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Amallar</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -798,22 +800,22 @@ const netBalance = totalIncome - totalExpense;
                                   className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
                                   <td className="px-4 py-3">
                                     <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white text-sm font-semibold">
+                                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold">
                                         {staffMember.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "??"}
                                       </div>
                                       <div>
-                                        <p className="text-sm font-medium text-slate-900">{staffMember.name}</p>
-                                        {staffMember.specialization && <p className="text-xs text-slate-500">{staffMember.specialization}</p>}
+                                        <p className="text-sm font-bold text-slate-900">{staffMember.name}</p>
+                                        {staffMember.specialization && <p className="text-xs font-medium text-slate-500">{staffMember.specialization}</p>}
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-slate-700">{staffMember.jobTitle || "—"}</td>
+                                  <td className="px-4 py-3 text-sm font-medium text-slate-700">{staffMember.jobTitle || "—"}</td>
                                   <td className="px-4 py-3">
-                                    <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-100 text-purple-700">{staffMember.role || "staff"}</span>
+                                    <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-700">{staffMember.role || "staff"}</span>
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-slate-600 font-mono">{staffMember.phone || "—"}</td>
+                                  <td className="px-4 py-3 text-sm font-medium text-slate-600 font-mono">{staffMember.phone || "—"}</td>
                                   <td className="px-4 py-3">
-                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${staffMember.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${staffMember.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                                       {staffMember.status || "active"}
                                     </span>
                                   </td>
@@ -857,11 +859,11 @@ const netBalance = totalIncome - totalExpense;
               <div className="space-y-6">
                 <div className="flex items-center gap-3 mb-2">
                   <button onClick={() => loadReport("daily")}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-sm font-medium">
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-sm font-bold">
                     <RefreshCw className="w-4 h-4" /> Kunlik
                   </button>
                   <button onClick={() => loadReport("monthly")}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all text-sm font-medium">
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all text-sm font-bold">
                     <RefreshCw className="w-4 h-4" /> Oylik
                   </button>
                 </div>
@@ -871,14 +873,14 @@ const netBalance = totalIncome - totalExpense;
                     <button onClick={() => loadReport("daily")}
                       className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-left">
                       <Calendar className="w-8 h-8 text-blue-600 mb-3" />
-                      <h3 className="font-semibold text-lg text-slate-900 mb-2">Kunlik Hisobot</h3>
-                      <p className="text-sm text-slate-500">Bugungi to'lovlar xulosasi</p>
+                      <h3 className="font-bold text-lg text-slate-900 mb-2">Kunlik Hisobot</h3>
+                      <p className="text-sm font-medium text-slate-500">Bugungi to'lovlar xulosasi</p>
                     </button>
                     <button onClick={() => loadReport("monthly")}
                       className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-left">
                       <FileText className="w-8 h-8 text-green-600 mb-3" />
-                      <h3 className="font-semibold text-lg text-slate-900 mb-2">Oylik Hisobot</h3>
-                      <p className="text-sm text-slate-500">Bu oyning to'lovlar xulosasi</p>
+                      <h3 className="font-bold text-lg text-slate-900 mb-2">Oylik Hisobot</h3>
+                      <p className="text-sm font-medium text-slate-500">Bu oyning to'lovlar xulosasi</p>
                     </button>
                   </div>
                 ) : (
@@ -889,9 +891,9 @@ const netBalance = totalIncome - totalExpense;
                       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
                         <div className="flex items-center gap-3 mb-2">
                           <ArrowUpCircle className="w-6 h-6 text-emerald-600" />
-                          <span className="text-sm font-medium text-emerald-700">Jami Kirim</span>
+                          <span className="text-sm font-bold text-emerald-700">Jami Kirim</span>
                         </div>
-                        <p className="text-2xl font-bold text-emerald-700">
+                        <p className="text-2xl font-black text-emerald-700">
                           {Number(
                             report.totalIncome ?? report.totalDailyCollection ?? report.income ?? 0
                           ).toLocaleString()} UZS
@@ -902,9 +904,9 @@ const netBalance = totalIncome - totalExpense;
                       <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
                         <div className="flex items-center gap-3 mb-2">
                           <ArrowDownCircle className="w-6 h-6 text-red-600" />
-                          <span className="text-sm font-medium text-red-700">Jami Chiqim</span>
+                          <span className="text-sm font-bold text-red-700">Jami Chiqim</span>
                         </div>
-                        <p className="text-2xl font-bold text-red-700">
+                        <p className="text-2xl font-black text-red-700">
                           {Number(
                             report.totalExpense ?? report.totalDailySalaries ?? report.expense ?? 0
                           ).toLocaleString()} UZS
@@ -918,9 +920,9 @@ const netBalance = totalIncome - totalExpense;
                       }`}>
                         <div className="flex items-center gap-3 mb-2">
                           <BarChart3 className={`w-6 h-6 ${(report.netIncome ?? report.dailyNetIncome ?? 0) >= 0 ? "text-blue-600" : "text-orange-600"}`} />
-                          <span className={`text-sm font-medium ${(report.netIncome ?? report.dailyNetIncome ?? 0) >= 0 ? "text-blue-700" : "text-orange-700"}`}>Sof Daromad</span>
+                          <span className={`text-sm font-bold ${(report.netIncome ?? report.dailyNetIncome ?? 0) >= 0 ? "text-blue-700" : "text-orange-700"}`}>Sof Daromad</span>
                         </div>
-                        <p className={`text-2xl font-bold ${(report.netIncome ?? report.dailyNetIncome ?? 0) >= 0 ? "text-blue-700" : "text-orange-700"}`}>
+                        <p className={`text-2xl font-black ${(report.netIncome ?? report.dailyNetIncome ?? 0) >= 0 ? "text-blue-700" : "text-orange-700"}`}>
                           {Number(report.netIncome ?? report.dailyNetIncome ?? 0).toLocaleString()} UZS
                         </p>
                       </div>
@@ -932,10 +934,10 @@ const netBalance = totalIncome - totalExpense;
                         <div className="bg-white border border-slate-200 rounded-xl p-4">
                           <div className="flex items-center gap-2 mb-3">
                             <UserPlus className="w-5 h-5 text-blue-500" />
-                            <span className="font-medium text-slate-700">O'quvchilar To'lovi</span>
+                            <span className="font-bold text-slate-700">O'quvchilar To'lovi</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-900">{report.studentPayments.count || 0} ta</p>
-                          <p className="text-sm text-slate-500 mt-1">
+                          <p className="text-xl font-black text-slate-900">{report.studentPayments.count || 0} ta</p>
+                          <p className="text-sm font-medium text-slate-500 mt-1">
                             Kutilgan: {Number(report.studentPayments.totalMonthlyExpected || 0).toLocaleString()} UZS
                           </p>
                         </div>
@@ -944,10 +946,10 @@ const netBalance = totalIncome - totalExpense;
                         <div className="bg-white border border-slate-200 rounded-xl p-4">
                           <div className="flex items-center gap-2 mb-3">
                             <GraduationCap className="w-5 h-5 text-violet-500" />
-                            <span className="font-medium text-slate-700">O'qituvchi Maoshi</span>
+                            <span className="font-bold text-slate-700">O'qituvchi Maoshi</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-900">{report.teacherSalaries.count || 0} ta</p>
-                          <p className="text-sm text-slate-500 mt-1">
+                          <p className="text-xl font-black text-slate-900">{report.teacherSalaries.count || 0} ta</p>
+                          <p className="text-sm font-medium text-slate-500 mt-1">
                             Kutilgan: {Number(report.teacherSalaries.totalMonthlyExpected || 0).toLocaleString()} UZS
                           </p>
                         </div>
@@ -956,10 +958,10 @@ const netBalance = totalIncome - totalExpense;
                         <div className="bg-white border border-slate-200 rounded-xl p-4">
                           <div className="flex items-center gap-2 mb-3">
                             <Building2 className="w-5 h-5 text-orange-500" />
-                            <span className="font-medium text-slate-700">Xodimlar Maoshi</span>
+                            <span className="font-bold text-slate-700">Xodimlar Maoshi</span>
                           </div>
-                          <p className="text-xl font-bold text-slate-900">{report.staffSalaries.count || 0} ta</p>
-                          <p className="text-sm text-slate-500 mt-1">
+                          <p className="text-xl font-black text-slate-900">{report.staffSalaries.count || 0} ta</p>
+                          <p className="text-sm font-medium text-slate-500 mt-1">
                             Kutilgan: {Number(report.staffSalaries.totalMonthlyExpected || 0).toLocaleString()} UZS
                           </p>
                         </div>
@@ -968,10 +970,10 @@ const netBalance = totalIncome - totalExpense;
 
                     {/* Raw data for any extra fields */}
                     {report.date && (
-                      <p className="text-xs text-slate-400 text-center">Sana: {report.date}</p>
+                      <p className="text-xs font-bold text-slate-400 text-center">Sana: {report.date}</p>
                     )}
 
-                    <button onClick={() => setReport && window.location.reload()} className="text-sm text-slate-500 hover:text-slate-700 underline">
+                    <button onClick={() => setReport && window.location.reload()} className="text-sm font-medium text-slate-500 hover:text-slate-700 underline">
                       Hisobotni yopish
                     </button>
                   </div>
@@ -996,24 +998,24 @@ const netBalance = totalIncome - totalExpense;
                 onClick={(e) => e.stopPropagation()}
                 className="bg-white rounded-2xl shadow-xl w-full max-w-lg pointer-events-auto flex flex-col max-h-[90vh]">
                 <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between flex-shrink-0">
-                  <h2 className="text-lg font-medium text-slate-900">{editingPayment ? "To'lovni Tahrirlash" : "Yangi To'lov"}</h2>
+                  <h2 className="text-lg font-bold text-slate-900">{editingPayment ? "To'lovni Tahrirlash" : "Yangi To'lov"}</h2>
                   <button onClick={() => setShowPaymentModal(false)} className="p-2 hover:bg-slate-200 rounded-lg"><X className="w-5 h-5 text-slate-500" /></button>
                 </div>
 
                 {Object.keys(formErrors).length > 0 && (
                   <div className="px-6 py-3 bg-red-50 border-b border-red-200">
-                    <div className="flex items-center gap-2 text-red-700"><AlertCircle className="w-5 h-5" /><span className="text-sm font-medium">Xatolarni to'g'irlang:</span></div>
-                    <ul className="mt-2 ml-7 text-sm text-red-600 list-disc space-y-1">{Object.values(formErrors).map((e, i) => <li key={i}>{e}</li>)}</ul>
+                    <div className="flex items-center gap-2 text-red-700"><AlertCircle className="w-5 h-5" /><span className="text-sm font-bold">Xatolarni to'g'irlang:</span></div>
+                    <ul className="mt-2 ml-7 text-sm font-medium text-red-600 list-disc space-y-1">{Object.values(formErrors).map((e, i) => <li key={i}>{e}</li>)}</ul>
                   </div>
                 )}
 
                 <div className="p-6 space-y-4 overflow-y-auto flex-1">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Turi *</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Turi *</label>
                       <div className="flex gap-2">
                         <select value={paymentForm.type} onChange={(e) => setPaymentForm({ ...paymentForm, type: e.target.value })} disabled={isSubmitting}
-                          className={`flex-1 px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 ${formErrors.type ? "border-red-500 bg-red-50" : "border-slate-200"}`}>
+                          className={`flex-1 px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 font-medium ${formErrors.type ? "border-red-500 bg-red-50" : "border-slate-200"}`}>
                           <option value="">Tanlang</option>
                           {paymentTypes.filter(t => t.dk === "credit").length > 0 && (
                             <optgroup label="📈 Kirim">
@@ -1027,12 +1029,12 @@ const netBalance = totalIncome - totalExpense;
                           )}
                         </select>
                         <button type="button" onClick={() => setShowNestedTypeModal(true)} disabled={isSubmitting}
-                          className="px-3 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center"
+                          className="px-3 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center font-bold"
                           title="Yangi tolov turi qo'shish">
                           <Plus className="w-5 h-5" />
                         </button>
                       </div>
-                      {formErrors.type && <p className="mt-1 text-xs text-red-600">{formErrors.type}</p>}
+                      {formErrors.type && <p className="mt-1 text-xs font-bold text-red-600">{formErrors.type}</p>}
 
                       {/* Tanlangan tur bo'yicha kirim/chiqim ko'rsatkichi */}
                       {paymentForm.type && (() => {
@@ -1051,30 +1053,30 @@ const netBalance = totalIncome - totalExpense;
                       })()}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Summa (UZS) *</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Summa (UZS) *</label>
                       <input type="text" value={amountInput} onChange={handleAmountChange} disabled={isSubmitting}
-                        className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 ${formErrors.amount ? "border-red-500 bg-red-50" : "border-slate-200"}`}
+                        className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 font-medium ${formErrors.amount ? "border-red-500 bg-red-50" : "border-slate-200"}`}
                         placeholder="1,000,000" />
-                      {formErrors.amount && <p className="mt-1 text-xs text-red-600">{formErrors.amount}</p>}
+                      {formErrors.amount && <p className="mt-1 text-xs font-bold text-red-600">{formErrors.amount}</p>}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Oy *</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Oy *</label>
                       <input type="month" value={paymentForm.month} onChange={(e) => setPaymentForm({ ...paymentForm, month: e.target.value })} disabled={isSubmitting}
-                        className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50" />
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 font-medium" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">Sana *</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Sana *</label>
                       <input type="date" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} disabled={isSubmitting}
-                        className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50" />
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50 font-medium" />
                     </div>
                   </div>
 
                   {/* Recipient */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Kim uchun to'lov *</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Kim uchun to'lov *</label>
                     <div className="grid grid-cols-3 gap-3 mb-3">
                       {[
                         { value: "teacher", label: "O'qituvchi", icon: GraduationCap },
@@ -1083,7 +1085,7 @@ const netBalance = totalIncome - totalExpense;
                       ].map((cat) => (
                         <button key={cat.value} type="button" disabled={isSubmitting}
                           onClick={() => { setRecipientCategory(cat.value); setSelectedGroup(null); setRecipientSearch(""); setPaymentForm({ ...paymentForm, toWho: "" }); setSelectedRecipient(null); setRecipientDebt(0); setRecipientDebtInfo({ debt: 0, salary: 0, paid: 0, lastPayment: 0 }); }}
-                          className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all disabled:opacity-50 ${recipientCategory === cat.value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                          className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all disabled:opacity-50 font-bold ${recipientCategory === cat.value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                           <cat.icon className="w-5 h-5" />
                           <span className="text-xs font-bold">{cat.label}</span>
                         </button>
@@ -1264,18 +1266,18 @@ const netBalance = totalIncome - totalExpense;
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Izoh</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Izoh</label>
                     <textarea value={paymentForm.comment} onChange={(e) => setPaymentForm({ ...paymentForm, comment: e.target.value })} disabled={isSubmitting}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none disabled:opacity-50"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none disabled:opacity-50 font-medium"
                       rows={3} placeholder="Qo'shimcha izoh..." />
                   </div>
                 </div>
 
                 <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-3 flex-shrink-0">
                   <button onClick={() => setShowPaymentModal(false)} disabled={isSubmitting}
-                    className="flex-1 px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all font-medium disabled:opacity-50">Bekor qilish</button>
+                    className="flex-1 px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all font-bold disabled:opacity-50">Bekor qilish</button>
                   <button onClick={handleSavePayment} disabled={isSubmitting}
-                    className="flex-1 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+                    className="flex-1 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold disabled:opacity-50 flex items-center justify-center gap-2">
                     {isSubmitting ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saqlashmoqda...</> : editingPayment ? "Yangilash" : "Saqlash"}
                   </button>
                 </div>
