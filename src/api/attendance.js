@@ -14,6 +14,8 @@ export const updateAttendance  = (id, body) => api.put(`/attendance/${id}`, body
 export const deleteAttendance  = (id) => api.delete(`/attendance/${id}`)
 
 
+export const getAttendanceByDate = (date) => api.get(`/attendance/date/${date}`)
+
 
 export const getGroupAttendanceCalendar = (groupId, params) =>
   api.get(`/attendance/group/${groupId}/calendar`, { params })

@@ -13,7 +13,7 @@ import TeachersPage from "./pages/admin/teachers/index.jsx";
 import PaymentsPage from "./pages/admin/payments/index.jsx";
 import GroupsPage from "./pages/admin/groups/index.jsx";
 import CoursesPage from "./pages/admin/courses/index.jsx";
-import BlogsPage from "./pages/admin/blog/index.jsx";
+import SettingsPage from "./pages/admin/Settings.jsx";
 import MyProfile from "./pages/student/MyProfile";
 import MyGroups from "./pages/student/MyGroups";
 import HomeworkPage from "./pages/student/Homework";
@@ -41,10 +41,9 @@ export default function App() {
               <Route path="/admin/payments" element={<PaymentsPage />} />
               <Route path="/admin/groups" element={<GroupsPage />} />
               <Route path="/admin/courses" element={<CoursesPage />} />
-              <Route path="/admin/blog" element={<BlogsPage />} />
               <Route path="/admin/contacts" element={<PlaceholderPage title="Contacts" />} />
               <Route path="/admin/reports" element={<PlaceholderPage title="Reports" />} />
-              <Route path="/admin/settings" element={<PlaceholderPage title="Settings" />} />
+              <Route path="/admin/settings" element={<SettingsPage />} />
             </Route>
           </Route>
 

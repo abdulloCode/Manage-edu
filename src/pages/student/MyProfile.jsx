@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useFetch } from '../../hooks/useFetch'
 import { getMe, updateMe } from '../../api/auth'
 import { getMyStudentData } from '../../api/students'
@@ -93,6 +93,18 @@ export default function MyProfile() {
 
   const groups = Array.isArray(groupsData) ? groupsData : (groupsData?.groups ?? [])
   const enrolledGroups = groups.filter(g => g.isEnrolled)
+
+  // Sidebar'dan kelsa, avtomatik edit modalini ochish
+  useEffect(() => {
+    const shouldOpenEdit = window.location.search.includes('edit=true')
+    if (shouldOpenEdit) {
+      setEditOpen(true)
+      // URL'dan edit=true ni olib tashlaymiz
+      const url = new URL(window.location)
+      url.searchParams.delete('edit')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [])
 
   if (pLoading || sLoading || gLoading) return <LoadingState />
   if (pError) return <ErrorState message={pError} />

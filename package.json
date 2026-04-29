@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "@tinymce/tinymce-react": "^6.3.0",
     "axios": "^1.7.2",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.11.0",

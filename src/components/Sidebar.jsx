@@ -10,7 +10,6 @@ const NAV = {
     { label: 'Payments', to: '/admin/payments', icon: CreditCardIcon },
     { label: 'Groups', to: '/admin/groups', icon: UserGroupIcon },
     { label: 'Courses', to: '/admin/courses', icon: BookIcon },
-    { label: 'Articles', to: '/admin/blog', icon: ClipboardIcon },
     { label: 'Settings', to: '/admin/settings', icon: CogIcon },
   ],
   teacher: [
@@ -114,24 +113,30 @@ function ProfileButton({ collapsed, user, onNavClick }) {
     ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : '??'
 
-  const profilePath = user?.role === 'student' ? '/student/profile' : '#'
+  const profilePath = user?.role === 'student' ? '/student/profile?edit=true' : '#'
+
+  const handleProfileClick = () => {
+    // Profile pathga o'tamiz va edit=true query parametr bilan, MyProfile komponenti avtomatik edit modalini ochadi
+    window.location.href = profilePath
+    onNavClick?.()
+  }
 
   if (collapsed) {
     return (
       <div className="tooltip tooltip-right flex justify-center" data-tip="Profile">
-        <Link to={profilePath} onClick={onNavClick} className="btn btn-ghost btn-sm btn-square p-0">
+        <button onClick={handleProfileClick} className="btn btn-ghost btn-sm btn-square p-0">
           <div className="avatar placeholder">
             <div className="bg-primary text-primary-content rounded-full w-8">
               <span className="text-xs font-bold">{initials}</span>
             </div>
           </div>
-        </Link>
+        </button>
       </div>
     )
   }
 
   return (
-    <Link to={profilePath} onClick={onNavClick} className="btn btn-ghost btn-sm w-full flex items-center gap-3 justify-start px-3 text-base-content/70 hover:text-base-content">
+    <button onClick={handleProfileClick} className="btn btn-ghost btn-sm w-full flex items-center gap-3 justify-start px-3 text-base-content/70 hover:text-base-content">
       <div className="avatar placeholder shrink-0">
         <div className="bg-primary text-primary-content rounded-full w-7">
           <span className="text-xs font-bold">{initials}</span>
@@ -141,14 +146,50 @@ function ProfileButton({ collapsed, user, onNavClick }) {
         <span className="text-sm font-medium truncate leading-tight">{user?.name ?? 'My Profile'}</span>
         <span className="text-xs text-base-content/40 capitalize leading-tight">{user?.role}</span>
       </div>
-    </Link>
+    </button>
+  )
+}
+
+function LogoutButton({ collapsed, onLogout }) {
+  if (collapsed) {
+    return (
+      <div className="tooltip tooltip-right flex justify-center" data-tip="Logout">
+        <button
+          onClick={onLogout}
+          className="btn btn-ghost btn-sm btn-square text-base-content/70 hover:text-base-content hover:bg-error/10"
+          aria-label="Logout"
+        >
+          <LogOutIcon className="w-5 h-5" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={onLogout}
+      className="btn btn-ghost btn-sm w-full flex items-center gap-3 justify-start px-3 text-base-content/70 hover:text-base-content hover:bg-error/10"
+    >
+      <LogOutIcon className="w-5 h-5 shrink-0" />
+      <span className="text-sm font-medium">Logout</span>
+    </button>
   )
 }
 
 export default function Sidebar({ collapsed, onToggle, onNavClick }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const role = user?.role ?? 'student'
   const links = NAV[role] ?? NAV.student
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('Logout failed:', error)
+      window.location.href = '/login'
+    }
+  }
 
   return (
     <aside
@@ -192,9 +233,10 @@ export default function Sidebar({ collapsed, onToggle, onNavClick }) {
         ))}
       </nav>
 
-      {/* Bottom: profile */}
-      <div className="pt-3 border-t border-base-200">
+      {/* Bottom: profile and logout */}
+      <div className="pt-3 border-t border-base-200 flex flex-col gap-1">
         <ProfileButton collapsed={collapsed} user={user} onNavClick={onNavClick} />
+        <LogoutButton collapsed={collapsed} onLogout={handleLogout} />
       </div>
     </aside>
   )
@@ -305,6 +347,13 @@ function ContactsIcon({ className }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+    </svg>
+  )
+}
+function LogOutIcon({ className }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
     </svg>
   )
 }

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   useTeachers,
   useTeacherForm,
@@ -7,6 +7,7 @@ import {
   getInitials,
   getAvatarColor
 } from './hooks'
+import PhoneInput from '../../../components/PhoneInput'
 
 export default function TeachersPage() {
   const {
@@ -34,6 +35,42 @@ export default function TeachersPage() {
     closeModals
   } = useTeacherForm()
 
+  const [phoneDisplay, setPhoneDisplay] = useState('')
+
+  useEffect(() => {
+    if (editingTeacher?.phone) {
+      setPhoneDisplay(formatPhoneNumber(editingTeacher.phone))
+    } else {
+      setPhoneDisplay('')
+    }
+  }, [editingTeacher, showModal])
+
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return ''
+    const digits = phone.replace(/\D/g, '')
+    let out = ''
+    if (digits.length > 0) out += '(' + digits.slice(0, 2)
+    if (digits.length > 2) out += ') ' + digits.slice(2, 5)
+    if (digits.length > 5) out += '-' + digits.slice(5, 7)
+    if (digits.length > 7) out += '-' + digits.slice(7, 9)
+    return out
+  }
+
+  const formatCurrency = (amount) => {
+    if (!amount) return '0'
+    return new Intl.NumberFormat('uz-UZ', {
+      style: 'currency',
+      currency: 'UZS',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)
+  }
+
+  const handlePhoneChange = (e) => {
+    setPhoneDisplay(e.target.value)
+    setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })
+  }
+
   const handleSaveTeacher = async () => {
     const success = await saveTeacher(editingTeacher, formData, loadTeachers)
     if (success) {
@@ -46,8 +83,7 @@ export default function TeachersPage() {
     if (!teacherToDelete) return
     const success = await removeTeacher(teacherToDelete, loadTeachers)
     if (success) {
-      setShowDeleteModal(false)
-      setTeacherToDelete(null)
+      closeModals()
       loadTeachers()
     }
   }
@@ -107,14 +143,16 @@ export default function TeachersPage() {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Telefon</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Malaka</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Maosh %</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Maosh</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">To'langan</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Qarzdorlik</th>
               <th className="w-32 px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Amallar</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan="7" className="px-6 py-16 text-center">
+                <td colSpan="9" className="px-6 py-16 text-center">
                   <div className="flex flex-col items-center gap-3 text-gray-400">
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     <span className="text-sm">Yuklanmoqda…</span>
@@ -123,7 +161,7 @@ export default function TeachersPage() {
               </tr>
             ) : teachers.length === 0 ? (
               <tr>
-                <td colSpan="7" className="px-6 py-16 text-center">
+                <td colSpan="9" className="px-6 py-16 text-center">
                   <div className="flex flex-col items-center gap-2 text-gray-400">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
@@ -160,6 +198,19 @@ export default function TeachersPage() {
                       </span>
                     ) : (
                       <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                    {teacher.salary ? formatCurrency(teacher.salary) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-medium text-emerald-600">
+                    {teacher.paid ? formatCurrency(teacher.paid) : '0'}
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-medium">
+                    {teacher.debt > 0 ? (
+                      <span className="text-red-600">{formatCurrency(teacher.debt)}</span>
+                    ) : (
+                      <span className="text-green-600">0</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -278,13 +329,11 @@ export default function TeachersPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Telefon <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                  placeholder="+998901234567"
+                <PhoneInput
+                  value={phoneDisplay}
+                  onChange={handlePhoneChange}
                   required
+                  className="w-full border-2 border-transparent bg-slate-50 outline-none focus:border-blue-500 focus:bg-white"
                 />
               </div>
 
@@ -377,10 +426,7 @@ export default function TeachersPage() {
               </p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setShowDeleteModal(false)
-                    setTeacherToDelete(null)
-                  }}
+                  onClick={closeModals}
                   className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                 >
                   Bekor qilish

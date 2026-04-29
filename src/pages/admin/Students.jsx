@@ -10,6 +10,7 @@ import {
 } from '../../api/students'
 import { getAllGroups } from '../../api/groups'
 import { useDebounce } from '../../hooks/useDebounce'
+import PhoneInput from '../../components/PhoneInput'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -127,6 +128,12 @@ function CreateModal({ onClose, onCreated }) {
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState(null)
+  const [phoneDisplay, setPhoneDisplay] = useState('')
+
+  const handlePhoneChange = (e) => {
+    setPhoneDisplay(e.target.value)
+    setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })
+  }
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -173,7 +180,12 @@ function CreateModal({ onClose, onCreated }) {
           <input className="input input-bordered w-full" value={form.name} onChange={set('name')} required placeholder="Ali Karimov" />
         </FormField>
         <FormField label="Telefon *" required>
-          <input className="input input-bordered w-full" value={form.phone} onChange={set('phone')} required placeholder="+998901234567" />
+          <PhoneInput
+            value={phoneDisplay}
+            onChange={handlePhoneChange}
+            required
+            className="w-full border-2 border-transparent bg-slate-50 outline-none focus:border-violet-500 focus:bg-white"
+          />
         </FormField>
         <FormField label="Parol *" required>
           <input type="password" className="input input-bordered w-full" value={form.password} onChange={set('password')} required placeholder="••••••••" />
@@ -218,6 +230,27 @@ function EditModal({ student, onClose, onUpdated }) {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [phoneDisplay, setPhoneDisplay] = useState('')
+
+  useEffect(() => {
+    setPhoneDisplay(formatPhoneNumber(student.phone) || '')
+  }, [student.phone])
+
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return ''
+    const digits = phone.replace(/\D/g, '')
+    let out = ''
+    if (digits.length > 0) out += '(' + digits.slice(0, 2)
+    if (digits.length > 2) out += ') ' + digits.slice(2, 5)
+    if (digits.length > 5) out += '-' + digits.slice(5, 7)
+    if (digits.length > 7) out += '-' + digits.slice(7, 9)
+    return out
+  }
+
+  const handlePhoneChange = (e) => {
+    setPhoneDisplay(e.target.value)
+    setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })
+  }
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -250,7 +283,11 @@ function EditModal({ student, onClose, onUpdated }) {
             <input className="input input-bordered w-full" value={form.name} onChange={set('name')} placeholder="Ali Karimov" />
           </FormField>
           <FormField label="Telefon">
-            <input className="input input-bordered w-full" value={form.phone} onChange={set('phone')} placeholder="+998901234567" />
+            <PhoneInput
+              value={phoneDisplay}
+              onChange={handlePhoneChange}
+              className="w-full border-2 border-transparent bg-slate-50 outline-none focus:border-violet-500 focus:bg-white"
+            />
           </FormField>
           <FormField label="Holati">
             <select className="select select-bordered w-full" value={form.status} onChange={set('status')}>
@@ -534,7 +571,7 @@ export default function StudentsPage() {
     setLoading(true)
     setError(null)
     try {
-      const params = { page, limit: 10 }
+      const params = { page, limit: 10, hasGroup: false }
       if (debouncedSearch) params.search = debouncedSearch
       const { data } = await getStudents(params)
       setStudents(data.data)

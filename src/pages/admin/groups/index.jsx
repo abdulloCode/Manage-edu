@@ -3,13 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users, Building2, Search, Edit3, Trash2, X, Calendar,
   Clock, UserPlus, GraduationCap, BookOpen, DoorOpen, AlertTriangle,
-  ChevronRight, ChevronLeft, MapPin, Wallet, Users2
+  ChevronRight, ChevronLeft, MapPin, Wallet, Users2, CheckCircle, XCircle
 } from 'lucide-react'
 import {
   useGroups, useGroupForm, saveGroup, saveRoom, removeItem,
   addStudentToGroupApi, fetchAllStudents
 } from './hooks'
 import { getGroupById } from '../../../api/groups'
+import { getAllPayments } from '../../../api/payments'
+import { getStudentById } from '../../../api/students'
 
 // ── 24h Time Picker ───────────────────────────────────────────
 function TimePicker24({ value, onChange, label }) {
@@ -404,7 +406,7 @@ function DeleteModal({ itemToDelete, deleteType, confirmDelete, closeModals }) {
 }
 
 // ── Add Student Modal ─────────────────────────────────────────
-function AddStudentModal({ group, onClose, onAdded }) {
+function AddStudentModal({ group, onClose, onAdded, existingStudents = [] }) {
   const [students, setStudents] = useState([])
   const [selectedId, setSelectedId] = useState('')
   const [loading, setLoading] = useState(false)
@@ -414,23 +416,95 @@ function AddStudentModal({ group, onClose, onAdded }) {
   useEffect(() => {
     fetchAllStudents()
       .then(all => {
-        setStudents(all.filter(s => !(s.group && (s.group._id === group._id || s.group.id === group._id))))
+        console.log('Barcha o\'quvchilar:', all)
+
+        // Guruh ID ni aniqlash
+        const groupId = group._id || group.id
+
+        // Allaqachon bu guruhga qo'shilgan o'quvchilarni exclude qilish
+        const filtered = all.filter(student => {
+          const studentId = student._id || student.id
+
+          console.log('Studentni tekshirish:', student.name, studentId)
+
+          // 1. existingStudents orqali tekshirish (agar berilgan bo'lsa)
+          const existsInGroup = existingStudents.some(s =>
+            (s._id || s.id) === studentId
+          )
+          if (existsInGroup) return false
+
+          // 2. student.group orqali tekshirish
+          if (student.group) {
+            const studentGroupId = student.group._id || student.group.id
+            if (studentGroupId === groupId) return false
+          }
+
+          // 3. student.groupId orqali tekshirish
+          if (student.groupId === groupId) return false
+
+          // 4. student.groups orqali tekshirish (agar o'quvchi bir nechta guruhda bo'lishi mumkin bo'lsa)
+          if (student.groups && Array.isArray(student.groups)) {
+            const inGroup = student.groups.some(g =>
+              (g._id || g.id) === groupId
+            )
+            if (inGroup) return false
+          }
+
+          return true
+        })
+
+        console.log('Guruhga qo\'shish mumkin bo\'lgan o\'quvchilar:', filtered.length)
+        console.log('Filter qilingan o\'quvchilar:', filtered)
+        setStudents(filtered)
         setFetching(false)
       })
-      .catch(() => { setErrors({ submit: 'Yuklanmadi' }); setFetching(false) })
-  }, [group])
+      .catch((err) => {
+        console.error('O\'quvchilarni yuklash xatolik:', err)
+        setErrors({ submit: 'Yuklanmadi' })
+        setFetching(false)
+      })
+  }, [group, existingStudents])
 
   const validate = () => {
     const newErrors = {}
     if (!selectedId) newErrors.selectedId = 'Studentni tanlang'
+
+    // Qo'shimcha: tanlangan o'quvchi allaqachon guruhda yo'qligini tekshirish
+    const studentId = selectedId
+    const groupId = group._id || group.id
+
+    // existingStudents orqali tekshirish
+    const alreadyInGroup = existingStudents.some(s =>
+      (s._id || s.id) === studentId
+    )
+
+    if (alreadyInGroup) {
+      newErrors.selectedId = 'Bu o\'quvchi allaqachon bu guruhda'
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleAdd = async () => {
     if (!validate()) return
+
+    // Qo'shimcha backend tekshiruvi
+    const studentId = selectedId
+    const groupId = group._id || group.id
+
+    // Agar o'quvchi allaqachon guruhda bo'lsa, qo'shmaslik
+    const alreadyInGroup = existingStudents.some(s =>
+      (s._id || s.id) === studentId
+    )
+
+    if (alreadyInGroup) {
+      setErrors({ submit: 'Bu o\'quvchi allaqachon bu guruhda qo\'shilgan' })
+      return
+    }
+
     setLoading(true)
-    const ok = await addStudentToGroupApi(group._id || group.id, selectedId)
+    const ok = await addStudentToGroupApi(groupId, studentId)
     if (ok) { onAdded(); onClose() } else { setErrors({ submit: "Qo'shishda xatolik" }); setLoading(false) }
   }
 
@@ -463,18 +537,28 @@ function AddStudentModal({ group, onClose, onAdded }) {
                 <select value={selectedId} onChange={e => { setSelectedId(e.target.value); setErrors({ ...errors, selectedId: null }) }}
                   className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-2xl text-sm font-medium outline-none focus:bg-white transition-all ${errors.selectedId ? 'border-red-400' : 'border-transparent focus:border-blue-500'}`}>
                   <option value="">Tanlang...</option>
-                  {students.map(s => <option key={s._id || s.id} value={s._id || s.id}>{s.name} — {s.phone}</option>)}
+                  {students.map(s => (
+                    <option key={s._id || s.id} value={s._id || s.id}>
+                      {s.name || 'Ism yo\'q'} {s.phone ? `— ${s.phone}` : '(Telefon yo\'q)'}
+                    </option>
+                  ))}
                 </select>
                 {errors.selectedId && <p className="text-xs text-red-500 mt-1 font-medium">{errors.selectedId}</p>}
               </div>
               {sel && (
                 <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
-                  {[['Ism', sel.name], ['Telefon', sel.phone], ['Balans', `${Number(sel.balance || 0).toLocaleString()} UZS`]].map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-sm">
-                      <span className="text-slate-400">{k}</span>
-                      <span className="font-bold text-slate-700">{v}</span>
-                    </div>
-                  ))}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Ism</span>
+                    <span className="font-bold text-slate-700">{sel.name || 'Ism yo\'q'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Telefon</span>
+                    <span className="font-bold text-slate-700">{sel.phone || 'Telefon yo\'q'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Balans</span>
+                    <span className="font-bold text-slate-700">{Number(sel.balance || 0).toLocaleString()} UZS</span>
+                  </div>
                 </div>
               )}
             </>
@@ -521,6 +605,7 @@ export default function GroupsPage() {
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [groupStudents, setGroupStudents] = useState([])
   const [loadingStudents, setLoadingStudents] = useState(false)
+  const [studentPayments, setStudentPayments] = useState({})
 
   const handleSaveGroup = async () => {
     const ok = await saveGroup(editingGroup, formData)
@@ -551,26 +636,119 @@ export default function GroupsPage() {
     if (selectedGroup?.id === group.id || selectedGroup?._id === group._id) {
       setSelectedGroup(null)
       setGroupStudents([])
+      setStudentPayments({})
     } else {
       setSelectedGroup(group)
       setLoadingStudents(true)
       try {
+        console.log('Guruh ID:', group.id || group._id)
+        console.log('Guruhdan o\'quvchilarni yuklash...')
+
         const res = await getGroupById(group.id || group._id, { includeStudents: true })
+        console.log('Backend response:', res.data)
+
         const groupData = res.data.data || res.data
-        let students = groupData.students || []
+        console.log('Group data:', groupData)
+
+        let students = []
+
+        // Turli xil ma'lumot formatlarini tekshirish
+        if (groupData.students && Array.isArray(groupData.students)) {
+          students = groupData.students
+        } else if (groupData.studentsData && Array.isArray(groupData.studentsData)) {
+          students = groupData.studentsData
+        } else if (groupData.studentData && Array.isArray(groupData.studentData)) {
+          students = groupData.studentData
+        } else if (groupData.studentIds && Array.isArray(groupData.studentIds)) {
+          // Agar faqat IDlar bo'lsa, API dan to'liq ma'lumotlarni yuklash
+          students = await Promise.all(
+            groupData.studentIds.map(id =>
+              getStudentById(id)
+                .then(res => res.data.data || res.data)
+                .catch(() => ({ id, name: "Noma'lum", phone: '—', balance: 0, role: 'student' }))
+            )
+          )
+        } else if (groupData.students && typeof groupData.students === 'object') {
+          // Agar students obyekt bo'lsa
+          students = Object.values(groupData.students)
+        }
+
+        // Agar hech narsa topilmasa, local group'dan olishga urinish
+        if (students.length === 0 && group.students) {
+          students = Array.isArray(group.students) ? group.students : [group.students]
+        }
+
+        console.log('Yuklangan o\'quvchilar:', students)
         setGroupStudents(students)
+
+        // O'quvchilarning to'lov ma'lumotlarini yuklash
+        if (students.length > 0) {
+          await loadStudentPayments(students)
+        }
+
+        if (students.length === 0) {
+          console.warn('O\'quvchilar topilmadi. Group data:', groupData)
+        }
       } catch (err) {
-        console.error(err)
-        setGroupStudents([])
+        console.error('O\'quvchilarni yuklashda xatolik:', err)
+        console.error('Error response:', err.response?.data)
+
+        // Xatolik bo'lsa, local data'dan olishga urinish
+        if (group.students) {
+          const students = Array.isArray(group.students) ? group.students : [group.students]
+          setGroupStudents(students)
+        } else {
+          setGroupStudents([])
+        }
       } finally {
         setLoadingStudents(false)
       }
     }
   }
 
+  // O'quvchilarning to'lov ma'lumotlarini yuklash
+  const loadStudentPayments = async (students) => {
+    try {
+      const paymentsRes = await getAllPayments({ limit: 1000 })
+      const allPayments = paymentsRes.data.payments || paymentsRes.data.data || paymentsRes.data || []
+
+      // Har bir o'quvchi uchun to'lovlarini guruhlash
+      const paymentsByStudent = {}
+
+      students.forEach(student => {
+        const studentId = student._id || student.id
+        const studentPayments = allPayments.filter(payment => {
+          const toWhoId = typeof payment.toWho === 'object'
+            ? (payment.toWho._id || payment.toWho.id)
+            : payment.toWho
+          return toWhoId === studentId
+        })
+
+        // Oxirgi to'lovni topish
+        const sortedPayments = studentPayments.sort((a, b) => new Date(b.date) - new Date(a.date))
+        const lastPayment = sortedPayments.length > 0 ? sortedPayments[0] : null
+
+        // Jami to'lovni hisoblash
+        const totalPaid = studentPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+
+        paymentsByStudent[studentId] = {
+          lastPayment,
+          totalPaid,
+          paymentCount: studentPayments.length
+        }
+      })
+
+      setStudentPayments(paymentsByStudent)
+    } catch (err) {
+      console.error('To\'lovlarni yuklashda xatolik:', err)
+      setStudentPayments({})
+    }
+  }
+
   const handleBack = () => {
     setSelectedGroup(null)
     setGroupStudents([])
+    setStudentPayments({})
   }
 
   const handleAddStudentSuccess = () => {
@@ -597,6 +775,7 @@ export default function GroupsPage() {
                 setActiveTab(tab)
                 setPage(1)
                 setSelectedGroup(null)
+                setStudentPayments({})
               }}
               className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
                 activeTab === tab
@@ -726,24 +905,99 @@ export default function GroupsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b">
-                      <tr><th className="px-5 py-3 text-left text-xs font-bold">#</th><th className="px-5 py-3 text-left text-xs font-bold">O'quvchi</th><th className="px-5 py-3 text-left text-xs font-bold">Telefon</th><th className="px-5 py-3 text-left text-xs font-bold">Balans</th><th className="px-5 py-3 text-left text-xs font-bold">Qo'shilgan sana</th></tr>
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-bold">#</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold">O'quvchi</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold">Telefon</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold">Qo'shilgan sana</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold">Oxirgi to'lov sanasi</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold">Oxirgi to'lov summasi</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold">To'lov holati</th>
+                      </tr>
                     </thead>
                     <tbody>
-                      {groupStudents.map((s, i) => (
-                        <tr key={s.id || s._id || i} className="border-b hover:bg-violet-50/40">
-                          <td className="px-5 py-3.5 text-slate-400 text-xs">{i+1}</td>
-                          <td className="px-5 py-3.5 font-bold text-slate-800">{s.name}</td>
-                          <td className="px-5 py-3.5 text-slate-500 text-xs">{s.phone || '—'}</td>
-                          <td className="px-5 py-3.5"><span className={`font-bold ${(s.balance || 0) < 0 ? 'text-red-500' : 'text-emerald-600'}`}>{(s.balance || 0).toLocaleString()} so'm</span></td>
-                          <td className="px-5 py-3.5 text-slate-500 text-xs">{s.createdAt ? new Date(s.createdAt).toLocaleDateString('uz-UZ') : '—'}</td>
-                        </tr>
-                      ))}
+                      {groupStudents.map((s, i) => {
+                        const studentId = s._id || s.id
+                        const paymentData = studentPayments[studentId]
+                        const lastPayment = paymentData?.lastPayment
+                        const totalPaid = paymentData?.totalPaid || 0
+                        const paymentCount = paymentData?.paymentCount || 0
+
+                        return (
+                          <tr key={studentId || i} className="border-b hover:bg-violet-50/40">
+                            <td className="px-4 py-3.5 text-slate-400 text-xs font-medium">{i+1}</td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-xs">
+                                  {s.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??'}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-slate-800">{s.name}</div>
+                                  <div className="text-xs text-slate-400">{s.role || 'student'}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-600 text-xs font-medium">{s.phone || '—'}</td>
+                            <td className="px-4 py-3.5 text-slate-500 text-xs">
+                              {s.createdAt ? new Date(s.createdAt).toLocaleDateString('uz-UZ') : '—'}
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-600 text-xs">
+                              {lastPayment ? (
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{new Date(lastPayment.date).toLocaleDateString('uz-UZ')}</span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {lastPayment ? (
+                                <div className="flex items-center gap-2">
+                                  <Wallet className="w-3.5 h-3.5 text-emerald-500" />
+                                  <span className="font-bold text-emerald-600">
+                                    {Number(lastPayment.amount).toLocaleString('uz-UZ')} <span className="text-xs font-medium text-slate-400">so'm</span>
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {paymentCount > 0 ? (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                  <span className="text-xs font-medium text-emerald-600">
+                                    {paymentCount} ta to'lov
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <XCircle className="w-4 h-4 text-red-400" />
+                                  <span className="text-xs font-medium text-red-400">
+                                    To'lov yo'q
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
-                  <div className="px-6 py-3 bg-slate-50 border-t flex justify-between">
-                    <span className="text-xs text-slate-400">Jami {groupStudents.length} ta o'quvchi</span>
-                    <span className="text-emerald-600 text-xs">✓ {groupStudents.filter(s => (s.balance || 0) >= 0).length} to'lagan</span>
-                    <span className="text-red-500 text-xs">✗ {groupStudents.filter(s => (s.balance || 0) < 0).length} qarzdor</span>
+                  <div className="px-6 py-4 bg-slate-50 border-t">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div className="flex flex-wrap gap-4">
+                        <span className="text-xs text-slate-500 font-medium">Jami: <span className="text-slate-800 font-bold">{groupStudents.length}</span> ta o'quvchi</span>
+                        <span className="text-xs text-emerald-600 font-medium">✓ {Object.values(studentPayments).filter(p => p.paymentCount > 0).length} ta to'lov qilgan</span>
+                        <span className="text-xs text-red-500 font-medium">✗ {Object.values(studentPayments).filter(p => p.paymentCount === 0).length} ta to'lov qilmagan</span>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Jami to'lov: <span className="font-bold text-emerald-600">
+                          {Object.values(studentPayments).reduce((sum, p) => sum + p.totalPaid, 0).toLocaleString('uz-UZ')} so'm
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -762,7 +1016,7 @@ export default function GroupsPage() {
         {showModal && <GroupModal formData={formData} setFormData={setFormData} teachers={teachers} courses={courses} rooms={rooms} editingGroup={editingGroup} handleSaveGroup={handleSaveGroup} closeModals={closeModals} />}
         {showRoomModal && <RoomModal roomFormData={roomFormData} setRoomFormData={setRoomFormData} editingRoom={editingRoom} handleSaveRoom={handleSaveRoom} closeModals={closeModals} />}
         {showDeleteModal && <DeleteModal itemToDelete={itemToDelete} deleteType={deleteType} confirmDelete={confirmDelete} closeModals={closeModals} />}
-        {showAddStudentModal && selectedGroupForStudent && <AddStudentModal group={selectedGroupForStudent} onClose={() => setShowAddStudentModal(false)} onAdded={handleAddStudentSuccess} />}
+        {showAddStudentModal && selectedGroupForStudent && <AddStudentModal group={selectedGroupForStudent} onClose={() => setShowAddStudentModal(false)} onAdded={handleAddStudentSuccess} existingStudents={groupStudents} />}
       </AnimatePresence>
     </div>
   )
