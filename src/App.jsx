@@ -33,7 +33,6 @@ export default function App() {
             {/* Public */}
             <Route path="/login" element={<Login />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
-
             {/* Admin routes */}
             <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
               <Route element={<DashboardLayout />}>
