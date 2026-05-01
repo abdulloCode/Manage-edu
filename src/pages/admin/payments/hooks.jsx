@@ -8,38 +8,31 @@ import {
   createPaymentType,
   updatePaymentType,
   deletePaymentType,
-  getMonthlyReport,
-  getDailyPaymentReport,
 } from '../../../api/payments'
 import {
   getAllStaff,
-  setStaffSalary,
-  getStaffSalaryHistory,
-  createStaff,
-  updateStaff,
-  deleteStaff
 } from '../../../api/staff'
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
+// ─── Helpers ─────────────────────────────────────────────────
 const getId = (item) => item?._id || item?.id || null
 
 const handleError = (message, err) => {
+  const status = err?.response?.status
+  if (status === 404) {
+    console.error(message, err)
+    return
+  }
   const serverMsg = err?.response?.data?.message
   const fullMsg = serverMsg || message
   console.error(fullMsg, err)
   alert(fullMsg)
 }
 
-// ─── usePayments ─────────────────────────────────────────────────────────────
-
 export function usePayments() {
   const [payments, setPayments] = useState([])
   const [paymentTypes, setPaymentTypes] = useState([])
   const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('payments')
-  const [report, setReport] = useState(null)
 
   const [filters, setFilters] = useState({
     startDate: '',
@@ -48,12 +41,13 @@ export function usePayments() {
     dk: ''
   })
 
-  // Faqat filterlar o'zganda qayta yuklanadi
+  // ✅ loadPayments qaytarildi
   const loadPayments = useCallback(async () => {
     setLoading(true)
     try {
       const res = await getAllPayments(filters)
-      setPayments(res.data.data || res.data || [])
+      console.log('=== PAYMENTS ===', res.data)
+      setPayments(res.data.payments || res.data.data || res.data || [])
     } catch (err) {
       handleError("To'lovlar yuklanmadi", err)
     } finally {
@@ -61,85 +55,47 @@ export function usePayments() {
     }
   }, [filters])
 
-  // Bir marta yuklanadi
   const loadPaymentTypes = useCallback(async () => {
     try {
       const res = await getAllPaymentTypes({ activeOnly: false })
+      console.log('=== PAYMENT TYPES ===', res.data)
       setPaymentTypes(res.data.data || res.data || [])
     } catch (err) {
+      console.error('=== PAYMENT TYPES ERROR ===', err.response?.status, err.response?.data)
       handleError("To'lov turlari yuklanmadi", err)
     }
   }, [])
 
-  const loadReport = useCallback(async (
-    type = 'daily',
-    date = new Date().toISOString().slice(0, 10)
-  ) => {
-    try {
-      let res
-      if (type === 'monthly') {
-        const month = new Date().toISOString().slice(0, 7)
-        res = await getMonthlyReport(month)
-      } else {
-        res = await getDailyPaymentReport(date)
-      }
-      setReport(res.data)
-    } catch (err) {
-      handleError('Hisobot yuklanmadi', err)
-    }
-  }, [])
-
-  const loadStaff = useCallback(async () => {
-    try {
-      console.log("Xodimlarni yuklashmoqda...")
-      const res = await getAllStaff()
-      console.log("Xodimlar ma'lumotlari:", res.data)
-      const staffData = res.data.data || res.data || []
-      console.log("Xodimlar ro'yxati:", staffData)
-      setStaff(staffData)
-    } catch (err) {
-      console.error("Xodimlarni yuklashda xatolik:", err)
-      console.error("Xatolik tafsilotlari:", err.response?.data)
-      handleError('Xodimlar yuklanmadi', err)
-    }
-  }, [])
-
-  // Filterlar o'zganda faqat to'lovlarni qayta yukla
+  // ✅ useEffect lar hammasi useCallback lardan keyin
   useEffect(() => {
     loadPayments()
   }, [loadPayments])
 
-  // Bir marta yukla
   useEffect(() => {
     loadPaymentTypes()
   }, [loadPaymentTypes])
 
-  // Tab o'zganda tegishli ma'lumotni yukla
-  useEffect(() => {
-    if (activeTab === 'reports') loadReport()
-    if (activeTab === 'staff') {
-      console.log("Staff tabiga o'tildi, xodimlarni yuklashmoqda...")
-      loadStaff()
+  const loadStaff = useCallback(async () => {
+    try {
+      const res = await getAllStaff()
+      setStaff(res.data.data || res.data || [])
+    } catch (err) {
+      handleError("Xodimlarni yuklashda xatolik", err)
     }
-  }, [activeTab])
+  }, [])
 
   return {
     payments,
     paymentTypes,
     staff,
     loading,
-    activeTab,
-    setActiveTab,
-    report,
     filters,
     setFilters,
     loadPayments,
     loadPaymentTypes,
-    loadReport,
-    loadStaff
+    loadStaff,
   }
 }
-
 // ─── usePaymentForm ───────────────────────────────────────────────────────────
 
 export function usePaymentForm() {

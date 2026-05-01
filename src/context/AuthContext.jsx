@@ -20,32 +20,82 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useAtom(loadingAtom);
   const [error, setError] = useAtom(authErrorAtom);
 
-  // Silently restore session on every page load via the httpOnly refresh cookie
+  // ── Restore session on every page load ─────────────────────
   useEffect(() => {
-    callRefresh()
-      .then(async ({ data }) => {
-        setAccessToken(data.accessToken);
-        api.defaults.headers.common.Authorization = `Bearer ${data.accessToken}`;
+    let cancelled = false;
+
+    const restore = async () => {
+      const storedToken = localStorage.getItem("accessToken");
+      const storedUserRaw = localStorage.getItem("user");
+      let storedUser = null;
+      try {
+        if (storedUserRaw) storedUser = JSON.parse(storedUserRaw);
+      } catch {
+        storedUser = null;
+      }
+
+      // 1) If we have a stored token, put it into axios immediately
+      if (storedToken) {
+        api.defaults.headers.common.Authorization = `Bearer ${storedToken}`;
+        if (!cancelled) setAccessToken(storedToken);
+        if (!cancelled && storedUser) setUser(storedUser);
+      }
+
+      // 2) Validate the token by calling /auth/me
+      if (storedToken) {
+        try {
+          const { data } = await getMe();
+          if (!cancelled) {
+            setUser(data);
+            localStorage.setItem("user", JSON.stringify(data));
+          }
+          if (!cancelled) setInitialized(true);
+          return; // token is valid, we're done
+        } catch (meErr) {
+          // token expired or invalid — try silent refresh
+        }
+      }
+
+      // 3) Try silent refresh via httpOnly cookie
+      try {
+        const { data } = await callRefresh();
+        const newToken = data.accessToken;
+        localStorage.setItem("accessToken", newToken);
+        api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+        if (!cancelled) setAccessToken(newToken);
+
         if (data.user) {
-          setUser(data.user);
+          if (!cancelled) setUser(data.user);
+          localStorage.setItem("user", JSON.stringify(data.user));
         } else {
-          // Refresh didn't return user — fetch profile separately
           try {
             const { data: me } = await getMe();
-            setUser(me);
+            if (!cancelled) {
+              setUser(me);
+              localStorage.setItem("user", JSON.stringify(me));
+            }
           } catch {
-            setUser(null);
+            if (!cancelled) setUser(null);
           }
         }
-      })
-      .catch(() => {
-        // No valid cookie — user needs to log in manually, no redirect here
-        setAccessToken(null);
-        setUser(null);
-      })
-      .finally(() => {
-        setInitialized(true);
-      });
+      } catch {
+        // No valid cookie and no valid stored token
+        if (!cancelled) {
+          setAccessToken(null);
+          setUser(null);
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("user");
+          delete api.defaults.headers.common.Authorization;
+        }
+      } finally {
+        if (!cancelled) setInitialized(true);
+      }
+    };
+
+    restore();
+    return () => {
+      cancelled = true;
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const login = useCallback(
@@ -53,15 +103,21 @@ export function AuthProvider({ children }) {
       setLoading(true);
       setError(null);
       try {
-        const { data } = await api.post("/auth/login", credentials, { _isLogin: true });
-        setAccessToken(data.accessToken);
-        localStorage.setItem("accessToken", data.accessToken);
+        const { data } = await api.post("/auth/login", credentials, {
+          _isLogin: true,
+        });
+        const token = data.accessToken;
+        localStorage.setItem("accessToken", token);
         localStorage.setItem("user", JSON.stringify(data.user));
+        setAccessToken(token);
         setUser(data.user);
-        api.defaults.headers.common.Authorization = `Bearer ${data.accessToken}`;
+        api.defaults.headers.common.Authorization = `Bearer ${token}`;
         return data.user;
       } catch (err) {
-        const message = err.response?.data?.message || "Login failed";
+        const message =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Login failed";
         setError(message);
         throw err;
       } finally {
@@ -78,14 +134,13 @@ export function AuthProvider({ children }) {
       /* ignore */
     }
     setAccessToken(null);
+    setUser(null);
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");
-    setUser(null);
     delete api.defaults.headers.common.Authorization;
   }, [setAccessToken, setUser]);
 
   const isAuthenticated = !!user && !!accessToken;
-  // const isAuthenticated = !!user && !!localStorage.getItem('accessToken')
 
   return (
     <AuthContext.Provider

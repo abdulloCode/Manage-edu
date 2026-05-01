@@ -1,43 +1,40 @@
 import axios from "axios";
-import { accessTokenAtom, userAtom, authStore } from "../store/auth";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL + "/api",
+  baseURL: API_BASE + "/api",
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
-    "ngrok-skip-browser-warning": "true", // ← o'chirildi
+    "ngrok-skip-browser-warning": "true",
   },
 });
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("accessToken");
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
+
+/* ── Token helpers ─────────────────────────────────────────── */
+
+const getStoredToken = () => localStorage.getItem("accessToken");
+
 const setToken = (token) => {
-  authStore.set(accessTokenAtom, token);
   if (token) {
+    localStorage.setItem("accessToken", token);
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
   } else {
+    localStorage.removeItem("accessToken");
     delete api.defaults.headers.common.Authorization;
   }
 };
 
-// Used by AuthContext.restoreSession and the 401 retry interceptor
-export const callRefresh = () =>
-  api.post("/auth/refresh", {}, { _isRefresh: true });
+/* ── Request: attach current access token ──────────────────── */
 
-// ── Request: attach current access token ──────────────────────────────────────
 api.interceptors.request.use((config) => {
-  const token = authStore.get(accessTokenAtom);
+  const token = getStoredToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// ── Response interceptors ─────────────────────────────────────────────────────
+/* ── Response: 401 refresh logic ───────────────────────────── */
+
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -46,9 +43,12 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+export const callRefresh = () =>
+  api.post("/auth/refresh", {}, { _isRefresh: true });
+
 api.interceptors.response.use(
   (res) => {
-    // Backend auto-refreshes on GET/PUT /auth/me — new token arrives in header
+    // Backend may send a new token in header after /auth/me
     const newToken = res.headers["x-access-token"];
     if (newToken) setToken(newToken);
     return res;
@@ -57,66 +57,24 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
-    // Don't try to refresh or redirect for login/refresh endpoint failures
+    // Never loop on refresh/login endpoints
     if (original?._isRefresh || original?._isLogin) {
       return Promise.reject(error);
     }
 
-    if (error.response?.status === 401 && !original._retry) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) =>
-          failedQueue.push({ resolve, reject }),
-        ).then((token) => {
-          original.headers.Authorization = `Bearer ${token}`;
-          return api(original);
-        });
-      }
-
-      original._retry = true;
-      isRefreshing = true;
-
-      try {
-        // refresh cookie is sent automatically via withCredentials
-        const { data } = await axios.post(
-          `${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`,
-          {},
-          {
-            withCredentials: true,
-            headers: { "ngrok-skip-browser-warning": "true" },
-          },
-        );
-
-        console.log(data);
-        const newToken = data.accessToken;
-        localStorage.setItem("accessToken", newToken);
-        api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
-
-        processQueue(null, newToken);
-        return api(original);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("user");
-        window.location.href = "/login";
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
-    }
-
+    // Not a 401, or already retried — just fail
     if (error.response?.status !== 401 || original._retry) {
       return Promise.reject(error);
     }
 
+    // Another request is already refreshing — queue this one
     if (isRefreshing) {
       return new Promise((resolve, reject) =>
         failedQueue.push({ resolve, reject }),
-      )
-        .then((token) => {
-          original.headers.Authorization = `Bearer ${token}`;
-          return api(original);
-        })
-        .catch(Promise.reject);
+      ).then((token) => {
+        original.headers.Authorization = `Bearer ${token}`;
+        return api(original);
+      });
     }
 
     original._retry = true;
@@ -124,16 +82,21 @@ api.interceptors.response.use(
 
     try {
       const { data } = await callRefresh();
-      setToken(data.accessToken);
-      if (data.user) authStore.set(userAtom, data.user);
-      processQueue(null, data.accessToken);
-      original.headers.Authorization = `Bearer ${data.accessToken}`;
+      const newToken = data.accessToken;
+      setToken(newToken);
+
+      // Also persist user if backend sends it
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+      }
+
+      processQueue(null, newToken);
+      original.headers.Authorization = `Bearer ${newToken}`;
       return api(original);
     } catch (refreshError) {
       processQueue(refreshError, null);
       setToken(null);
-      authStore.set(userAtom, null);
-      // Only redirect here — a real API call failed even after a refresh attempt
+      localStorage.removeItem("user");
       window.location.href = "/login";
       return Promise.reject(refreshError);
     } finally {

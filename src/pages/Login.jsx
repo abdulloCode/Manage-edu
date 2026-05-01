@@ -37,15 +37,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const leftIn = useEntrance(50);
   const rightIn = useEntrance(150);
   const formIn = useEntrance(300);
 
   if (!initialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-950">
+      <div className="min-h-screen flex items-center justify-center bg-base-100">
         <div className="relative">
-          <div className="w-10 h-10 rounded-full border-2 border-orange-500/20 border-t-orange-500 animate-spin" />
+          <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
         </div>
       </div>
     );
@@ -75,8 +74,6 @@ export default function Login() {
     }
   };
 
-  const chartBars = [40, 65, 50, 80, 55, 70, 45];
-
   const panelTransition = (inView) => ({
     opacity: inView ? 1 : 0,
     transform: inView ? "translateY(0)" : "translateY(16px)",
@@ -86,175 +83,21 @@ export default function Login() {
 
   return (
     <div
-      className="min-h-screen flex bg-neutral-950"
+      className="min-h-screen flex items-center justify-center bg-base-100"
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
-      {/* ── Left: Dark brand panel ─────────────────────────────── */}
       <div
-        className="hidden lg:flex relative w-[480px] shrink-0 flex-col justify-between overflow-hidden p-12"
-        style={{ background: "#0c0c0c" }}
-      >
-        {/* Animated gradient orbs */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div
-            className="absolute -top-32 -left-32 w-[420px] h-[420px] rounded-full blur-[100px] opacity-30"
-            style={{
-              background:
-                "radial-gradient(circle, #e8472a 0%, transparent 70%)",
-              animation: "pulseOrb 8s ease-in-out infinite",
-            }}
-          />
-          <div
-            className="absolute bottom-0 right-0 w-[320px] h-[320px] rounded-full blur-[100px] opacity-20"
-            style={{
-              background:
-                "radial-gradient(circle, #f4a535 0%, transparent 70%)",
-              animation: "pulseOrb 10s ease-in-out infinite 2s",
-            }}
-          />
-          <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] rounded-full"
-            style={{ border: "0.5px dashed rgba(255,255,255,0.04)" }}
-          />
-        </div>
-
-        {/* Logo */}
-        <div
-          className="relative z-10 flex items-center gap-2.5"
-          style={panelTransition(leftIn)}
-        >
-          <div
-            className="w-7 h-7 rounded-full p-[3px]"
-            style={{
-              background:
-                "conic-gradient(#e8472a, #f4a535, #4caf50, #2196f3, #e8472a)",
-            }}
-          >
-            <div
-              className="w-full h-full rounded-full"
-              style={{ background: "#0c0c0c" }}
-            />
-          </div>
-          <span className="text-white/90 font-medium text-[15px] tracking-tight">
-            CRM Portal
-          </span>
-        </div>
-
-        {/* Headline + description */}
-        <div className="relative z-10" style={panelTransition(leftIn)}>
-          <h2
-            className="text-white leading-[1.1] tracking-tight mb-4"
-            style={{
-              fontFamily: "'Playfair Display', Georgia, serif",
-              fontSize: "42px",
-              fontWeight: 600,
-              letterSpacing: "-0.5px",
-            }}
-          >
-            Manage your
-            <br />
-            learning
-            <br />
-            journey.
-          </h2>
-          <p
-            className="text-sm leading-relaxed max-w-[260px]"
-            style={{ color: "rgba(255,255,255,0.38)", fontWeight: 300 }}
-          >
-            Track groups, payments, grades and attendance — all from a single
-            unified dashboard.
-          </p>
-
-          {/* Mini dashboard mockup */}
-          <div
-            className="mt-10 max-w-[200px] rounded-2xl p-4 backdrop-blur-md"
-            style={{
-              background: "rgba(255,255,255,0.03)",
-              border: "0.5px solid rgba(255,255,255,0.08)",
-              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
-            }}
-          >
-            <div
-              className="rounded-xl p-3 mb-3"
-              style={{ background: "rgba(255,255,255,0.04)" }}
-            >
-              <div
-                className="text-[10px] mb-1 tracking-wide uppercase"
-                style={{ color: "rgba(255,255,255,0.3)", fontWeight: 500 }}
-              >
-                This Month
-              </div>
-              <div className="text-white font-semibold text-xl tracking-tight">
-                897.00 €
-              </div>
-              <div className="flex items-center gap-1 mt-1">
-                <svg
-                  className="w-3 h-3 text-emerald-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={3}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M5 10l7-7m0 0l7 7m-7-7v18"
-                  />
-                </svg>
-                <span className="text-[10px] text-emerald-400 font-medium">
-                  +12.5%
-                </span>
-              </div>
-            </div>
-            <div
-              className="flex items-end gap-[3px]"
-              style={{ height: "40px" }}
-            >
-              {chartBars.map((h, i) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-sm transition-all duration-500"
-                  style={{
-                    height: leftIn ? `${h}%` : "0%",
-                    background:
-                      i === chartBars.length - 1
-                        ? "#e8472a"
-                        : "rgba(255,255,255,0.12)",
-                    transitionDelay: `${i * 60 + 400}ms`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom tagline */}
-        <div
-          className="relative z-10 text-[11px] font-light tracking-wide"
-          style={{ color: "rgba(255,255,255,0.18)" }}
-        >
-          Global management made simple.
-        </div>
-      </div>
-
-      {/* ── Right: Form panel ──────────────────────────────────── */}
-      <div
-        className="flex-1 flex flex-col bg-white px-8 sm:px-10 py-10"
+        className="h-full w-full max-w-[400px] px-6 sm:px-0"
         style={panelTransition(rightIn)}
       >
         {/* Top bar */}
+
         <div className="flex justify-between items-center mb-auto">
           <div className="flex lg:hidden items-center gap-2">
-            <div
-              className="w-6 h-6 rounded-full p-[2.5px]"
-              style={{
-                background:
-                  "conic-gradient(#e8472a, #f4a535, #4caf50, #2196f3, #e8472a)",
-              }}
-            >
-              <div className="w-full h-full rounded-full bg-white" />
+            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+              <div className="w-4 h-4 rounded-full bg-base-100" />
             </div>
-            <span className="font-medium text-sm text-gray-900">
+            <span className="font-medium text-sm text-base-content">
               CRM Portal
             </span>
           </div>
@@ -262,7 +105,7 @@ export default function Login() {
 
           <div className="flex items-center gap-1.5 cursor-pointer group">
             <svg
-              className="w-4 h-4 text-gray-400 transition-colors group-hover:text-gray-600"
+              className="w-4 h-4 text-base-content/70 transition-colors group-hover:text-base-content/60"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -271,7 +114,7 @@ export default function Login() {
               <circle cx="12" cy="8" r="4" />
               <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" strokeLinecap="round" />
             </svg>
-            <span className="text-sm text-gray-400 group-hover:text-gray-700 transition-colors">
+            <span className="text-sm text-base-content/70 group-hover:text-base-content/70 transition-colors">
               Sign Up
             </span>
           </div>
@@ -282,7 +125,7 @@ export default function Login() {
           <div className="w-full max-w-[360px]" style={panelTransition(formIn)}>
             <div className="mb-8">
               <h1
-                className="text-gray-900 mb-2"
+                className="text-base-content mb-2"
                 style={{
                   fontFamily: "'Playfair Display', Georgia, serif",
                   fontSize: "34px",
@@ -292,21 +135,14 @@ export default function Login() {
               >
                 Welcome back
               </h1>
-              <p className="text-sm text-gray-400 font-light">
+              <p className="text-sm text-base-content/70 font-light">
                 Enter your credentials to access your account
               </p>
             </div>
 
             {/* Error */}
             {error && (
-              <div
-                className="flex items-center gap-2.5 px-4 py-3 rounded-2xl mb-5 text-sm animate-[slideIn_0.3s_ease-out]"
-                style={{
-                  background: "#fff3f2",
-                  border: "1px solid #fecdca",
-                  color: "#c0392b",
-                }}
-              >
+              <div className="alert alert-error flex items-center gap-2.5 px-4 py-3 rounded-2xl mb-5 text-sm animate-[slideIn_0.3s_ease-out]">
                 <svg
                   className="w-4 h-4 shrink-0"
                   fill="none"
@@ -335,23 +171,13 @@ export default function Login() {
                   onChange={handlePhoneChange}
                   required
                   autoComplete="tel"
-                  className="w-full text-sm text-gray-900 outline-none transition-all duration-300 placeholder:text-gray-300"
+                  className="w-full text-sm text-base-content outline-none transition-all duration-300 placeholder:text-base-content/60 border border-base-300 focus:border-primary focus:ring-4 focus:ring-primary/10"
                   style={{
                     height: "54px",
                     borderRadius: "14px",
-                    border: "1.5px solid #e8e8e8",
                     padding: "0 20px",
                     fontSize: "14px",
                     fontWeight: 400,
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "#e8472a";
-                    e.target.style.boxShadow =
-                      "0 0 0 4px rgba(232, 71, 42, 0.08)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "#e8e8e8";
-                    e.target.style.boxShadow = "none";
                   }}
                 />
               </div>
@@ -365,30 +191,20 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="w-full text-sm text-gray-900 outline-none transition-all duration-300 placeholder:text-gray-300"
+                  className="w-full text-sm text-base-content outline-none transition-all duration-300 placeholder:text-base-content/60 border border-base-300 focus:border-primary focus:ring-4 focus:ring-primary/10"
                   style={{
                     height: "54px",
                     borderRadius: "14px",
-                    border: "1.5px solid #e8e8e8",
                     padding: "0 48px 0 20px",
                     fontSize: "14px",
                     fontWeight: 400,
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "#e8472a";
-                    e.target.style.boxShadow =
-                      "0 0 0 4px rgba(232, 71, 42, 0.08)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "#e8e8e8";
-                    e.target.style.boxShadow = "none";
                   }}
                 />
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-600 transition-colors duration-200"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-base-content/60 hover:text-base-content/60 transition-colors duration-200"
                 >
                   {showPassword ? (
                     <svg
@@ -431,8 +247,8 @@ export default function Login() {
               <div className="flex justify-end">
                 <a
                   href="#"
-                  className="text-sm font-medium transition-all duration-200 hover:opacity-70"
-                  style={{ color: "#e8472a" }}
+                  // className="text-sm font-medium transition-all duration-200 hover:opacity-70"
+                  className="text-primary"
                 >
                   Forgot password?
                 </a>
@@ -442,29 +258,14 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center justify-center gap-2.5 text-white font-medium transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98]"
+                className="flex items-center justify-center gap-2.5 text-primary-content font-medium transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] bg-primary shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:-translate-y-px"
                 style={{
                   height: "54px",
                   borderRadius: "14px",
                   border: "none",
-                  background:
-                    "linear-gradient(135deg, #e8472a 0%, #f4733a 100%)",
                   fontSize: "15px",
                   fontWeight: 500,
                   letterSpacing: "0.2px",
-                  boxShadow: "0 8px 24px -8px rgba(232, 71, 42, 0.45)",
-                }}
-                onMouseEnter={(e) => {
-                  if (!loading) {
-                    e.currentTarget.style.transform = "translateY(-1px)";
-                    e.currentTarget.style.boxShadow =
-                      "0 12px 32px -8px rgba(232, 71, 42, 0.55)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow =
-                    "0 8px 24px -8px rgba(232, 71, 42, 0.45)";
                 }}
               >
                 {loading ? (
@@ -493,21 +294,18 @@ export default function Login() {
         </div>
 
         {/* Footer */}
-        <div
-          className="flex justify-between items-center mt-auto pt-6"
-          style={{ borderTop: "0.5px solid #f3f4f6" }}
-        >
-          <span className="text-xs text-gray-300 font-light">
+        <div className="flex justify-between items-center mt-auto pt-6 border-t border-base-200">
+          <span className="text-xs text-base-content/60 font-light">
             © 2026 CRM Portal
           </span>
-          <div className="flex items-center gap-4 text-xs text-gray-300 font-light">
+          <div className="flex items-center gap-4 text-xs text-base-content/60 font-light">
             <a
               href="#"
-              className="hover:text-gray-500 transition-colors duration-200"
+              className="hover:text-base-content/50 transition-colors duration-200"
             >
               Contact Us
             </a>
-            <span className="flex items-center gap-1 cursor-pointer hover:text-gray-500 transition-colors duration-200">
+            {/* <span className="flex items-center gap-1 cursor-pointer hover:text-base-content/50 transition-colors duration-200">
               English
               <svg
                 className="w-3 h-3"
@@ -522,17 +320,10 @@ export default function Login() {
                   d="M19 9l-7 7-7-7"
                 />
               </svg>
-            </span>
+            </span> */}
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes pulseOrb {
-          0%, 100% { transform: scale(1); opacity: 0.3; }
-          50% { transform: scale(1.15); opacity: 0.2; }
-        }
-      `}</style>
     </div>
   );
 }

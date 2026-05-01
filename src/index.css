@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* DaisyUI tooltips inside the sidebar get clipped by .drawer-side overflow.
+   Boost z-index so they always render on top. */
+.tooltip::before,
+.tooltip::after {
+  z-index: 50 !important;
+}
+
+/* Make tooltips theme-aware: use base colours instead of hardcoded neutral.
+   This adapts automatically to light / dark / pastel themes. */
+.tooltip {
+  --tooltip-color: oklch(var(--b3) / 1);
+  --tooltip-text-color: oklch(var(--bc) / 1);
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -18,7 +32,7 @@
   }
 
   body {
-    @apply font-sans text-slate-900 bg-slate-50;
+    @apply font-sans text-base-content bg-base-100;
   }
 
   h1,
@@ -47,10 +61,10 @@
   }
 
   p {
-    @apply text-slate-600 leading-relaxed;
+    @apply text-base-content/70 leading-relaxed;
   }
 
   small {
-    @apply text-slate-500;
+    @apply text-base-content/60;
   }
 }

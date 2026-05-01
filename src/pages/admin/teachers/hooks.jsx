@@ -139,7 +139,9 @@ export async function saveTeacher(teacher, formData, loadTeachers) {
     return true
   } catch (err) {
     console.error('Saqlash xatolik:', err)
-    alert('Xatolik yuz berdi')
+    if (err?.response?.status !== 404) {
+      alert('Xatolik yuz berdi')
+    }
     return false
   }
 }

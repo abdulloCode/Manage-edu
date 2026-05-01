@@ -195,7 +195,9 @@ function AttendanceTab({ groupId, students: studentsProp }) {
       setHasChanges(false)
     } catch (err) {
       console.error(err)
-      alert('Failed to save some attendance records')
+      if (err?.response?.status !== 404) {
+        alert('Failed to save some attendance records')
+      }
     } finally {
       setSaving(false)
     }
@@ -208,7 +210,7 @@ function AttendanceTab({ groupId, students: studentsProp }) {
 
   if (loading) return <LoadingState />
   if (students.length === 0) {
-    return <div className="py-12 text-center text-base-content/30 text-sm rounded-2xl bg-base-100 border border-base-200">No students in this group</div>
+    return <div className="py-12 text-center text-base-content/60 text-sm rounded-2xl bg-base-100 border border-base-200">No students in this group</div>
   }
 
   return (
@@ -240,7 +242,7 @@ function AttendanceTab({ groupId, students: studentsProp }) {
                 const label = dayObj.l
                 const isWeekend = label ? (label === 'Ya' || label === 'Sh') : (new Date(year, month - 1, day).getDay() === 0 || new Date(year, month - 1, day).getDay() === 6)
                 return (
-                  <th key={day} className={`text-center min-w-[40px] text-[11px] font-semibold ${isWeekend ? 'text-error/60' : 'text-base-content/50'}`}>
+                  <th key={day} className={`text-center min-w-[40px] text-[11px] font-semibold ${isWeekend ? 'text-error' : 'text-base-content/70'}`}>
                     <div className="leading-tight">
                       {label && <div className="text-[9px]">{label}</div>}
                       <div>{day}</div>
@@ -281,7 +283,7 @@ function AttendanceTab({ groupId, students: studentsProp }) {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-base-content/50">
+      <div className="flex items-center gap-4 text-xs text-base-content/70">
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-success/15 text-success font-bold text-[10px] flex items-center justify-center">P</span> Present</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-error/15 text-error font-bold text-[10px] flex items-center justify-center">A</span> Absent</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-warning/15 text-warning font-bold text-[10px] flex items-center justify-center">L</span> Late</span>
@@ -422,7 +424,9 @@ function RatingsTab({ groupId, students: studentsProp }) {
       setHasChanges(false)
     } catch (err) {
       console.error(err)
-      alert('Failed to save some ratings')
+      if (err?.response?.status !== 404) {
+        alert('Failed to save some ratings')
+      }
     } finally {
       setSaving(false)
     }
@@ -435,7 +439,7 @@ function RatingsTab({ groupId, students: studentsProp }) {
 
   if (loading) return <LoadingState />
   if (students.length === 0) {
-    return <div className="py-12 text-center text-base-content/30 text-sm rounded-2xl bg-base-100 border border-base-200">No students in this group</div>
+    return <div className="py-12 text-center text-base-content/60 text-sm rounded-2xl bg-base-100 border border-base-200">No students in this group</div>
   }
 
   return (
@@ -467,7 +471,7 @@ function RatingsTab({ groupId, students: studentsProp }) {
                 const label = dayObj.l
                 const isWeekend = label ? (label === 'Ya' || label === 'Sh') : (new Date(year, month - 1, day).getDay() === 0 || new Date(year, month - 1, day).getDay() === 6)
                 return (
-                  <th key={day} className={`text-center min-w-[44px] text-[11px] font-semibold ${isWeekend ? 'text-error/60' : 'text-base-content/50'}`}>
+                  <th key={day} className={`text-center min-w-[44px] text-[11px] font-semibold ${isWeekend ? 'text-error' : 'text-base-content/70'}`}>
                     <div className="leading-tight">
                       {label && <div className="text-[9px]">{label}</div>}
                       <div>{day}</div>
@@ -506,7 +510,7 @@ function RatingsTab({ groupId, students: studentsProp }) {
                 })}
                 <td className="text-center font-bold text-sm bg-base-200/30 min-w-[60px] text-base-content">
                   {monthlyAverages[s.id] === null ? (
-                    <span className="text-base-content/30">-</span>
+                    <span className="text-base-content/60">-</span>
                   ) : (
                     <span className={monthlyAverages[s.id] >= 8 ? 'text-success' : monthlyAverages[s.id] >= 5 ? 'text-warning' : 'text-error'}>
                       {monthlyAverages[s.id].toFixed(1)}
@@ -520,7 +524,7 @@ function RatingsTab({ groupId, students: studentsProp }) {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-base-content/50">
+      <div className="flex items-center gap-4 text-xs text-base-content/70">
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded text-success font-bold text-[10px] flex items-center justify-center">8+</span> Excellent</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded text-warning font-bold text-[10px] flex items-center justify-center">5+</span> Good</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded text-error font-bold text-[10px] flex items-center justify-center">&lt;5</span> Needs work</span>
@@ -584,21 +588,21 @@ export default function GroupDetail() {
           <h1 className="text-2xl font-bold text-base-content">{group?.name ?? 'Group'}</h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
             {group?.course && (
-              <span className="text-sm text-base-content/50">
+              <span className="text-sm text-base-content/70">
                 {group.course.title ?? group.course.name}
               </span>
             )}
             {group?.schedule && (
               <>
-                <span className="text-base-content/20">·</span>
-                <span className="text-sm text-base-content/40">
+                <span className="text-base-content/70">·</span>
+                <span className="text-sm text-base-content/70">
                   {Array.isArray(group.schedule.days) ? group.schedule.days.join(', ') : group.schedule.days}
                   {group.schedule.fromHour && group.schedule.toHour && ` · ${group.schedule.fromHour}–${group.schedule.toHour}`}
                 </span>
               </>
             )}
-            <span className="text-base-content/20">·</span>
-            <span className="text-sm text-base-content/40">{students.length} students</span>
+            <span className="text-base-content/70">·</span>
+            <span className="text-sm text-base-content/70">{students.length} students</span>
           </div>
         </div>
       </div>
@@ -615,7 +619,7 @@ export default function GroupDetail() {
             className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === key
                 ? 'bg-base-100 text-base-content shadow-sm'
-                : 'text-base-content/50 hover:text-base-content'
+                : 'text-base-content/70 hover:text-base-content'
             }`}
           >
             {label}

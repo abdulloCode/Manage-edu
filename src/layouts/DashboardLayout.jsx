@@ -58,14 +58,13 @@ export default function DashboardLayout() {
             <span className="font-bold text-base">CRM Portal</span>
           </div>
         </header>
-
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
           <Outlet />
         </main>
       </div>
 
       {/* ── Drawer sidebar ── */}
-      <div className="drawer-side z-40">
+      <div className="drawer-side z-40 lg:!overflow-visible">
         <label
           htmlFor="main-drawer"
           aria-label="close sidebar"
