@@ -23,7 +23,6 @@ function EditModal({ user, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: user.name ?? "",
     phone: user.phone ?? "",
-    email: user.email ?? "",
     password: "",
   });
   const [loading, setLoading] = useState(false);
@@ -31,26 +30,30 @@ function EditModal({ user, onClose, onSaved }) {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const payload = {
-        name: form.name,
-        phone: form.phone,
-        email: form.email || undefined,
-      };
-      if (form.password) payload.password = form.password;
-      const { data } = await updateMe(payload);
-      onSaved(data);
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.message ?? "Failed to update profile");
-    } finally {
-      setLoading(false);
+ const handleSubmit = async (e) => {
+  e.preventDefault()
+  setLoading(true)
+  setError(null)
+  try {
+    const payload = {}
+    if (form.name && form.name !== user.name) payload.name = form.name
+    if (form.phone && form.phone !== user.phone) payload.phone = form.phone
+    if (form.password) payload.password = form.password
+
+    if (Object.keys(payload).length === 0) {
+      onClose()
+      return
     }
-  };
+
+    const { data } = await updateMe(payload)
+    onSaved(data)
+    onClose()
+  } catch (err) {
+    setError(err.response?.data?.message ?? 'Failed to update profile')
+  } finally {
+    setLoading(false)
+  }
+}
 
   return (
     <div className="modal modal-open">
@@ -80,12 +83,6 @@ function EditModal({ user, onClose, onSaved }) {
               key: "phone",
               type: "tel",
               placeholder: "+998901234567",
-            },
-            {
-              label: "Email",
-              key: "email",
-              type: "email",
-              placeholder: "ali@gmail.com",
             },
             {
               label: "New password",
@@ -262,7 +259,6 @@ export default function MyProfile() {
         {/* Info strip */}
         <div className="border-t border-base-200 px-8 py-3 flex flex-wrap gap-x-8 gap-y-1">
           <InfoChip label="Phone" value={user?.phone} />
-          {user?.email && <InfoChip label="Email" value={user.email} />}
           {user?.centerId && (
             <InfoChip label="Center ID" value={user.centerId} mono />
           )}

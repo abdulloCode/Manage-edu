@@ -180,7 +180,7 @@ function AppearanceTab({ onMessage }) {
 // ─── Profile Tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({ onMessage }) {
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '' })
+  const [formData, setFormData] = useState({ name: '', phone: '' })
   const [fetchLoading, setFetchLoading] = useState(true)
   const [saveLoading, setSaveLoading] = useState(false)
 
@@ -191,7 +191,6 @@ function ProfileTab({ onMessage }) {
         if (cancelled) return
         setFormData({
           name: data.name ?? '',
-          email: data.email ?? '',
           phone: data.phone ?? '',
         })
       })
@@ -265,14 +264,6 @@ function ProfileTab({ onMessage }) {
           onChange={handleChange('name')}
           placeholder="John Doe"
           icon={<User className="w-4 h-4" />}
-        />
-        <FormField
-          label="Email"
-          value={formData.email}
-          onChange={handleChange('email')}
-          placeholder="john@example.com"
-          type="email"
-          icon={<Mail className="w-4 h-4" />}
         />
         <FormField
           label="Phone"

@@ -6,10 +6,11 @@ export const getAllPayments   = (params)     => api.get('/payments', { params })
 export const getPaymentById  = (id)         => api.get(`/payments/${id}`)
 
 export const createPayment   = (data)       => api.post('/payments', data)
-// data: { type, amount, month, toWho, date?, comment? }
+// data: { toWho, amount, dk: 'debit' | 'credit', date?, type?, comment? }
+// ⚠️ dk is now REQUIRED. type is optional (auto-detected by user role if omitted)
 
 export const updatePayment   = (id, data)   => api.put(`/payments/${id}`, data)
-// data: { type?, amount?, date?, month?, toWho?, comment? }
+// data: { type?, amount?, dk?: 'debit' | 'credit', date?, month?, toWho?, comment? }
 
 export const deletePayment   = (id)         => api.delete(`/payments/${id}`)
 
@@ -23,20 +24,26 @@ export const getMyPayments   = ()           => api.get('/payments/me/payments')
 
 
 // ── Payment Types ─────────────────────────────────────────────
+// ⚠️ dk field is REMOVED from payment types entirely.
+// dk is now set on individual payments, not on the type.
+
 export const getAllPaymentTypes   = (params)   => api.get('/payment-types', { params })
 // params: { activeOnly? }
 
 export const getPaymentTypeById  = (id)        => api.get(`/payment-types/${id}`)
 
 export const createPaymentType   = (data)      => api.post('/payment-types', data)
-// data: { name, code, dk: 'credit' | 'debit', description? }
+// data: { name, code, description? }
+// ❌ dk removed — no longer a payment type field
 
 export const updatePaymentType   = (id, data)  => api.put(`/payment-types/${id}`, data)
-// data: { name?, code?, dk?, description?, isActive? }
+// data: { name?, code?, description?, isActive? }
+// ❌ dk removed — no longer a payment type field
 
 export const deletePaymentType   = (id)        => api.delete(`/payment-types/${id}`)
 
 export const initializePaymentTypes = ()       => api.post('/payment-types/initialize')
+// Creates clean payment types without dk
 
 
 // ── Payment Calculations ──────────────────────────────────────
@@ -52,6 +59,9 @@ export const getDailyFinancialSummary    = (date) => api.get(`/payment-calculati
 
 
 // ── Payment Reports ───────────────────────────────────────────
+// ⚠️ Payment Type report items now return: { totalCredit, totalDebit, totalAmount, transactionCount }
+// instead of a single total per type.
+
 export const getPaymentReport      = (params)  => api.get('/payment-reports', { params })
 // params: { startDate?, endDate?, groupingBy?: 'type'|'month'|'toWho', typeId? }
 

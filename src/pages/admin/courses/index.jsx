@@ -65,7 +65,7 @@ function CourseCard({ course, index, onEdit, onDelete }) {
             </button>
             <button
               onClick={() => onDelete(course)}
-              className="p-1.5 bg-primary-content/20 hover:bg-error/60 rounded-lg text-primary-content transition-colors font-bold"
+              className="p-1.5 bg-error text-error-content hover:bg-red-50 rounded-lg text-error-content transition-colors font-bold"
             >
               <Trash2 className="w-3 h-3" />
             </button>

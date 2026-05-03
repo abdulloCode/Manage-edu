@@ -30,8 +30,10 @@ import {
   removeItem,
   addStudentToGroupApi,
   fetchAllStudents,
+  fetchStudentsForCourse,
 } from "./hooks";
-import { getGroupById } from "../../../api/groups";
+import { getGroupById, getFreeRooms } from "../../../api/groups";
+import { getAvailableTeachers } from "../../../api/teachers";
 import { getAllPayments } from "../../../api/payments";
 import { getStudentById } from "../../../api/students";
 
@@ -47,14 +49,14 @@ function TimePicker24({ value, onChange, label }) {
 
   return (
     <div>
-      <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-2">
+      <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-1.5">
         {label}
       </label>
       <div className="flex gap-2">
         <select
           value={h}
           onChange={(e) => onChange(`${e.target.value}:${m}`)}
-          className="flex-1 px-3 py-2.5 bg-base-200 border-2 border-transparent rounded-xl text-sm font-bold text-base-content outline-none focus:border-primary focus:bg-base-100 transition-all cursor-pointer"
+          className="flex-1 px-2.5 py-2 bg-base-200 border-2 border-transparent rounded-xl text-sm font-bold text-base-content outline-none focus:border-primary focus:bg-base-100 transition-all cursor-pointer"
         >
           {hours.map((hr) => (
             <option key={hr} value={hr}>
@@ -65,7 +67,7 @@ function TimePicker24({ value, onChange, label }) {
         <select
           value={m}
           onChange={(e) => onChange(`${h}:${e.target.value}`)}
-          className="w-24 px-3 py-2.5 bg-base-200 border-2 border-transparent rounded-xl text-sm font-bold text-base-content outline-none focus:border-primary focus:bg-base-100 transition-all cursor-pointer"
+          className="w-20 px-2.5 py-2 bg-base-200 border-2 border-transparent rounded-xl text-sm font-bold text-base-content outline-none focus:border-primary focus:bg-base-100 transition-all cursor-pointer"
         >
           {minutes.map((min) => (
             <option key={min} value={min}>
@@ -74,9 +76,6 @@ function TimePicker24({ value, onChange, label }) {
           ))}
         </select>
       </div>
-      <p className="text-[11px] text-base-content/40 mt-1 ml-1">
-        Tanlangan: {h}:{m}
-      </p>
     </div>
   );
 }
@@ -156,7 +155,9 @@ function GroupCard({
           {course && (
             <div className="flex items-center gap-1.5 truncate">
               <BookOpen className="w-3 h-3 shrink-0" />
-              <span className="truncate font-medium">{course.name}</span>
+              <span className="truncate font-medium">{course.title || course.name}</span>
+
+
             </div>
           )}
           {teacher && (
@@ -311,6 +312,78 @@ function GroupModal({
 }) {
   const days = ["Du", "Se", "Chor", "Pa", "Ju", "Sha", "Yak"];
   const [errors, setErrors] = useState({});
+  const [availableRooms, setAvailableRooms] = useState([]);
+  const [availableTeachers, setAvailableTeachers] = useState([]);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+
+  // Fetch available rooms and teachers when both days and time are selected
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      const selectedDays = formData.schedule?.days || [];
+      const fromHour = formData.schedule?.fromHour || "";
+
+      // Only fetch if both days and time are selected
+      if (selectedDays.length > 0 && fromHour) {
+        setLoadingAvailability(true);
+        try {
+          const daysString = selectedDays.join(",");
+          const timeString = fromHour;
+
+          // Fetch available rooms and teachers in parallel
+          const [roomsRes, teachersRes] = await Promise.all([
+            getFreeRooms({ days: daysString, time: timeString }),
+            getAvailableTeachers({ days: daysString, time: timeString }),
+          ]);
+
+          const availableRoomsData = roomsRes.data.data || roomsRes.data || [];
+          const availableTeachersData = teachersRes.data.data || teachersRes.data || [];
+
+          setAvailableRooms(Array.isArray(availableRoomsData) ? availableRoomsData : []);
+          setAvailableTeachers(Array.isArray(availableTeachersData) ? availableTeachersData : []);
+
+          // If currently selected room or teacher is not available, clear the selection
+       if (editingGroup) {
+  // Edit: mavjud teacher/room ni listga qo'sh (band bo'lsa ham)
+  if (formData.teacherId) {
+    const exists = availableTeachersData.some(t => (t._id || t.id) === formData.teacherId);
+    if (!exists) {
+      const full = teachers.find(t => (t._id || t.id) === formData.teacherId);
+      if (full) availableTeachersData.unshift(full);
+    }
+  }
+  if (formData.roomId) {
+    const exists = availableRoomsData.some(r => (r._id || r.id) === formData.roomId);
+    if (!exists) {
+      const full = rooms.find(r => (r._id || r.id) === formData.roomId);
+      if (full) availableRoomsData.unshift(full);
+    }
+  }
+} else {
+  // Yangi guruh: band bo'lsa tozala
+  if (formData.teacherId && !availableTeachersData.some(t => (t._id || t.id) === formData.teacherId)) {
+    setFormData(prev => ({ ...prev, teacherId: "" }));
+  }
+  if (formData.roomId && !availableRoomsData.some(r => (r._id || r.id) === formData.roomId)) {
+    setFormData(prev => ({ ...prev, roomId: "" }));
+  }
+}
+        } catch (err) {
+          console.error("Availability check failed:", err);
+          // On error, show all options
+          setAvailableRooms(rooms);
+          setAvailableTeachers(teachers);
+        } finally {
+          setLoadingAvailability(false);
+        }
+      } else {
+        // Reset to all options if days or time not selected
+        setAvailableRooms(rooms);
+        setAvailableTeachers(teachers);
+      }
+    };
+
+    fetchAvailability();
+ }, [formData.schedule?.days, formData.schedule?.fromHour, editingGroup]);
 
   const validate = () => {
     const newErrors = {};
@@ -358,28 +431,28 @@ function GroupModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.92 }}
         transition={{ type: "spring", stiffness: 380, damping: 30 }}
-        className="relative bg-base-100 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]"
+        className="relative bg-base-100 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[85vh]"
       >
-        <div className="bg-primary px-6 py-5 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary-content/20 rounded-xl">
-              <Users className="w-5 h-5 text-primary-content" />
+        <div className="bg-primary px-5 py-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-primary-content/20 rounded-lg">
+              <Users className="w-4.5 h-4.5 text-primary-content" />
             </div>
-            <h2 className="font-black text-primary-content text-lg">
+            <h2 className="font-black text-primary-content text-base">
               {editingGroup ? "Guruhni Tahrirlash" : "Yangi Guruh"}
             </h2>
           </div>
           <button
             onClick={closeModals}
-            className="p-2 hover:bg-primary-content/20 rounded-xl transition-colors text-primary-content"
+            className="p-1.5 hover:bg-primary-content/20 rounded-lg transition-colors text-primary-content"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4.5 h-4.5" />
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-6 space-y-4">
+        <div className="overflow-y-auto flex-1 p-5 space-y-3">
           <div>
-            <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-1.5">
               Guruh nomi *
             </label>
             <input
@@ -388,161 +461,63 @@ function GroupModal({
                 setFormData({ ...formData, name: e.target.value });
                 setErrors({ ...errors, name: null });
               }}
-              className={`w-full px-4 py-3 bg-base-200 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-base-100 transition-all ${errors.name ? "border-error" : "border-transparent focus:border-primary"}`}
-              placeholder="Masalan: Frontend Guruh A"
+              className={`w-full px-3.5 py-2.5 bg-base-200 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-base-100 transition-all ${errors.name ? "border-error" : "border-transparent focus:border-primary"}`}
+              placeholder="Guruh nomi"
             />
-            {errors.name && (
-              <p className="text-xs text-error mt-1 font-bold">{errors.name}</p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-1.5">
+              O'qituvchi *
+            </label>
+            <select
+              value={formData.teacherId || ""}
+              onChange={(e) => {
+                setFormData({ ...formData, teacherId: e.target.value });
+                setErrors({ ...errors, teacherId: null });
+              }}
+              disabled={loadingAvailability}
+              className={`w-full px-3.5 py-2.5 bg-base-200 border-2 rounded-2xl text-sm font-bold text-base-content outline-none focus:bg-base-100 transition-all ${errors.teacherId ? "border-error" : "border-transparent focus:border-primary"} ${loadingAvailability ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              <option value="">Tanlang</option>
+              {loadingAvailability ? (
+                <option disabled>Yuklanmoqda...</option>
+              ) : availableTeachers.length === 0 ? (
+                <option disabled>Mavjud emas</option>
+              ) : (
+                availableTeachers.map((i) => (
+                  <option
+                    key={i.id || i._id}
+                    value={i.id || i._id}
+                    className="text-base-content"
+                  >
+                    {i.name}
+                  </option>
+                ))
+              )}
+            </select>
+            {errors.teacherId && (
+              <p className="text-xs text-error mt-1 font-bold">
+                {errors.teacherId}
+              </p>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              {
-                key: "courseId",
-                label: "Kurs *",
-                list: courses,
-                nameKey: "name",
-              },
-              {
-                key: "teacherId",
-                label: "O'qituvchi *",
-                list: teachers,
-                nameKey: "name",
-              },
-            ].map(({ key, label, list, nameKey }) => (
-              <div key={key}>
-                <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-2">
-                  {label}
-                </label>
-                <select
-                  value={formData[key] || ""}
-                  onChange={(e) => {
-                    setFormData({ ...formData, [key]: e.target.value });
-                    setErrors({ ...errors, [key]: null });
-                  }}
-                  className={`w-full px-4 py-3 bg-base-200 border-2 rounded-2xl text-sm font-bold text-base-content outline-none focus:bg-base-100 transition-all ${errors[key] ? "border-error" : "border-transparent focus:border-primary"}`}
-                >
-                  <option value="">Tanlang</option>
-                  {list.map((i) => (
-                    <option
-                      key={i.id}
-                      value={i.id}
-                      className="text-base-content"
-                    >
-                      {i[nameKey]}
-                    </option>
-                  ))}
-                </select>
-                {errors[key] && (
-                  <p className="text-xs text-error mt-1 font-bold">
-                    {errors[key]}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-2">
-                Xona *
-              </label>
-              <select
-                value={formData.roomId || ""}
-                onChange={(e) => {
-                  setFormData({ ...formData, roomId: e.target.value });
-                  setErrors({ ...errors, roomId: null });
-                }}
-                className={`w-full px-4 py-3 bg-base-200 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-base-100 transition-all ${errors.roomId ? "border-error" : "border-transparent focus:border-primary"}`}
-              >
-                <option value="">Tanlang</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} (#{r.number})
-                  </option>
-                ))}
-              </select>
-              {errors.roomId && (
-                <p className="text-xs text-error mt-1 font-bold">
-                  {errors.roomId}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-2">
-                Oylik to'lov *
-              </label>
-              <input
-                type="number"
-                value={formData.monthlyFeePerStudent || ""}
-                placeholder="500000"
-                onChange={(e) => {
-                  setFormData({
-                    ...formData,
-                    monthlyFeePerStudent: e.target.value,
-                  });
-                  setErrors({ ...errors, monthlyFeePerStudent: null });
-                }}
-                className={`w-full px-4 py-3 bg-base-200 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-base-100 transition-all ${errors.monthlyFeePerStudent ? "border-error" : "border-transparent focus:border-primary"}`}
-              />
-              {errors.monthlyFeePerStudent && (
-                <p className="text-xs text-error mt-1 font-bold">
-                  {errors.monthlyFeePerStudent}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { key: "startDate", label: "Boshlanish *", type: "date" },
-              { key: "endDate", label: "Tugash *", type: "date" },
-              {
-                key: "maxStudents",
-                label: "Max talaba *",
-                type: "number",
-                placeholder: "20",
-              },
-            ].map(({ key, label, type, placeholder }) => (
-              <div key={key}>
-                <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-2">
-                  {label}
-                </label>
-                <input
-                  type={type}
-                  value={formData[key] || ""}
-                  placeholder={placeholder}
-                  onChange={(e) => {
-                    setFormData({ ...formData, [key]: e.target.value });
-                    setErrors({ ...errors, [key]: null });
-                  }}
-                  className={`w-full px-3 py-3 bg-base-200 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-base-100 transition-all ${errors[key] ? "border-error" : "border-transparent focus:border-primary"}`}
-                />
-                {errors[key] && (
-                  <p className="text-xs text-error mt-1 font-bold">
-                    {errors[key]}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-primary/10 rounded-2xl p-4 space-y-4 border border-primary/20">
+          <div className="bg-primary/10 rounded-2xl p-3.5 space-y-3 border border-primary/20">
             <p className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
               <Calendar className="w-3.5 h-3.5" /> Dars jadvali
             </p>
             <div>
-              <p className="text-xs text-base-content/60 font-medium mb-2">
+              <p className="text-xs text-base-content/60 font-medium mb-1.5">
                 Dars kunlari
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {days.map((day) => (
                   <button
                     key={day}
                     type="button"
                     onClick={() => toggleDay(day)}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
                       formData.schedule?.days?.includes(day)
                         ? "bg-primary text-primary-content shadow-md shadow-primary/20"
                         : "bg-base-100 text-base-content/60 hover:bg-primary/10 border border-base-300"
@@ -553,7 +528,7 @@ function GroupModal({
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <TimePicker24
                 label="Boshlanish vaqti"
                 value={formData.schedule?.fromHour || "09:00"}
@@ -576,7 +551,133 @@ function GroupModal({
               />
             </div>
           </div>
+
+          <div>
+            <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-1.5">
+              Xona *
+            </label>
+            <select
+              value={formData.roomId || ""}
+              onChange={(e) => {
+                setFormData({ ...formData, roomId: e.target.value });
+                setErrors({ ...errors, roomId: null });
+              }}
+              disabled={loadingAvailability}
+              className={`w-full px-3.5 py-2.5 bg-base-200 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-base-100 transition-all ${errors.roomId ? "border-error" : "border-transparent focus:border-primary"} ${loadingAvailability ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              <option value="">Tanlang</option>
+              {loadingAvailability ? (
+                <option disabled>Yuklanmoqda...</option>
+              ) : availableRooms.length === 0 ? (
+                <option disabled>Mavjud emas</option>
+              ) : (
+                availableRooms.map((r) => (
+                  <option key={r.id || r._id} value={r.id || r._id}>
+                    {r.name} (#{r.number})
+                  </option>
+                ))
+              )}
+            </select>
+            {errors.roomId && (
+              <p className="text-xs text-error mt-1 font-bold">
+                {errors.roomId}
+              </p>
+            )}
+          </div>
+
+          <div className="border-t border-base-200 pt-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-1.5">
+                  Kurs *
+                </label>
+                <select
+                  value={formData.courseId || ""}
+                  onChange={(e) => {
+                    setFormData({ ...formData, courseId: e.target.value });
+                    setErrors({ ...errors, courseId: null });
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-black/10 border-2 border-black/30 rounded-2xl text-sm font-bold text-base-content outline-none focus:bg-black/20 focus:border-black transition-all"
+                >
+                  <option value="">Tanlang</option>
+                  {courses.map((course) => (
+                    <option
+                      key={course.id || course._id}
+                      value={course.id || course._id}
+                    >
+                    <span className="truncate font-medium">{course.title || course.name}</span>
+
+                    </option>
+                  ))}
+                </select>
+                {errors.courseId && (
+                  <p className="text-xs text-error mt-1 font-bold">
+                    {errors.courseId}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-1.5">
+                  Oylik to'lov *
+                </label>
+                <input
+                  type="number"
+                  value={formData.monthlyFeePerStudent || ""}
+                  placeholder="500000"
+                  onChange={(e) => {
+                    setFormData({
+                      ...formData,
+                      monthlyFeePerStudent: e.target.value,
+                    });
+                    setErrors({ ...errors, monthlyFeePerStudent: null });
+                  }}
+                  className={`w-full px-3.5 py-2.5 bg-base-200 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-base-100 transition-all ${errors.monthlyFeePerStudent ? "border-error" : "border-transparent focus:border-primary"}`}
+                />
+                {errors.monthlyFeePerStudent && (
+                  <p className="text-xs text-error mt-1 font-bold">
+                    {errors.monthlyFeePerStudent}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              {[
+                { key: "startDate", label: "Boshlanish *", type: "date" },
+                { key: "endDate", label: "Tugash *", type: "date" },
+                {
+                  key: "maxStudents",
+                  label: "Max talaba *",
+                  type: "number",
+                  placeholder: "20",
+                },
+              ].map(({ key, label, type, placeholder }) => (
+                <div key={key}>
+                  <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-1.5">
+                    {label}
+                  </label>
+                  <input
+                    type={type}
+                    value={formData[key] || ""}
+                    placeholder={placeholder}
+                    onChange={(e) => {
+                      setFormData({ ...formData, [key]: e.target.value });
+                      setErrors({ ...errors, [key]: null });
+                    }}
+                    className={`w-full px-2.5 py-2.5 bg-base-200 border-2 rounded-2xl text-sm font-bold outline-none focus:bg-base-100 transition-all ${errors[key] ? "border-error" : "border-transparent focus:border-primary"}`}
+                  />
+                  {errors[key] && (
+                    <p className="text-xs text-error mt-1 font-bold">
+                      {errors[key]}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+              
+          
 
         {Object.keys(errors).length > 0 && (
           <div className="px-6 py-3 bg-error/10 border-t border-error/20">
@@ -1036,6 +1137,222 @@ function AddStudentModal({ group, onClose, onAdded, existingStudents = [] }) {
   );
 }
 
+// ── Add Students to New Group Modal ─────────────────────────────
+function AddStudentsToNewGroupModal({ group, onClose, onAdded }) {
+  const [students, setStudents] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (group?.courseId) {
+      setFetching(true);
+      fetchStudentsForCourse(group.courseId)
+        .then((courseStudents) => {
+          console.log("Kursga yozilgan o'quvchilar:", courseStudents);
+          setStudents(courseStudents);
+          setFetching(false);
+        })
+        .catch((err) => {
+          console.error("Kurs uchun studentlarni yuklash xatolik:", err);
+          setErrors({ fetch: "O'quvchilarni yuklashda xatolik" });
+          setFetching(false);
+        });
+    }
+  }, [group?.courseId]);
+
+  const toggleStudentSelection = (studentId) => {
+    setSelectedIds((prev) =>
+      prev.includes(studentId)
+        ? prev.filter((id) => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
+
+  const handleAddAllSelected = async () => {
+    if (selectedIds.length === 0) {
+      setErrors({ submit: "Kamida bitta o'quvchi tanlang" });
+      return;
+    }
+
+    setLoading(true);
+    setErrors({});
+    try {
+      const groupId = group._id || group.id;
+      const results = await Promise.all(
+        selectedIds.map((studentId) =>
+          addStudentToGroupApi(groupId, studentId)
+        )
+      );
+
+      const allSuccess = results.every((result) => result === true);
+
+      if (allSuccess) {
+        onAdded();
+        onClose();
+      } else {
+        setErrors({ submit: "Ba'zi o'quvchilarni qo'shishda xatolik yuz berdi" });
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("O'quvchilarni qo'shish xatolik:", err);
+      setErrors({ submit: "Xatolik yuz berdi" });
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="absolute inset-0 bg-base-300/60 backdrop-blur-md"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+        className="relative bg-base-100 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]"
+      >
+        <div className="bg-success px-6 py-5 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-success-content/20 rounded-xl">
+              <UserPlus className="w-5 h-5 text-success-content" />
+            </div>
+            <div>
+              <h2 className="font-black text-success-content">O'quvchilarni qo'shish</h2>
+              <p className="text-xs text-success-content/70">{group.name}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-success-content/20 rounded-xl transition-colors text-success-content"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {fetching ? (
+          <div className="flex flex-1 items-center justify-center py-12">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-success border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm text-base-content/60">O'quvchilar yuklanmoqda...</p>
+            </div>
+          </div>
+        ) : students.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center py-12">
+            <div className="text-center">
+              <Users className="w-16 h-16 text-base-content/20 mx-auto mb-3" />
+              <p className="text-base-content/60 font-medium">Bu kursda guruhga biriktirilmagan o'quvchilar yo'q</p>
+              <p className="text-xs text-base-content/40 mt-1">Birinchi o'quvchilarni kursga qo'shing</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="p-4 bg-base-200 border-b border-base-300">
+              <div className="flex items-center justify-between text-xs font-bold text-base-content/60">
+                <span>
+                  {students.length} ta o'quvchi mavjud
+                </span>
+                <span>
+                  {selectedIds.length} ta tanlandi
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-4">
+              <div className="space-y-2">
+                {students.map((student) => {
+                  const studentId = student._id || student.id;
+                  const isSelected = selectedIds.includes(studentId);
+
+                  return (
+                    <motion.button
+                      key={studentId}
+                      type="button"
+                      onClick={() => toggleStudentSelection(studentId)}
+                      className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
+                        isSelected
+                          ? "bg-success/10 border-success"
+                          : "bg-base-100 border-base-200 hover:border-base-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          isSelected ? "bg-success border-success text-white" : "border-base-300"
+                        }`}>
+                          {isSelected && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-base-content text-sm truncate">
+                            {student.name || "Ism yo'q"}
+                          </div>
+                          <div className="text-xs text-base-content/60 font-medium">
+                            {student.phone || "Telefon yo'q"}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-xs text-base-content/60 font-medium">
+                            Balans
+                          </div>
+                          <div className={`text-sm font-bold ${
+                            Number(student.balance || 0) < 0 ? "text-error" : "text-success"
+                          }`}>
+                            {Number(student.balance || 0).toLocaleString()} UZS
+                          </div>
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-4 bg-base-200 border-t border-base-300 shrink-0">
+              <div className="flex gap-3">
+                <button
+                  onClick={onClose}
+                  disabled={loading}
+                  className="flex-1 py-3 text-sm font-bold text-base-content/60 bg-base-100 border border-base-300 rounded-2xl hover:bg-base-200 transition-colors disabled:opacity-50"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  onClick={handleAddAllSelected}
+                  disabled={loading || selectedIds.length === 0}
+                  className="flex-1 py-3 text-sm font-bold text-success-content bg-success rounded-2xl shadow-lg shadow-success/20 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-success-content border-t-transparent rounded-full animate-spin" />
+                      Qo'shilmoqda...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      {selectedIds.length} ta o'quvchini qo'shish
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {errors.submit && (
+          <div className="px-6 py-3 bg-error/10 border-t border-error/20">
+            <p className="text-xs text-error font-bold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> {errors.submit}
+            </p>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
 // ── Main GroupsPage ───────────────────────────────────────────
 export default function GroupsPage() {
   const {
@@ -1086,6 +1403,8 @@ export default function GroupsPage() {
   const [studentPayments, setStudentPayments] = useState({});
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [newlyCreatedGroup, setNewlyCreatedGroup] = useState(null);
+  const [showNewGroupStudentModal, setShowNewGroupStudentModal] = useState(false);
 
   const handleSaveGroup = async () => {
     setIsSubmittingGroup(true);
@@ -1104,6 +1423,19 @@ export default function GroupsPage() {
 
         closeModals();
         loadGroups();
+
+        // If creating a new group, open modal to add students
+        if (!editingGroup && formData.courseId) {
+          // Find the newly created group
+          setTimeout(async () => {
+            const updatedGroups = await loadGroups();
+            const newGroup = groups.find(g => g.courseId === formData.courseId && g.name === formData.name);
+            if (newGroup) {
+              setNewlyCreatedGroup(newGroup);
+              setShowNewGroupStudentModal(true);
+            }
+          }, 500);
+        }
       }
     } finally {
       setIsSubmittingGroup(false);
@@ -1714,6 +2046,20 @@ export default function GroupsPage() {
             onClose={() => setShowAddStudentModal(false)}
             onAdded={handleAddStudentSuccess}
             existingStudents={groupStudents}
+          />
+        )}
+        {showNewGroupStudentModal && newlyCreatedGroup && (
+          <AddStudentsToNewGroupModal
+            group={newlyCreatedGroup}
+            onClose={() => {
+              setShowNewGroupStudentModal(false);
+              setNewlyCreatedGroup(null);
+            }}
+            onAdded={() => {
+              loadGroups();
+              setShowNewGroupStudentModal(false);
+              setNewlyCreatedGroup(null);
+            }}
           />
         )}
       </AnimatePresence>

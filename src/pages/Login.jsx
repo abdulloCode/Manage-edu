@@ -4,10 +4,20 @@ import { useAuth } from "../context/AuthContext";
 
 const ROLE_HOME = {
   admin: "/admin/dashboard",
+  manager: "/manager/dashboard",
   teacher: "/teacher/dashboard",
   student: "/student/dashboard",
   staff: "/staff/dashboard",
+  supporter: "/admin/dashboard",
+  assistant: "/admin/dashboard",
 };
+
+// Helper function to normalize role to lowercase for case-insensitive matching
+function getRoleHome(role) {
+  const normalizedRole = role?.toLowerCase()?.trim();
+  console.log("Login - User role:", role, "Normalized:", normalizedRole);
+  return ROLE_HOME[normalizedRole] ?? "/student/dashboard";
+}
 
 function formatPhone(digits) {
   const d = digits.slice(0, 9);
@@ -52,7 +62,7 @@ export default function Login() {
 
   if (isAuthenticated && user) {
     return (
-      <Navigate to={ROLE_HOME[user.role] ?? "/student/dashboard"} replace />
+      <Navigate to={getRoleHome(user.role)} replace />
     );
   }
 
@@ -66,7 +76,8 @@ export default function Login() {
     const phone = phoneDisplay.replace(/\D/g, "");
     try {
       const loggedUser = await login({ phone, password });
-      navigate(ROLE_HOME[loggedUser.role] ?? "/student/dashboard", {
+      console.log("Login - Logged user:", loggedUser);
+      navigate(getRoleHome(loggedUser.role), {
         replace: true,
       });
     } catch {

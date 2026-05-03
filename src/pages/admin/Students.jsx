@@ -9,6 +9,7 @@ import {
   assignStudentGroup,
 } from "../../api/students";
 import { getAllGroups } from "../../api/groups";
+import { getAllCourses } from "../../api/courses";
 import { useDebounce } from "../../hooks/useDebounce";
 import PhoneInput from "../../components/PhoneInput";
 
@@ -156,22 +157,30 @@ function CreateModal({ onClose, onCreated }) {
     phone: "",
     password: "",
     courseId: "",
+    parentPhone: "",
+    groupId: "",
   });
   const [courses, setCourses] = useState([]);
+  const [availableGroups, setAvailableGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState(null);
   const [phoneDisplay, setPhoneDisplay] = useState("");
+  const [parentPhoneDisplay, setParentPhoneDisplay] = useState("");
 
   const handlePhoneChange = (e) => {
     setPhoneDisplay(e.target.value);
     setForm({ ...form, phone: e.target.value.replace(/\D/g, "") });
   };
 
+  const handleParentPhoneChange = (e) => {
+    setParentPhoneDisplay(e.target.value);
+    setForm({ ...form, parentPhone: e.target.value.replace(/\D/g, "") });
+  };
+
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const { getAllCourses } = await import("../../api/courses");
         const res = await getAllCourses();
         setCourses(res.data.data || res.data || []);
       } catch (err) {
@@ -183,14 +192,67 @@ function CreateModal({ onClose, onCreated }) {
     fetchCourses();
   }, []);
 
+  // Load available groups when course is selected
+  useEffect(() => {
+    const fetchGroups = async () => {
+      if (!form.courseId) {
+        setAvailableGroups([]);
+        setForm(prev => ({ ...prev, groupId: "" }));
+        return;
+      }
+
+      try {
+        const res = await getAllGroups();
+        const allGroups = res.data.data || res.data || [];
+        // Filter groups that have the selected course
+       const courseGroups = allGroups.filter(g =>
+  g.courseId === form.courseId ||
+  g.course?._id === form.courseId ||
+  g.course?.id === form.courseId
+);
+        setAvailableGroups(courseGroups);
+
+        // Auto-select the first available group
+        if (courseGroups.length > 0) {
+          const firstGroupId = courseGroups[0]._id || courseGroups[0].id;
+          setForm(prev => ({ ...prev, groupId: firstGroupId }));
+        } else {
+          setForm(prev => ({ ...prev, groupId: "" }));
+        }
+      } catch (err) {
+        console.error("Guruhlarni yuklashda xatolik:", err);
+      }
+    };
+    fetchGroups();
+  }, [form.courseId]);
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const errors = {};
+    if (!form.name?.trim()) errors.name = "Ismni kiriting";
+    if (!form.phone?.trim()) errors.phone = "Telefon raqamini kiriting";
+    if (!form.password?.trim()) errors.password = "Parolni kiriting";
+    if (!form.courseId) errors.courseId = "Kursni tanlang";
+    if (!form.parentPhone?.trim()) errors.parentPhone = "Ota-ona telefonini kiriting";
+
+    if (Object.keys(errors).length > 0) {
+      setError(errors[Object.keys(errors)[0]]);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const { data } = await createStudent(form);
+
+      // If groupId is set, assign to group
+      if (form.groupId) {
+        await assignStudentGroup(data._id || data.id, form.groupId);
+      }
+
       onCreated(data);
       onClose();
     } catch (err) {
@@ -236,7 +298,7 @@ function CreateModal({ onClose, onCreated }) {
             placeholder="••••••••"
           />
         </FormField>
-        <FormField label="Kurs (ixtiyoriy)">
+        <FormField label="Kurs *" required>
           {fetching ? (
             <div className="flex items-center gap-2">
               <span className="loading loading-spinner loading-sm"></span>
@@ -245,22 +307,75 @@ function CreateModal({ onClose, onCreated }) {
               </span>
             </div>
           ) : (
+            <div className="space-y-2">
+              <select
+                className="select select-bordered w-full"
+                value={form.courseId}
+                onChange={set("courseId")}
+                required
+              >
+                <option value="">Kursni tanlang...</option>
+                {courses.map((course) => {
+                  const courseColor = course.color || '#6366f1';
+                  return (
+                    <option
+                      key={course._id || course.id}
+                      value={course._id || course.id}
+                      style={{ backgroundColor: courseColor + '20', color: courseColor }}
+                    >
+                      {course.name || course.title}
+                    </option>
+                  );
+                })}
+              </select>
+              {courses.find(c => (c._id || c.id) === form.courseId) && (
+                <div
+                  className="text-xs px-2 py-1 rounded font-medium text-center"
+                  style={{
+                    backgroundColor: (courses.find(c => (c._id || c.id) === form.courseId)?.color || '#6366f1') + '20',
+                    color: courses.find(c => (c._id || c.id) === form.courseId)?.color || '#6366f1'
+                  }}
+                >
+                  {courses.find(c => (c._id || c.id) === form.courseId)?.name || courses.find(c => (c._id || c.id) === form.courseId)?.title}
+                </div>
+              )}
+            </div>
+          )}
+        </FormField>
+
+        {availableGroups.length > 0 && (
+          <FormField label="Guruh (avtomatik tanlanadi)">
             <select
               className="select select-bordered w-full"
-              value={form.courseId}
-              onChange={set("courseId")}
+              value={form.groupId}
+              onChange={(e) => setForm({ ...form, groupId: e.target.value })}
             >
-              <option value="">Kursni tanlang...</option>
-              {courses.map((course) => (
-                <option
-                  key={course._id || course.id}
-                  value={course._id || course.id}
-                >
-                  {course.name || course.title}
-                </option>
-              ))}
+              <option value="">Guruhni tanlang...</option>
+              {availableGroups.map((group) => {
+                const courseColor = group.course?.color || '#6366f1';
+                return (
+                  <option
+                    key={group._id || group.id}
+                    value={group._id || group.id}
+                    style={{ backgroundColor: courseColor + '20', color: courseColor }}
+                  >
+                    {group.name}
+                    {group.teacher ? ` - ${group.teacher.name}` : ""}
+                    [{group.currentStudents || 0}/${group.maxStudents}]
+                  </option>
+                );
+              })}
             </select>
-          )}
+          </FormField>
+        )}
+
+        <FormField label="Ota-ona telefoni *" required>
+          <PhoneInput
+            value={parentPhoneDisplay}
+            onChange={handleParentPhoneChange}
+            required
+            className="w-full border-2 border-transparent bg-slate-50 outline-none focus:border-violet-500 focus:bg-white"
+          />
         </FormField>
         <div className="modal-action mt-1">
           <button
@@ -721,51 +836,84 @@ export default function StudentsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [hasGroup, setHasGroup] = useState("all");
+  const [courseFilter, setCourseFilter] = useState("all");
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [modal, setModal] = useState(null); // { type, student? }
 
   const debouncedSearch = useDebounce(search, 400);
 
-  const fetchStudents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = { page, limit: 10 };
-      if (debouncedSearch) params.search = debouncedSearch;
-      if (hasGroup !== "all") params.hasGroup = hasGroup === "true";
-      const { data } = await getStudents(params);
-      setStudents(data.data);
-      setPagination(data.pagination);
-    } catch (err) {
-      setError(err.response?.data?.error ?? "Failed to load students");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, debouncedSearch, hasGroup]);
-
+  // Load courses for filtering
   useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, hasGroup]);
+    const fetchCourses = async () => {
+      try {
+        const res = await getAllCourses();
+        setCourses(res.data.data || res.data || []);
+      } catch (err) {
+        console.error("Kurslarni yuklashda xatolik:", err);
+      }
+    };
+    fetchCourses();
+  }, []);
 
-  useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
+const fetchStudents = useCallback(async () => {
+  setLoading(true);
+  setError(null);
+  try {
+    const params = { page, limit: 50 };
+    if (debouncedSearch) params.search = debouncedSearch;
+    if (hasGroup !== "all") params.hasGroup = hasGroup === "true";
+    if (courseFilter !== "all") params.courseId = courseFilter;
 
-  const handleCreated = (newStudent) => {
-    setStudents((prev) => [newStudent, ...prev]);
-  };
+    const { data } = await getStudents(params);
 
-  const handleUpdated = (updated) => {
-    const updatedId = getId(updated);
-    setStudents((prev) =>
-      prev.map((s) => (getId(s) === updatedId ? { ...s, ...updated } : s)),
+    console.log("Raw API response:", data); // ← tekshirish uchun
+
+    const studentsList = data.data || data.students || data || [];
+
+    const studentsWithCourse = studentsList.map((s) => ({
+      ...s,
+      course: s.courseId
+        ? { _id: s.courseId, name: s.courseName, title: s.courseName }
+        : null,
+      group: s.groupId
+        ? { _id: s.groupId, name: s.groupName }
+        : null,
+    }));
+console.log("Student 0:", JSON.stringify(studentsList[7], null, 2));
+    setStudents(studentsWithCourse);
+    setPagination(
+      data.pagination || {
+        page: 1,
+        totalPages: 1,
+        total: studentsList.length,
+      }
     );
-  };
+  } catch (err) {
+    console.error("fetchStudents xatolik:", err);
+    setError(err.response?.data?.error ?? "Failed to load students");
+  } finally {
+    setLoading(false);
+  }
+}, [page, debouncedSearch, hasGroup, courseFilter]); // courses yo'q
+const handleCreated = () => {
+  fetchStudents();
+};
 
+const handleUpdated = (updated) => {
+  const updatedId = getId(updated);
+  setStudents((prev) =>
+    prev.map((s) => (getId(s) === updatedId ? { ...s, ...updated } : s))
+  );
+};
   const handleDeleted = (id) => {
     setStudents((prev) => prev.filter((s) => getId(s) !== id));
   };
+  useEffect(() => {
+  console.log("useEffect triggered");
+  fetchStudents();
+}, [fetchStudents]);
   const handleAssigned = (updated) => {
     const updatedId = getId(updated);
     setStudents((prev) =>
@@ -856,6 +1004,25 @@ export default function StudentsPage() {
           <option value="true">Guruhda</option>
           <option value="false">Guruhsiz</option>
         </select>
+        <select
+          value={courseFilter}
+          onChange={(e) => setCourseFilter(e.target.value)}
+          className="select select-bordered select-sm w-44"
+        >
+          <option value="all">Barcha kurslar</option>
+          {courses.map((course) => {
+            const courseColor = course.color || '#6366f1'; // Default blue color
+            return (
+              <option
+                key={course._id || course.id}
+                value={course._id || course.id}
+                style={{ backgroundColor: courseColor + '20', color: courseColor }}
+              >
+                {course.name || course.title}
+              </option>
+            );
+          })}
+        </select>
       </div>
 
       {/* Table card */}
@@ -908,9 +1075,27 @@ export default function StudentsPage() {
                         <BalanceCell value={s.balance} />
                       </td>
                       <td>
-                        {s.group?.course ? (
-                          <span className="text-xs text-base-content">
-                            {s.group.course.title}
+                        {s.courseId ? (
+                          <span
+                            className="text-xs px-2 py-1 rounded-full font-medium"
+                            style={{
+                              backgroundColor: (s.course?.color || '#6366f1') + '20',
+                              color: s.course?.color || '#6366f1',
+                              border: `1px solid ${s.course?.color || '#6366f1'}`
+                            }}
+                          >
+                            {s.courseName || s.course?.name || s.course?.title || "Noma'lum kurs"}
+                          </span>
+                        ) : s.group?.course ? (
+                          <span
+                            className="text-xs px-2 py-1 rounded-full font-medium"
+                            style={{
+                              backgroundColor: (s.group.course?.color || '#6366f1') + '20',
+                              color: s.group.course?.color || '#6366f1',
+                              border: `1px solid ${s.group.course?.color || '#6366f1'}`
+                            }}
+                          >
+                            {s.group.course.title || s.group.course.name}
                           </span>
                         ) : (
                           <span className="text-base-content/20 text-xs">

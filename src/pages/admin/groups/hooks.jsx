@@ -26,52 +26,32 @@ export function useGroups() {
   const [page, setPage] = useState(1);
   const itemsPerPage = 9;
 
-  const loadGroups = async () => {
+const loadGroups = async () => {
   setLoading(true);
   try {
-    const res = await getAllGroups({ search });
-    const groupsData = res.data.data || res.data || [];
+    const [groupsRes, coursesRes] = await Promise.all([
+      getAllGroups({ search }),
+      getAllCourses(),
+    ]);
 
-    const groupsWithStudents = await Promise.all(
-      groupsData.map(async (group) => {
-        try {
-          const groupRes = await getGroupById(group.id || group._id, {
-            includeStudents: true,
-          });
-          const groupData = groupRes.data.data || groupRes.data;
+    const groupsData = groupsRes.data.data || groupsRes.data || [];
+    const allCourses = coursesRes.data.data || coursesRes.data || [];
 
-          let students = [];
+    const groupsWithCourse = groupsData.map((group) => {
+      // courseId orqali kurs topish
+      const course = allCourses.find(
+        (c) => (c._id || c.id) === group.courseId
+      );
+      return {
+        ...group,
+        students: group.studentIds || [],
+        course: course || group.course || null,
+      };
+    });
 
-          if (groupData.students && Array.isArray(groupData.students)) {
-            students = groupData.students;
-          } else if (groupData.studentsData && Array.isArray(groupData.studentsData)) {
-            students = groupData.studentsData;
-          } else if (groupData.studentData && Array.isArray(groupData.studentData)) {
-            students = groupData.studentData;
-          } else if (groupData.studentIds && Array.isArray(groupData.studentIds)) {
-            students = await Promise.all(
-              groupData.studentIds.map(id =>
-                getStudentById(id)
-                  .then(res => {
-                    console.log('student:', res.data)
-                    return res.data.data || res.data
-                  })
-                  .catch(() => ({ id, name: "Noma'lum", phone: '—' }))
-              )
-            );
-          }
-
-          return { ...group, students: students || [] };
-        } catch (err) {
-          console.error(`Guruh ${group.name} xatolik:`, err);
-          return { ...group, students: [] };
-        }
-      })
-    );
-
-    setGroups(groupsWithStudents);
+    setGroups(groupsWithCourse);
   } catch (err) {
-    console.error('Guruhlar yuklanmadi:', err);
+    console.error("Guruhlar yuklanmadi:", err);
   } finally {
     setLoading(false);
   }
@@ -168,9 +148,9 @@ export function useGroupForm(teachers, courses, rooms) {
 
   const [formData, setFormData] = useState({
     name: "",
-    courseId: null,
-    teacherId: null,
-    roomId: null,
+    courseId: "",
+    teacherId: "",
+    roomId: "",
     startDate: "",
     endDate: "",
     maxStudents: "",
@@ -182,6 +162,7 @@ export function useGroupForm(teachers, courses, rooms) {
     },
   });
 
+  // ← BU YO'Q EDI
   const [roomFormData, setRoomFormData] = useState({
     name: "",
     number: "",
@@ -193,9 +174,9 @@ export function useGroupForm(teachers, courses, rooms) {
     setEditingGroup(null);
     setFormData({
       name: "",
-      courseId: null,
-      teacherId: null,
-      roomId: null,
+      courseId: "",
+      teacherId: "",
+      roomId: "",
       startDate: "",
       endDate: "",
       maxStudents: "",
@@ -210,25 +191,36 @@ export function useGroupForm(teachers, courses, rooms) {
   };
 
   const openEditGroupModal = (group) => {
-    setEditingGroup(group);
-    setFormData({
-      name: group.name || "",
-      courseId: group.courseId || "",
-      teacherId: group.teacherId || "",
-      roomId: group.roomId || "",
-      startDate: group.startDate || "",
-      endDate: group.endDate || "",
-      maxStudents: group.maxStudents || "",
-      monthlyFeePerStudent: group.monthlyFeePerStudent || "",
-      schedule: group.schedule || {
-        days: [],
-        fromHour: "",
-        toHour: "",
-      },
-    });
-    setShowModal(true);
-  };
+  setEditingGroup(group);
+  // openEditGroupModal ichida, setFormData dan oldin
+console.log("group:", group);
+console.log("courses:", courses);
+console.log("resolved courseId:", 
+  (typeof group.courseId === 'object' 
+    ? group.courseId?._id || group.courseId?.id 
+    : group.courseId) 
+  || group.course?._id || group.course?.id
+);
+  setFormData({
+    name: group.name || "",
+    // courseId yo'q bo'lsa, course obyektidan olish
+    courseId: group.courseId || group.course?._id || group.course?.id || "",
+    teacherId: group.teacherId || group.teacher?._id || group.teacher?.id || "",
+    roomId: group.roomId || group.room?._id || group.room?.id || "",
+    startDate: group.startDate ? group.startDate.slice(0, 10) : "",
+    endDate: group.endDate ? group.endDate.slice(0, 10) : "",
+    maxStudents: group.maxStudents || "",
+    monthlyFeePerStudent: group.monthlyFeePerStudent || "",
+    schedule: group.schedule || {
+      days: [],
+      fromHour: "",
+      toHour: "",
+    },
+  });
+  setShowModal(true);
+};
 
+  // ← BU HAM YO'Q EDI
   const openAddRoomModal = () => {
     setEditingRoom(null);
     setRoomFormData({
@@ -294,7 +286,6 @@ export function useGroupForm(teachers, courses, rooms) {
     setLoadingStudents,
   };
 }
-
 export async function saveGroup(group, formData) {
   try {
     const dataToSend = {
@@ -403,6 +394,20 @@ export async function fetchAllStudents(excludeIds = []) {
   }
 }
 
+export async function fetchStudentsForCourse(courseId) {
+  try {
+    const { data } = await getStudents({
+      courseId,
+      hasGroup: 'false',
+      limit: 100
+    })
+    return data.data || data || []
+  } catch (err) {
+    console.error('Kurs uchun studentlarni yuklash xatolik:', err)
+    return []
+  }
+}
+
 export async function loadGroupStudents(group, setGroupStudents, setLoadingStudents) {
   setLoadingStudents(true)
   try {
@@ -448,6 +453,8 @@ export function getGroupIcon(name) {
 }
 
 export function getRoomIcon(name) {
+
+
   const icons = [
     { emoji: "🚪", bg: "bg-indigo-100", color: "text-indigo-600" },
     { emoji: "🏠", bg: "bg-cyan-100", color: "text-cyan-600" },

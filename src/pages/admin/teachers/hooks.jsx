@@ -60,8 +60,7 @@ export function useTeacherForm() {
     phone: '',
     password: '',
     qualification: '',
-    salaryPercentage: '',
-    email: ''
+    salaryPercentage: ''
   })
 
   const openAddModal = () => {
@@ -71,8 +70,7 @@ export function useTeacherForm() {
       phone: '',
       password: '',
       qualification: '',
-      salaryPercentage: '',
-      email: ''
+      salaryPercentage: ''
     })
     setShowModal(true)
   }
@@ -84,8 +82,7 @@ export function useTeacherForm() {
       phone: teacher.phone || '',
       password: '',
       qualification: teacher.qualification || '',
-      salaryPercentage: teacher.salaryPercentage || '',
-      email: teacher.email || ''
+      salaryPercentage: teacher.salaryPercentage || ''
     })
     setShowModal(true)
   }
@@ -121,7 +118,6 @@ export async function saveTeacher(teacher, formData, loadTeachers) {
     const dataToSave = {
       name: formData.name,
       phone: formData.phone,
-      email: formData.email,
       qualification: formData.qualification,
       salaryPercentage: formData.salaryPercentage,
     }

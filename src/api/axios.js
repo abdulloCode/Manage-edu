@@ -51,11 +51,27 @@ api.interceptors.response.use(
     // Backend may send a new token in header after /auth/me
     const newToken = res.headers["x-access-token"];
     if (newToken) setToken(newToken);
+
+    // Log successful API responses for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`✅ API Success [${res.config.method?.toUpperCase()} ${res.config.url}]:`, res.data);
+    }
+
     return res;
   },
 
   async (error) => {
     const original = error.config;
+
+    // Log all API errors for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`❌ API Error [${original?.method?.toUpperCase()} ${original?.url}]:`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+    }
 
     // Never loop on refresh/login endpoints
     if (original?._isRefresh || original?._isLogin) {

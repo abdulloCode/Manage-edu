@@ -14,6 +14,16 @@ const NAV = {
     { label: "Payment Reports", to: "/admin/payment-reports", icon: ReceiptIcon },
     { label: "Reports", to: "/admin/reports", icon: FileTextIcon },
   ],
+  manager: [
+    { label: "Dashboard", to: "/manager/dashboard", icon: HomeIcon },
+    { label: "O'quvchilar", to: "/manager/students", icon: UsersIcon },
+    { label: "O'qituvchilar", to: "/manager/teachers", icon: AcademicIcon },
+    { label: "Guruhlar", to: "/manager/groups", icon: UserGroupIcon },
+    { label: "Kurslar", to: "/manager/courses", icon: BookIcon },
+    { label: "Ombor", to: "/manager/inventory", icon: BoxIcon },
+    { label: "To'lovlar", to: "/manager/payments", icon: CreditCardIcon },
+   
+  ],
   teacher: [
     { label: "Dashboard", to: "/teacher/dashboard", icon: HomeIcon },
     { label: "My Groups", to: "/teacher/groups", icon: UsersIcon },
@@ -68,9 +78,12 @@ function ProfileButton({ collapsed, user, onNavClick }) {
         .slice(0, 2)
     : "??";
 
+  // Normalize role to lowercase for case-insensitive matching
+  const normalizedRole = user?.role?.toLowerCase()?.trim();
   const profilePath =
-    { student: "/student/profile", teacher: "/teacher/profile", admin: "/admin/profile" }[user?.role] ??
+    { student: "/student/profile", teacher: "/teacher/profile", admin: "/admin/profile", manager: "/manager/profile" }[normalizedRole] ??
     "#";
+  console.log("ProfileButton - User role:", user?.role, "Normalized:", normalizedRole, "Profile path:", profilePath);
 
   if (collapsed) {
     return (
@@ -137,8 +150,10 @@ function ProfileButton({ collapsed, user, onNavClick }) {
 
 export default function Sidebar({ collapsed, onToggle, onNavClick }) {
   const { user, logout } = useAuth();
-  const role = user?.role ?? "student";
+  // Normalize role to lowercase for case-insensitive matching
+  const role = (user?.role ?? "student").toLowerCase();
   const links = NAV[role] ?? NAV.student;
+  console.log("Sidebar - User role:", user?.role, "Normalized:", role, "Links:", links);
 
   const handleLogout = async () => {
     try {
@@ -210,6 +225,26 @@ export default function Sidebar({ collapsed, onToggle, onNavClick }) {
           user={user}
           onNavClick={onNavClick}
         />
+        <button
+          onClick={handleLogout}
+          className={`flex items-center ${collapsed ? "justify-center" : "gap-3"} rounded-lg text-sm font-medium transition-all duration-200 text-error/70 hover:bg-error/10 hover:text-error ${collapsed ? "px-2 py-2.5" : "px-3 py-2"}`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+            />
+          </svg>
+          {!collapsed && <span>Chiqish</span>}
+        </button>
       </div>
     </aside>
   );

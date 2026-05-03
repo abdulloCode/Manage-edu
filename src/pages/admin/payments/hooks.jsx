@@ -46,7 +46,6 @@ export function usePayments() {
     setLoading(true)
     try {
       const res = await getAllPayments(filters)
-      console.log('=== PAYMENTS ===', res.data)
       setPayments(res.data.payments || res.data.data || res.data || [])
     } catch (err) {
       handleError("To'lovlar yuklanmadi", err)
@@ -58,11 +57,13 @@ export function usePayments() {
   const loadPaymentTypes = useCallback(async () => {
     try {
       const res = await getAllPaymentTypes({ activeOnly: false })
-      console.log('=== PAYMENT TYPES ===', res.data)
       setPaymentTypes(res.data.data || res.data || [])
     } catch (err) {
-      console.error('=== PAYMENT TYPES ERROR ===', err.response?.status, err.response?.data)
-      handleError("To'lov turlari yuklanmadi", err)
+      if (err.response?.status === 403) {
+        handleError("Sizda to'lovlarni boshqarish uchun ruxsat yo'q", err)
+      } else {
+        handleError("To'lov turlari yuklanmadi", err)
+      }
     }
   }, [])
 

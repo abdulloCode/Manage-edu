@@ -38,7 +38,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
             {/* Admin routes */}
-            <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+            <Route element={<ProtectedRoute allowedRoles={["admin", "manager", "supporter"]} />}>
               <Route element={<DashboardLayout />}>
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
                 <Route path="/admin/students" element={<StudentsPage />} />
@@ -46,7 +46,6 @@ export default function App() {
                 <Route path="/admin/payments" element={<PaymentsPage />} />
                 <Route path="/admin/groups" element={<GroupsPage />} />
                 <Route path="/admin/courses" element={<CoursesPage />} />
-                <Route path="/admin/staff" element={<StaffPage />} />
                 <Route path="/admin/reports" element={<ReportsPage />} />
                 <Route
                   path="/admin/payment-reports"
@@ -65,6 +64,13 @@ export default function App() {
               </Route>
             </Route>
 
+            {/* Staff management - Admin, manager, and supporter only */}
+            <Route element={<ProtectedRoute allowedRoles={["admin", "manager", "supporter"]} />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/admin/staff" element={<StaffPage />} />
+              </Route>
+            </Route>
+
             {/* Teacher routes */}
             <Route element={<ProtectedRoute allowedRoles={["teacher"]} />}>
               <Route element={<DashboardLayout />}>
@@ -75,6 +81,22 @@ export default function App() {
                 <Route path="/teacher/groups" element={<ManagerMyGroups />} />
                 <Route path="/teacher/groups/:id" element={<GroupDetail />} />
                 <Route path="/teacher/profile" element={<TeacherProfile />} />
+              </Route>
+            </Route>
+
+            {/* Manager routes - same as teacher but with admin dashboard */}
+            <Route element={<ProtectedRoute allowedRoles={["manager"]} />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/manager/dashboard" element={<AdminDashboard />} />
+                <Route path="/manager/students" element={<StudentsPage />} />
+                <Route path="/manager/teachers" element={<TeachersPage />} />
+                <Route path="/manager/groups" element={<GroupsPage />} />
+                <Route path="/manager/groups/:id" element={<GroupDetail />} />
+                <Route path="/manager/courses" element={<CoursesPage />} />
+                <Route path="/manager/inventory" element={<InventoryPage />} />
+                <Route path="/manager/payments" element={<PaymentsPage />} />
+                
+                <Route path="/manager/profile" element={<TeacherProfile />} />
               </Route>
             </Route>
 
@@ -107,6 +129,22 @@ export default function App() {
               </Route>
             </Route>
 
+            {/* Supporter routes - read-only admin dashboard */}
+            <Route element={<ProtectedRoute allowedRoles={["supporter"]} />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/supporter/dashboard" element={<AdminDashboard />} />
+               
+              </Route>
+            </Route>
+
+            {/* Assistant routes - read-only admin dashboard */}
+            <Route element={<ProtectedRoute allowedRoles={["assistant"]} />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/assistant/dashboard" element={<AdminDashboard />} />
+               
+              </Route>
+            </Route>
+``
             {/* Fallback */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<Navigate to="/login" replace />} />

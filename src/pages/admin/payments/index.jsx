@@ -20,6 +20,7 @@ import {
   ArrowDownCircle,
   BarChart3,
   CheckCircle,
+  Lock,
 } from "lucide-react";
 import {
   usePayments,
@@ -32,9 +33,14 @@ import {
 import { getAllTeachers } from "../../../api/teacher";
 import { getStudents } from "../../../api/students";
 import { getAllGroups } from "../../../api/groups";
+import { useAuth } from "../../../context/AuthContext";
+import { useIsAdmin } from "../../../utils/permissions";
 
 
 export default function PaymentsPage() {
+  const { user } = useAuth();
+  const isAdmin = useIsAdmin();
+
   const {
     payments: rawPayments,
     paymentTypes: rawTypes,
@@ -109,6 +115,7 @@ export default function PaymentsPage() {
 
   const [paymentForm, setPaymentForm] = useState({
     type: "",
+    dk: "credit", // Added dk field with default value
     amount: "",
     month: new Date().toISOString().slice(0, 7),
     toWho: "",
@@ -132,12 +139,22 @@ export default function PaymentsPage() {
         try {
           const [teachersRes, studentsRes, groupsRes] = await Promise.all([
             getAllTeachers(),
-            getStudents({ limit: 1000 }),
+            getStudents({ limit: 1000 }).catch(err => {
+              return { data: { data: [] } };
+            }),
             getAllGroups(),
           ]);
-          setTeachers(teachersRes.data.data || teachersRes.data || []);
-          setStudents(studentsRes.data.data || studentsRes.data || []);
-          setGroups(groupsRes.data.data || groupsRes.data || []);
+
+          const teachersData = Array.isArray(teachersRes.data?.data) ? teachersRes.data.data :
+                             Array.isArray(teachersRes.data) ? teachersRes.data : [];
+          const studentsData = Array.isArray(studentsRes.data?.data) ? studentsRes.data.data :
+                             Array.isArray(studentsRes.data) ? studentsRes.data : [];
+          const groupsData = Array.isArray(groupsRes.data?.data) ? groupsRes.data.data :
+                           Array.isArray(groupsRes.data) ? groupsRes.data : [];
+
+          setTeachers(teachersData);
+          setStudents(studentsData);
+          setGroups(groupsData);
           loadStaff();
         } catch (err) {
           console.error("Ma'lumotlarni yuklashda xatolik:", err);
@@ -185,7 +202,11 @@ export default function PaymentsPage() {
   }, [paymentTypes]);
 
   const getDk = (payment) => {
+    // First check if payment has its own dk field (preferred)
+    if (payment.dk) return payment.dk;
+    // Then check if payment type has dk field (legacy support)
     if (payment.type?.dk) return payment.type.dk;
+    // Finally check the typeMap
     const typeId = payment.type?._id || payment.type?.id || payment.type;
     return typeMap[typeId] || null;
   };
@@ -231,24 +252,27 @@ export default function PaymentsPage() {
 
   const getFilteredRecipients = () => {
     const searchLower = recipientSearch.toLowerCase();
+
     if (recipientCategory === "teacher")
       return teachers.filter((t) =>
         t.name?.toLowerCase().includes(searchLower),
       );
     if (recipientCategory === "staff")
       return staff.filter((s) => s.name?.toLowerCase().includes(searchLower));
-    if (recipientCategory === "student")
+    if (recipientCategory === "student") {
       return filteredStudents.filter(
         (s) =>
           s.name?.toLowerCase().includes(searchLower) ||
           s.phone?.includes(searchLower),
       );
+    }
     return [];
   };
 
   const resetPaymentModal = () => {
     setPaymentForm({
       type: "",
+      dk: "credit",
       amount: "",
       month: new Date().toISOString().slice(0, 7),
       toWho: "",
@@ -314,6 +338,7 @@ export default function PaymentsPage() {
         toWho: paymentForm.toWho,
         date: paymentForm.date,
         comment: paymentForm.comment,
+        dk: paymentForm.dk, // Use user-selected dk value
       });
       if (success) {
         setShowPaymentModal(false);
@@ -716,6 +741,7 @@ export default function PaymentsPage() {
                                                 payment.type?.id ||
                                                 payment.type ||
                                                 "",
+                                              dk: payment.dk || "credit",
                                               amount: amount,
                                               month:
                                                 payment.month ||
@@ -850,34 +876,16 @@ export default function PaymentsPage() {
                         className={`select select-bordered flex-1 ${formErrors.type ? "select-error" : ""}`}
                       >
                         <option value="">Tanlang</option>
-                        {paymentTypes.filter((t) => t.dk === "credit")
-                          .length > 0 && (
-                          <optgroup label="📈 Kirim">
-                            {paymentTypes
-                              .filter((t) => t.dk === "credit")
-                              .map((t) => (
-                                <option
-                                  key={t._id || t.id}
-                                  value={t._id || t.id}
-                                >
-                                  {t.name}
-                                </option>
-                              ))}
-                          </optgroup>
-                        )}
-                        {paymentTypes.filter((t) => t.dk === "debit").length >
-                          0 && (
-                          <optgroup label="📉 Chiqim">
-                            {paymentTypes
-                              .filter((t) => t.dk === "debit")
-                              .map((t) => (
-                                <option
-                                  key={t._id || t.id}
-                                  value={t._id || t.id}
-                                >
-                                  {t.name}
-                                </option>
-                              ))}
+                        {paymentTypes.length > 0 && (
+                          <optgroup label="📋 To'lov turlari">
+                            {paymentTypes.map((t) => (
+                              <option
+                                key={t._id || t.id}
+                                value={t._id || t.id}
+                              >
+                                {t.name}
+                              </option>
+                            ))}
                           </optgroup>
                         )}
                       </select>
@@ -897,6 +905,35 @@ export default function PaymentsPage() {
                       </p>
                     )}
 
+                  {/* dk selector - kirim/chiqim */}
+                  <div>
+                    <label className="block text-sm font-bold text-base-content/80 mb-2">
+                      Turi *
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPaymentForm({ ...paymentForm, dk: "credit" })
+                        }
+                        disabled={isSubmitting}
+                        className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all font-bold ${paymentForm.dk === "credit" ? "border-success bg-success/10 text-success" : "border-base-300 text-base-content/50 hover:bg-base-200"}`}
+                      >
+                        <ArrowUpCircle className="w-5 h-5" /> Kirim
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPaymentForm({ ...paymentForm, dk: "debit" })
+                        }
+                        disabled={isSubmitting}
+                        className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all font-bold ${paymentForm.dk === "debit" ? "border-error bg-error/10 text-error" : "border-base-300 text-base-content/50 hover:bg-base-200"}`}
+                      >
+                        <ArrowDownCircle className="w-5 h-5" /> Chiqim
+                      </button>
+                    </div>
+                  </div>
+
                       {/* Tanlangan tur bo'yicha kirim/chiqim ko'rsatkichi */}
                       {paymentForm.type &&
                         (() => {
@@ -904,22 +941,16 @@ export default function PaymentsPage() {
                             (t) => (t._id || t.id) === paymentForm.type,
                           );
                           if (selectedType) {
-                            const isCredit = selectedType.dk === "credit";
+                            // dk is now determined at payment level, not type level
+                            // Show the type name without credit/debit indicator
                             return (
                               <div
-                                className={`mt-2 p-2 rounded-lg ${isCredit ? "bg-success/10 text-success" : "bg-error/10 text-error"} flex items-center gap-2 text-xs`}
+                                className="mt-2 p-2 rounded-lg bg-primary/10 text-primary flex items-center gap-2 text-xs"
                               >
-                                {isCredit ? (
-                                  <ArrowUpCircle className="w-4 h-4" />
-                                ) : (
-                                  <ArrowDownCircle className="w-4 h-4" />
-                                )}
+                                <Tag className="w-4 h-4" />
                                 <span className="font-medium">
-                                  {isCredit
-                                    ? "Kirim: Kassa + "
-                                    : "Chiqim: Kassa - "}
+                                  Tanlangan: {selectedType.name}
                                 </span>
-                                <span>{selectedType.name}</span>
                               </div>
                             );
                           }
@@ -1088,12 +1119,17 @@ export default function PaymentsPage() {
                         </div>
                         {showRecipientDropdown && (
                           <div className="absolute z-50 left-0 right-0 bg-base-100 border border-base-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                            {getFilteredRecipients().length === 0 ? (
-                              <div className="p-4 text-center text-base-content/40 text-sm">
-                                Topilmadi
-                              </div>
-                            ) : (
-                              getFilteredRecipients().map((person) => {
+                            {(() => {
+                              const filtered = getFilteredRecipients();
+                              if (filtered.length === 0) {
+                                return (
+                                  <div className="p-4 text-center text-base-content/40 text-sm">
+                                    Topilmadi
+                                  </div>
+                                );
+                              }
+
+                              return filtered.map((person) => {
                                 const personId = person._id || person.id;
                                 return (
                                   <button
@@ -1142,11 +1178,80 @@ export default function PaymentsPage() {
                                     </div>
                                   </button>
                                 );
-                              })
-                            )}
+                              });
+                            })()}
                           </div>
                         )}
 
+                      </div>
+                    )}
+
+                    {/* Balance Information Display */}
+                    {selectedRecipient && recipientDebtInfo && (
+                      <div className="p-4 bg-base-200 rounded-xl border border-base-300">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Wallet className="w-5 h-5 text-primary" />
+                          <span className="text-sm font-bold text-base-content/80">
+                            Balans ma'lumotlari ({new Date().toISOString().slice(0, 7)})
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-base-100 rounded-lg p-3 border border-base-200">
+                            <p className="text-xs font-medium text-base-content/50 mb-1">Jami to'langan</p>
+                            <p className="text-lg font-bold text-success">
+                              +{Number(recipientDebtInfo.paid).toLocaleString()} UZS
+                            </p>
+                          </div>
+
+                          {recipientCategory === "staff" && recipientDebtInfo.salary > 0 && (
+                            <div className="bg-base-100 rounded-lg p-3 border border-base-200">
+                              <p className="text-xs font-medium text-base-content/50 mb-1">Oylik maosh</p>
+                              <p className="text-lg font-bold text-primary">
+                                {Number(recipientDebtInfo.salary).toLocaleString()} UZS
+                              </p>
+                            </div>
+                          )}
+
+                          {recipientCategory === "staff" && (
+                            <div className={`rounded-lg p-3 border ${recipientDebtInfo.debt > 0 ? "bg-error/10 border-error/30" : "bg-success/10 border-success/30"}`}>
+                              <p className="text-xs font-medium text-base-content/50 mb-1">
+                                {recipientDebtInfo.debt > 0 ? "Qarz" : "To'liq to'langan"}
+                              </p>
+                              <p className={`text-lg font-bold ${recipientDebtInfo.debt > 0 ? "text-error" : "text-success"}`}>
+                                {recipientDebtInfo.debt > 0 ? "-" : "+"}
+                                {Math.abs(recipientDebtInfo.debt).toLocaleString()} UZS
+                              </p>
+                            </div>
+                          )}
+
+                          {recipientDebtInfo.lastPayment > 0 && (
+                            <div className="bg-base-100 rounded-lg p-3 border border-base-200">
+                              <p className="text-xs font-medium text-base-content/50 mb-1">Oxirgi to'lov</p>
+                              <p className="text-sm font-bold text-base-content/80">
+                                {Number(recipientDebtInfo.lastPayment).toLocaleString()} UZS
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {recipientCategory === "staff" && (
+                          <div className="mt-3 pt-3 border-t border-base-300">
+                            <div className="flex items-center gap-2 text-xs text-base-content/60">
+                              {recipientDebtInfo.debt > 0 ? (
+                                <AlertCircle className="w-4 h-4 text-error" />
+                              ) : (
+                                <CheckCircle className="w-4 h-4 text-success" />
+                              )}
+                              <span>
+                                {recipientDebtInfo.debt > 0
+                                  ? `Hali ${recipientDebtInfo.debt.toLocaleString()} UZS qarz bor`
+                                  : "Oylik to'liq to'langan"
+                                }
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

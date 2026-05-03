@@ -15,6 +15,9 @@ import {
   Wallet,
   ArrowUpCircle,
   ArrowDownCircle,
+  Trash2,
+  Edit3,
+  Plus,
 } from "lucide-react";
 
 // API importlaringiz
@@ -23,7 +26,8 @@ import { getAllTeachers } from "../../api/teacher";
 import { getStudents, getStudentById } from "../../api/students";
 import { getAllAttendances } from "../../api/attendance";
 import { getAllRatings } from "../../api/ratings";
-import { getAllPayments } from "../../api/payments";
+import { getAllPayments, getMyPayments } from "../../api/payments";
+import { createPayment, deletePayment, updatePayment } from "../../api/payments";
 
 // ─── CONSTANTS ────────────────────────────────────────────────
 const DAYS = [
@@ -60,8 +64,12 @@ const getDk = (payment) => {
   return "credit";
 };
 
+import { useAuth } from "../../context/AuthContext";
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isManager = user?.role?.toLowerCase()?.trim() === 'manager';
   const [selectedDay, setSelectedDay] = useState("Sha");
   const [viewMode, setViewMode] = useState("room");
   const [activeSection, setActiveSection] = useState("schedule"); // schedule, absent, rating, payments
@@ -78,6 +86,7 @@ export default function Dashboard() {
   const [loadingRatings, setLoadingRatings] = useState(false);
   const [paymentsData, setPaymentsData] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  const [paymentModal, setPaymentModal] = useState({ show: false, payment: null, mode: 'edit' });
   const [groupsStudentsData, setGroupsStudentsData] = useState({}); // Har bir guruh uchun o'quvchilar
   const [loadingGroupsStudents, setLoadingGroupsStudents] = useState(false);
 
@@ -178,7 +187,7 @@ export default function Dashboard() {
         ...a,
         studentName: student?.name || "Noma'lum",
         studentSurname: student?.surname || "",
-        studentPhone: student?.phone || "—",
+        studentPhone: student?.phone || student?.parentPhone || "—",
         groupName: group?.name || "—",
         teacherName: teacher?.name || "Noma'lum",
         balance: student?.balance || 0,
@@ -343,6 +352,26 @@ export default function Dashboard() {
     }
   };
 
+  // Payment ma'lumotlarini boshqarish
+  const handlePaymentAction = async (action, payment) => {
+    try {
+      if (action === 'delete') {
+        await deletePayment(payment._id || payment.id);
+        setPaymentsData(prev => prev.filter(p => (p._id || p.id) !== (payment._id || payment.id)));
+      } else if (action === 'edit') {
+        await updatePayment(payment._id || payment.id, payment);
+        setPaymentsData(prev => prev.map(p => (p._id || p.id) === (payment._id || payment.id) ? { ...payment, ...p } : p));
+      } else if (action === 'add') {
+        const { data } = await createPayment(payment);
+        setPaymentsData(prev => [data, ...prev]);
+      }
+      await loadPayments(); // Reload payments
+    } catch (err) {
+      console.error('Payment action failed:', err);
+      alert('Amalga o\'tkazildi: ' + err.response?.data?.message || 'Xatolik yuz berdi');
+    }
+  };
+
   // Guruhlar yuklangandan keyin o'quvchilarni ham yuklash
   useEffect(() => {
     if (data.groups.length > 0) {
@@ -360,11 +389,12 @@ export default function Dashboard() {
   const loadPayments = async () => {
     setLoadingPayments(true);
     try {
-      const res = await getAllPayments({ limit: 1000 });
+      // Managerlar uchun getMyPayments API'sini ishlatamiz
+      const res = isManager ? await getMyPayments() : await getAllPayments({ limit: 1000 });
       const allPayments =
         res.data?.payments || res.data?.data || res.data || [];
       setPaymentsData(Array.isArray(allPayments) ? allPayments : []);
-      console.log("To'lov ma'lumotlari:", allPayments);
+      console.log("To'lov ma'lumotlari (Manager: " + isManager + "):", allPayments);
     } catch (err) {
       console.error("To'lovlar yuklashda xatolik:", err);
       setPaymentsData([]);
@@ -673,7 +703,7 @@ export default function Dashboard() {
                   {columns.map((col, idx) => (
                     <th
                       key={col._id || col.id}
-                      className="p-3 border-r border-b border-gray-200 min-w-[150px] text-center text-xs font-bold text-gray-900"
+                      className="p-3 border-r border-b border-gray-200 min-w-[150px] text-center text-xs font-semibold text-gray-900"
                     >
                       {col.name || idx + 1}
                     </th>
