@@ -1252,11 +1252,28 @@ function AddStudentsToNewGroupModal({ group, onClose, onAdded }) {
         ) : (
           <div className="flex flex-col flex-1 overflow-hidden">
             <div className="p-4 bg-base-200 border-b border-base-300">
-              <div className="flex items-center justify-between text-xs font-bold text-base-content/60">
-                <span>
-                  {students.length} ta o'quvchi mavjud
-                </span>
-                <span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs font-bold text-base-content/60">
+                    {students.length} ta o'quvchi mavjud
+                  </span>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length === students.length && students.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds(students.map(s => s._id || s.id));
+                        } else {
+                          setSelectedIds([]);
+                        }
+                      }}
+                      className="checkbox checkbox-sm checkbox-success"
+                    />
+                    <span className="text-xs font-bold text-base-content/70">Barchasini tanlash</span>
+                  </label>
+                </div>
+                <span className="text-xs font-bold text-success">
                   {selectedIds.length} ta tanlandi
                 </span>
               </div>
@@ -1269,21 +1286,24 @@ function AddStudentsToNewGroupModal({ group, onClose, onAdded }) {
                   const isSelected = selectedIds.includes(studentId);
 
                   return (
-                    <motion.button
+                    <motion.div
                       key={studentId}
-                      type="button"
-                      onClick={() => toggleStudentSelection(studentId)}
-                      className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`w-full p-3 rounded-xl border-2 transition-all ${
                         isSelected
                           ? "bg-success/10 border-success"
                           : "bg-base-100 border-base-200 hover:border-base-300"
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          isSelected ? "bg-success border-success text-white" : "border-base-300"
-                        }`}>
-                          {isSelected && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
+                        <div className="checkbox checkbox-success">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleStudentSelection(studentId)}
+                            className="checkbox checkbox-success w-5 h-5"
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-base-content text-sm truncate">
@@ -1304,7 +1324,7 @@ function AddStudentsToNewGroupModal({ group, onClose, onAdded }) {
                           </div>
                         </div>
                       </div>
-                    </motion.button>
+                    </motion.div>
                   );
                 })}
               </div>

@@ -24,3 +24,4 @@ export const getStaffSalary        = (id, params) => api.get(`/staff/${id}/salar
 export const getStaffSalaryHistory = (id)         => api.get(`/staff/${id}/salary-history`)
 
 export const getStaffDailySalaries = (date)       => api.get(`/staff/daily-salaries/${date}`)
+export const getStaffPages = () => api.get('/staff/pages');

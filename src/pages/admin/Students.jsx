@@ -165,17 +165,15 @@ function CreateModal({ onClose, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState(null);
-  const [phoneDisplay, setPhoneDisplay] = useState("");
-  const [parentPhoneDisplay, setParentPhoneDisplay] = useState("");
 
   const handlePhoneChange = (e) => {
-    setPhoneDisplay(e.target.value);
-    setForm({ ...form, phone: e.target.value.replace(/\D/g, "") });
+    const rawPhone = e.target.value.replace(/\D/g, "");
+    setForm({ ...form, phone: rawPhone });
   };
 
   const handleParentPhoneChange = (e) => {
-    setParentPhoneDisplay(e.target.value);
-    setForm({ ...form, parentPhone: e.target.value.replace(/\D/g, "") });
+    const rawParentPhone = e.target.value.replace(/\D/g, "");
+    setForm({ ...form, parentPhone: rawParentPhone });
   };
 
   useEffect(() => {
@@ -406,26 +404,10 @@ function EditModal({ student, onClose, onUpdated }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [phoneDisplay, setPhoneDisplay] = useState("");
-
-  useEffect(() => {
-    setPhoneDisplay(formatPhoneNumber(student.phone) || "");
-  }, [student.phone]);
-
-  const formatPhoneNumber = (phone) => {
-    if (!phone) return "";
-    const digits = phone.replace(/\D/g, "");
-    let out = "";
-    if (digits.length > 0) out += "(" + digits.slice(0, 2);
-    if (digits.length > 2) out += ") " + digits.slice(2, 5);
-    if (digits.length > 5) out += "-" + digits.slice(5, 7);
-    if (digits.length > 7) out += "-" + digits.slice(7, 9);
-    return out;
-  };
 
   const handlePhoneChange = (e) => {
-    setPhoneDisplay(e.target.value);
-    setForm({ ...form, phone: e.target.value.replace(/\D/g, "") });
+    const rawPhone = e.target.value.replace(/\D/g, "");
+    setForm({ ...form, phone: rawPhone });
   };
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -825,6 +807,8 @@ function Pagination({ page, totalPages, onChange }) {
 export default function StudentsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager";
+  const canCreate = isAdmin || isManager;
 
   const [students, setStudents] = useState([]);
   const [pagination, setPagination] = useState({
@@ -938,7 +922,7 @@ const handleUpdated = (updated) => {
             {pagination.total} total students
           </p>
         </div>
-        {isAdmin && (
+        {canCreate && (
           <button
             className="btn btn-primary btn-sm gap-2"
             onClick={() => open("create")}
@@ -1125,7 +1109,7 @@ const handleUpdated = (updated) => {
                           >
                             View
                           </button>
-                          {isAdmin && (
+                          {canCreate && (
                             <>
                               <button
                                 className="btn btn-ghost btn-xs"

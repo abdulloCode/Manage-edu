@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useToast } from "../../../components/Toast";
 import {
   getAllGroups,
   createGroup,
@@ -286,7 +287,7 @@ console.log("resolved courseId:",
     setLoadingStudents,
   };
 }
-export async function saveGroup(group, formData) {
+export async function saveGroup(group, formData, showToast = null) {
   try {
     const dataToSend = {
       name: formData.name,
@@ -319,16 +320,14 @@ export async function saveGroup(group, formData) {
   } catch (err) {
     console.error("Saqlash xatolik:", err);
     if (err?.response?.status !== 404) {
-      alert(
-        "Xatolik yuz berdi: " +
-          (err.response?.data?.error ?? err.message ?? "Noma'lum xatolik"),
-      );
+      const message = "Xatolik yuz berdi: " + (err.response?.data?.error ?? err.message ?? "Noma'lum xatolik");
+      showToast(message, "error", 5000);
     }
     return false;
   }
 }
 
-export async function saveRoom(room, roomFormData) {
+export async function saveRoom(room, roomFormData, showToast = null) {
   try {
     const data = {
       ...roomFormData,
@@ -347,7 +346,11 @@ export async function saveRoom(room, roomFormData) {
   } catch (err) {
     console.error("Saqlash xatolik:", err);
     if (err?.response?.status !== 404) {
-      alert("Xatolik yuz berdi");
+      if (showToast) {
+        showToast("Xatolik yuz berdi", "error", 5000);
+      } else {
+        alert("Xatolik yuz berdi");
+      }
     }
     return false;
   }
@@ -367,17 +370,15 @@ export async function removeItem(item, type) {
   }
 }
 
-export async function addStudentToGroupApi(groupId, studentId) {
+export async function addStudentToGroupApi(groupId, studentId, showToast = null) {
   try {
     await addStudentToGroup(groupId, studentId);
     return true;
   } catch (err) {
     console.error("Student qo'shish xatolik:", err);
     if (err?.response?.status !== 404) {
-      alert(
-        "Xatolik yuz berdi: " +
-          (err.response?.data?.error ?? err.message ?? "Noma'lum xatolik"),
-      );
+      const message = "Xatolik yuz berdi: " + (err.response?.data?.error ?? err.message ?? "Noma'lum xatolik");
+      showToast(message, "error", 5000);
     }
     return false;
   }

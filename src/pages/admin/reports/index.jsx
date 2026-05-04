@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useToast } from "../../../components/Toast";
 import {
   Calendar,
   FileText,
@@ -265,6 +266,7 @@ function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
 /* ── Main Page ───────────────────────────────────────────── */
 
 export default function ReportsPage() {
+  const { showToast } = useToast();
   const [reportType, setReportType] = useState("teachers");
 
   /* balance reports */
@@ -296,7 +298,7 @@ export default function ReportsPage() {
       const msg = err?.response?.data?.message || err?.response?.data?.error || "Balans hisoboti yuklanmadi";
       console.error(msg, err);
       if (err?.response?.status !== 404) {
-        alert(msg);
+        showToast(msg, "error", 5000);
       }
     } finally {
       setBalanceLoading(false);

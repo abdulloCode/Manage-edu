@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { ToastProvider } from "./components/Toast";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
 import Login from "./pages/Login";
@@ -20,7 +21,6 @@ import StaffPage from "./pages/admin/staff/index.jsx";
 import ReportsPage from "./pages/admin/reports/index.jsx";
 import PaymentReportsPage from "./pages/admin/payment-reports/index.jsx";
 import InventoryPage from "./pages/admin/inventory/index.jsx";
-import SettingsPage from "./pages/admin/Settings.jsx";
 import MyProfile from "./pages/student/MyProfile";
 import MyGroups from "./pages/student/MyGroups";
 import HomeworkPage from "./pages/student/Homework";
@@ -28,170 +28,112 @@ import Attendance from "./pages/student/Attendance";
 import Payments from "./pages/student/Payments";
 import Ratings from "./pages/student/Ratings";
 
+const DYNAMIC_ROLES = ["manager", "supporter", "assistant", "staff"];
+
+const PAGE_COMPONENTS = {
+  students:          StudentsPage,
+  teachers:          TeachersPage,
+  payments:          PaymentsPage,
+  groups:            GroupsPage,
+  courses:           CoursesPage,
+  inventory:         InventoryPage,
+  reports:           ReportsPage,
+  "payment-reports": PaymentReportsPage,
+};
+
+// useAuth ishlatish uchun AuthProvider ichida bo'lishi kerak
+function AppRoutes() {
+  const { user, initialized } = useAuth();
+  const role = user?.role?.toLowerCase()?.trim();
+  const pages = Array.isArray(user?.pagesToAccess) ? user.pagesToAccess : [];
+  const isDynamic = DYNAMIC_ROLES.includes(role);
+
+  if (!initialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-base-100">
+        <span className="loading loading-spinner loading-lg text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/unauthorized" element={<Unauthorized />} />
+
+      {/* Admin */}
+      <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/admin/dashboard"       element={<AdminDashboard />} />
+          <Route path="/admin/students"        element={<StudentsPage />} />
+          <Route path="/admin/teachers"        element={<TeachersPage />} />
+          <Route path="/admin/payments"        element={<PaymentsPage />} />
+          <Route path="/admin/groups"          element={<GroupsPage />} />
+          <Route path="/admin/courses"         element={<CoursesPage />} />
+          <Route path="/admin/reports"         element={<ReportsPage />} />
+          <Route path="/admin/payment-reports" element={<PaymentReportsPage />} />
+          <Route path="/admin/inventory"       element={<InventoryPage />} />
+          <Route path="/admin/staff"           element={<StaffPage />} />
+          <Route path="/admin/profile"         element={<TeacherProfile />} />
+        </Route>
+      </Route>
+
+      {/* Teacher */}
+      <Route element={<ProtectedRoute allowedRoles={["teacher"]} />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/teacher/dashboard"  element={<ManagerDashboard />} />
+          <Route path="/teacher/groups"     element={<ManagerMyGroups />} />
+          <Route path="/teacher/groups/:id" element={<GroupDetail />} />
+          <Route path="/teacher/profile"    element={<TeacherProfile />} />
+        </Route>
+      </Route>
+
+      {/* Student */}
+      <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/student/dashboard"  element={<UserDashboard />} />
+          <Route path="/student/profile"    element={<MyProfile />} />
+          <Route path="/student/groups"     element={<MyGroups />} />
+          <Route path="/student/homework"   element={<HomeworkPage />} />
+          <Route path="/student/attendance" element={<Attendance />} />
+          <Route path="/student/payments"   element={<Payments />} />
+          <Route path="/student/ratings"    element={<Ratings />} />
+        </Route>
+      </Route>
+
+      {/* Dynamic rollar */}
+      {isDynamic && role && (
+        <Route element={<ProtectedRoute allowedRoles={[role]} />}>
+          <Route element={<DashboardLayout />}>
+            <Route path={`/${role}/dashboard`} element={<AdminDashboard />} />
+            <Route path={`/${role}/profile`}   element={<TeacherProfile />} />
+            {pages.map((page) => {
+              const Component = PAGE_COMPONENTS[page];
+              if (!Component) return null;
+              return (
+                <Route key={page} path={`/${role}/${page}`} element={<Component />} />
+              );
+            })}
+          </Route>
+        </Route>
+      )}
+
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <Routes>
-            {/* Public */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/unauthorized" element={<Unauthorized />} />
-            {/* Admin routes */}
-            <Route element={<ProtectedRoute allowedRoles={["admin", "manager", "supporter"]} />}>
-              <Route element={<DashboardLayout />}>
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route path="/admin/students" element={<StudentsPage />} />
-                <Route path="/admin/teachers" element={<TeachersPage />} />
-                <Route path="/admin/payments" element={<PaymentsPage />} />
-                <Route path="/admin/groups" element={<GroupsPage />} />
-                <Route path="/admin/courses" element={<CoursesPage />} />
-                <Route path="/admin/reports" element={<ReportsPage />} />
-                <Route
-                  path="/admin/payment-reports"
-                  element={<PaymentReportsPage />}
-                />
-                <Route path="/admin/inventory" element={<InventoryPage />} />
-                <Route
-                  path="/admin/contacts"
-                  element={<PlaceholderPage title="Contacts" />}
-                />
-                <Route
-                  path="/admin/reports"
-                  element={<PlaceholderPage title="Reports" />}
-                />
-                <Route path="/admin/profile" element={<TeacherProfile />} />
-              </Route>
-            </Route>
-
-            {/* Staff management - Admin, manager, and supporter only */}
-            <Route element={<ProtectedRoute allowedRoles={["admin", "manager", "supporter"]} />}>
-              <Route element={<DashboardLayout />}>
-                <Route path="/admin/staff" element={<StaffPage />} />
-              </Route>
-            </Route>
-
-            {/* Teacher routes */}
-            <Route element={<ProtectedRoute allowedRoles={["teacher"]} />}>
-              <Route element={<DashboardLayout />}>
-                <Route
-                  path="/teacher/dashboard"
-                  element={<ManagerDashboard />}
-                />
-                <Route path="/teacher/groups" element={<ManagerMyGroups />} />
-                <Route path="/teacher/groups/:id" element={<GroupDetail />} />
-                <Route path="/teacher/profile" element={<TeacherProfile />} />
-              </Route>
-            </Route>
-
-            {/* Manager routes - same as teacher but with admin dashboard */}
-            <Route element={<ProtectedRoute allowedRoles={["manager"]} />}>
-              <Route element={<DashboardLayout />}>
-                <Route path="/manager/dashboard" element={<AdminDashboard />} />
-                <Route path="/manager/students" element={<StudentsPage />} />
-                <Route path="/manager/teachers" element={<TeachersPage />} />
-                <Route path="/manager/groups" element={<GroupsPage />} />
-                <Route path="/manager/groups/:id" element={<GroupDetail />} />
-                <Route path="/manager/courses" element={<CoursesPage />} />
-                <Route path="/manager/inventory" element={<InventoryPage />} />
-                <Route path="/manager/payments" element={<PaymentsPage />} />
-                
-                <Route path="/manager/profile" element={<TeacherProfile />} />
-              </Route>
-            </Route>
-
-            {/* Student routes */}
-            <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
-              <Route element={<DashboardLayout />}>
-                <Route path="/student/dashboard" element={<UserDashboard />} />
-                <Route path="/student/profile" element={<MyProfile />} />
-                <Route path="/student/groups" element={<MyGroups />} />
-                <Route path="/student/homework" element={<HomeworkPage />} />
-                <Route path="/student/attendance" element={<Attendance />} />
-                <Route path="/student/payments" element={<Payments />} />
-                <Route path="/student/ratings" element={<Ratings />} />
-              </Route>
-            </Route>
-
-            {/* Staff routes */}
-            <Route element={<ProtectedRoute allowedRoles={["staff"]} />}>
-              <Route element={<DashboardLayout />}>
-                <Route path="/staff/dashboard" element={<UserDashboard />} />
-                <Route path="/staff/students" element={<StudentsPage />} />
-                <Route
-                  path="/staff/contacts"
-                  element={<PlaceholderPage title="Contacts" />}
-                />
-                <Route
-                  path="/staff/deals"
-                  element={<PlaceholderPage title="Deals" />}
-                />
-              </Route>
-            </Route>
-
-            {/* Supporter routes - read-only admin dashboard */}
-            <Route element={<ProtectedRoute allowedRoles={["supporter"]} />}>
-              <Route element={<DashboardLayout />}>
-                <Route path="/supporter/dashboard" element={<AdminDashboard />} />
-               
-              </Route>
-            </Route>
-
-            {/* Assistant routes - read-only admin dashboard */}
-            <Route element={<ProtectedRoute allowedRoles={["assistant"]} />}>
-              <Route element={<DashboardLayout />}>
-                <Route path="/assistant/dashboard" element={<AdminDashboard />} />
-               
-              </Route>
-            </Route>
-``
-            {/* Fallback */}
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
-  );
-}
-
-function PlaceholderPage({ title }) {
-  return (
-    <div className="flex flex-col gap-6 p-1">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
-          {title}
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Bu sahifa hozircha ishlab chiqilmoqda
-        </p>
-      </div>
-      <div className="card bg-base-100 border border-base-200 shadow-sm">
-        <div className="card-body items-center text-center py-16">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-8 h-8 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-              />
-            </svg>
-          </div>
-          <p className="text-base-content/60 text-lg font-normal">
-            Sahifa tayyorlanmoqda
-          </p>
-          <p className="text-base-content/40 text-sm mt-2">
-            Tez orada bu funksiya mavjud bo'ladi
-          </p>
-        </div>
-      </div>
-    </div>
   );
 }

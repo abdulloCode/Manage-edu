@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function formatPhone(digits) {
   const d = digits.slice(0, 9)
@@ -11,20 +11,24 @@ function formatPhone(digits) {
 }
 
 export default function PhoneInput({ value, onChange, className = '', placeholder = '(90) 123-45-67', required = false, disabled = false }) {
-  const [displayValue, setDisplayValue] = useState(formatPhone(value?.replace(/\D/g, '') || ''))
+  const digits = value?.replace(/\D/g, '') || ''
+  const [displayValue, setDisplayValue] = useState(formatPhone(digits))
+
+  useEffect(() => {
+    const d = value?.replace(/\D/g, '') || ''
+    setDisplayValue(formatPhone(d))
+  }, [value])
 
   const handleChange = (e) => {
     const digits = e.target.value.replace(/\D/g, '')
     const formatted = formatPhone(digits)
     setDisplayValue(formatted)
-    onChange({ target: { value: formatted } })
+    onChange({ target: { value: '+998' + digits } })
   }
 
   return (
     <div className="relative">
-      <span
-        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-500 font-medium select-none"
-      >
+      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-500 font-medium select-none">
         +998
       </span>
       <input

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useToast } from "../../../components/Toast";
 import {
   getAllCourses,
   createCourse,
@@ -103,9 +104,10 @@ export function useAdminCourseForm() {
 }
 
 // ─── Admin Course Actions ───────────────────────────────────────
-export async function saveAdminCourse(course, formData, loadCourses) {
+export async function saveAdminCourse(course, formData, loadCourses, showToast = null) {
   if (!formData.name || !formData.price || !formData.duration) {
-    alert("Nomi, Narx va Davomiylik kiritilishi shart!");
+    const message = "Nomi, Narx va Davomiylik kiritilishi shart!";
+    showToast(message, "error", 5000);
     return false;
   }
 
@@ -128,13 +130,14 @@ export async function saveAdminCourse(course, formData, loadCourses) {
     return true;
   } catch (err) {
     if (err?.response?.status !== 404) {
-      alert(err.response?.data?.message || "Server xatosi");
+      const message = err.response?.data?.message || "Server xatosi";
+      showToast(message, "error", 5000);
     }
     return false;
   }
 }
 
-export async function deleteAdminCourse(course, loadCourses) {
+export async function deleteAdminCourse(course, loadCourses, showToast = null) {
   if (!window.confirm("Kursni o'chirishni tasdiqlaysizmi?")) {
     return false;
   }
@@ -145,9 +148,8 @@ export async function deleteAdminCourse(course, loadCourses) {
     return true;
   } catch (err) {
     if (err?.response?.status !== 404) {
-      alert(
-        "O'chirishda xatolik: " + (err.response?.data?.message || err.message),
-      );
+      const message = "O'chirishda xatolik: " + (err.response?.data?.message || err.message);
+      showToast(message, "error", 5000);
     }
     return false;
   }

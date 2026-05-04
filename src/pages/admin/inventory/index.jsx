@@ -23,6 +23,7 @@ import {
   deleteInventoryItem,
   getInventoryCategories,
 } from "../../../api/inventory";
+import { useToast } from "../../../components/Toast";
 
 const CONDITIONS = ["new", "good", "fair", "poor"];
 
@@ -326,6 +327,7 @@ function DeleteModal({ show, item, onClose, onConfirm, isSubmitting }) {
 }
 
 export default function InventoryPage() {
+  const { showToast } = useToast();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -368,7 +370,7 @@ export default function InventoryPage() {
         console.error("Inventarni yuklashda xatolik", err);
       } else {
         const msg = err?.response?.data?.message || err?.response?.data?.error || "Inventarni yuklashda xatolik";
-        alert(msg);
+        showToast(msg, "error", 5000);
       }
     } finally {
       setLoading(false);
@@ -433,7 +435,7 @@ export default function InventoryPage() {
 
   const handleSave = async () => {
     if (!formData.name || !formData.category || formData.quantity === "") {
-      alert("Nomi, kategoriya va miqdor kiritilishi shart!");
+      showToast("Nomi, kategoriya va miqdor kiritilishi shart!", "error", 5000);
       return;
     }
     setIsSubmitting(true);
@@ -457,7 +459,7 @@ export default function InventoryPage() {
         console.error("Saqlashda xatolik", err);
       } else {
         const msg = err?.response?.data?.message || err?.response?.data?.error || "Saqlashda xatolik";
-        alert(msg);
+        showToast(msg, "error", 5000);
       }
     } finally {
       setIsSubmitting(false);
@@ -482,7 +484,7 @@ export default function InventoryPage() {
         console.error("O'chirishda xatolik", err);
       } else {
         const msg = err?.response?.data?.message || err?.response?.data?.error || "O'chirishda xatolik";
-        alert(msg);
+        showToast(msg, "error", 5000);
       }
     } finally {
       setIsSubmitting(false);

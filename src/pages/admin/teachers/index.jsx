@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../../../context/AuthContext";
 import {
   useTeachers,
   useTeacherForm,
@@ -10,6 +11,11 @@ import {
 import PhoneInput from "../../../components/PhoneInput";
 
 export default function TeachersPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager";
+  const canCreate = isAdmin || isManager;
+
   const {
     teachers,
     loading,
@@ -104,26 +110,28 @@ export default function TeachersPage() {
             ta o'qituvchi
           </p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
+        {canCreate && (
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Qo'shish
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Qo'shish
+          </button>
+        )}
       </div>
 
       {/* ── Search ── */}

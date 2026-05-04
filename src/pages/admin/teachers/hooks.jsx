@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useToast } from '../../../components/Toast'
 import {
   getAllTeachers,
   createTeacher,
@@ -113,7 +114,7 @@ export function useTeacherForm() {
   }
 }
 
-export async function saveTeacher(teacher, formData, loadTeachers) {
+export async function saveTeacher(teacher, formData, loadTeachers, showToast = null) {
   try {
     const dataToSave = {
       name: formData.name,
@@ -136,7 +137,8 @@ export async function saveTeacher(teacher, formData, loadTeachers) {
   } catch (err) {
     console.error('Saqlash xatolik:', err)
     if (err?.response?.status !== 404) {
-      alert('Xatolik yuz berdi')
+      const message = 'Xatolik yuz berdi';
+      showToast(message, "error", 5000);
     }
     return false
   }

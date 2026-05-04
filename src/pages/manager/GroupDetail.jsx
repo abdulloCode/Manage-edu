@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useToast } from '../../components/Toast'
 import { useFetch } from '../../hooks/useFetch'
 import { getGroupById } from '../../api/groups'
 import { getGroupAttendance, getGroupAttendanceCalendar, updateDayAttendance } from '../../api/attendance'
@@ -133,6 +134,7 @@ function extractCalendarStudents(res) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function AttendanceTab({ groupId, students: studentsProp }) {
+  const { showToast } = useToast();
   const [viewDate, setViewDate] = useState(new Date())
   const [data, setData] = useState({})      // { "studentId-YYYY-MM-DD": "present" }
   const [original, setOriginal] = useState({})
@@ -196,7 +198,7 @@ function AttendanceTab({ groupId, students: studentsProp }) {
     } catch (err) {
       console.error(err)
       if (err?.response?.status !== 404) {
-        alert('Failed to save some attendance records')
+        showToast('Failed to save some attendance records', 'error', 5000);
       }
     } finally {
       setSaving(false)
@@ -298,6 +300,7 @@ function AttendanceTab({ groupId, students: studentsProp }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function RatingsTab({ groupId, students: studentsProp }) {
+  const { showToast } = useToast();
   const [viewDate, setViewDate] = useState(new Date())
   const [data, setData] = useState({})      // { "studentId-YYYY-MM-DD": "85" }
   const [original, setOriginal] = useState({})
@@ -425,7 +428,7 @@ function RatingsTab({ groupId, students: studentsProp }) {
     } catch (err) {
       console.error(err)
       if (err?.response?.status !== 404) {
-        alert('Failed to save some ratings')
+        showToast('Failed to save some ratings', 'error', 5000);
       }
     } finally {
       setSaving(false)

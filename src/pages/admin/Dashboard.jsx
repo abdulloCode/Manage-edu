@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "../../components/Toast";
 import {
   Users,
   UserCheck,
@@ -68,6 +69,7 @@ import { useAuth } from "../../context/AuthContext";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const { user } = useAuth();
   const isManager = user?.role?.toLowerCase()?.trim() === 'manager';
   const [selectedDay, setSelectedDay] = useState("Sha");
@@ -368,7 +370,7 @@ export default function Dashboard() {
       await loadPayments(); // Reload payments
     } catch (err) {
       console.error('Payment action failed:', err);
-      alert('Amalga o\'tkazildi: ' + err.response?.data?.message || 'Xatolik yuz berdi');
+      showToast('Amalga o\'tkazildi: ' + err.response?.data?.message || 'Xatolik yuz berdi', 'error', 5000);
     }
   };
 

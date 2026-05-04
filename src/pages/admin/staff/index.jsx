@@ -1,35 +1,19 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus,
-  Search,
-  Edit3,
-  Trash2,
-  DollarSign,
-  X,
-  AlertCircle,
-  Clock,
-  Users,
+  Plus, Search, Edit3, Trash2, DollarSign, X, AlertCircle, Clock, Users,
+  Shield, CheckSquare, Square,
 } from "lucide-react";
 import {
-  getAllStaff,
-  setStaffSalary,
-  getStaffSalaryHistory,
-  createStaff,
-  updateStaff,
-  deleteStaff,
+  getAllStaff, setStaffSalary, getStaffSalaryHistory,
+  createStaff, updateStaff, deleteStaff,
 } from "../../../api/staff";
 import PhoneInput from "../../../components/PhoneInput";
+import { useToast } from "../../../components/Toast";
+import { useIsAdmin } from "../../../utils/permissions";
+import { useAuth } from "../../../context/AuthContext";
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 const getId = (item) => item?._id || item?.id || null;
-
-const handleError = (message, err) => {
-  const status = err?.response?.status;
-  if (status === 404) { console.error(message, err); return; }
-  const serverMsg = err?.response?.data?.message || err?.response?.data?.error;
-  alert(serverMsg || message);
-};
 
 const formatPhoneNumber = (phone) => {
   if (!phone) return "";
@@ -39,10 +23,9 @@ const formatPhoneNumber = (phone) => {
   return phone;
 };
 
-const today      = () => new Date().toISOString().slice(0, 10);
-const thisMonth  = () => new Date().toISOString().slice(0, 7);
+const today     = () => new Date().toISOString().slice(0, 10);
+const thisMonth = () => new Date().toISOString().slice(0, 7);
 
-// Role options — single source of truth
 const ROLES = [
   { value: "staff",     label: "Staff"     },
   { value: "manager",   label: "Manager"   },
@@ -50,40 +33,52 @@ const ROLES = [
   { value: "supporter", label: "Supporter" },
 ];
 
+// Rol bo'yicha standart sahifalar (old)
+const ROLE_DEFAULT_PAGES_OLD = {
+  manager:   ["students", "teachers", "payments", "groups", "courses", "inventory", "reports", "payment-reports"],
+  supporter: ["students", "teachers", "payments", "groups", "courses", "inventory", "reports", "payment-reports"],
+  assistant: ["students", "teachers", "payments", "groups", "courses", "inventory", "reports", "payment-reports"],
+  staff:     ["students"],
+};
+
+const ALL_PAGES = [
+  { value: "students",        label: "O'quvchilar",         icon: "👨‍🎓" },
+  { value: "teachers",        label: "O'qituvchilar",        icon: "👨‍🏫" },
+  { value: "payments",        label: "To'lovlar",            icon: "💰" },
+  { value: "groups",          label: "Guruhlar",             icon: "👥" },
+  { value: "courses",         label: "Kurslar",              icon: "📚" },
+  { value: "inventory",       label: "Inventar",             icon: "📦" },
+  { value: "reports",         label: "Hisobotlar",           icon: "📊" },
+  { value: "payment-reports", label: "To'lov hisobotlari",   icon: "📈" },
+];
+
 const emptyStaffForm = () => ({
-  name:            "",
-  phone:           "",
-  password:        "",
-  adminPassword:   "",
-  role:            "staff",
-  jobTitle:        "",          // free-text, not role
-  hireDate:        today(),
-  specialization:  "",
-  monthlySalary:   "",
-  salaryMonth:     thisMonth(),
-  salaryStartDate: today(),
-  salaryComment:   "",
+  name: "", phone: "", password: "", adminPassword: "",
+  role: "staff", jobTitle: "", hireDate: today(),
+  specialization: "", monthlySalary: "",
+  salaryMonth: thisMonth(), salaryStartDate: today(), salaryComment: "",
+  pagesToAccess: [],
 });
 
 const emptySalaryForm = () => ({
-  month:         thisMonth(),
-  monthlySalary: "",
-  startDate:     today(),
-  comment:       "",
+  month: thisMonth(), monthlySalary: "", startDate: today(), comment: "",
 });
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function StaffPage() {
-  const [staff,        setStaff]        = useState([]);
-  const [loading,      setLoading]      = useState(false);
-  const [searchQuery,  setSearchQuery]  = useState("");
+  const { showToast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = useIsAdmin();
+
+  const [staff,       setStaff]       = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [showStaffModal,   setShowStaffModal]   = useState(false);
   const [showSalaryModal,  setShowSalaryModal]  = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-  const [selectedStaff,  setSelectedStaff]  = useState(null);
-  const [salaryHistory,  setSalaryHistory]  = useState([]);
+  const [selectedStaff, setSelectedStaff] = useState(null);
+  const [salaryHistory, setSalaryHistory] = useState([]);
 
   const [isSubmittingStaff,  setIsSubmittingStaff]  = useState(false);
   const [isSubmittingSalary, setIsSubmittingSalary] = useState(false);
@@ -91,18 +86,16 @@ export default function StaffPage() {
   const [staffFormErrors,  setStaffFormErrors]  = useState({});
   const [salaryFormErrors, setSalaryFormErrors] = useState({});
 
-  const [staffForm,        setStaffForm]        = useState(emptyStaffForm());
-  const [salaryForm,       setSalaryForm]       = useState(emptySalaryForm());
-  const [staffPhoneDisplay, setStaffPhoneDisplay] = useState("");
+  const [staffForm,         setStaffForm]         = useState(emptyStaffForm());
+  const [salaryForm,        setSalaryForm]        = useState(emptySalaryForm());
 
-  // ── Load ──
   const loadStaff = async () => {
     setLoading(true);
     try {
       const res = await getAllStaff();
       setStaff(res.data.data || res.data || []);
     } catch (err) {
-      handleError("Xodimlarni yuklashda xatolik", err);
+      showToast("Xodimlarni yuklashda xatolik", "error", 5000);
     } finally {
       setLoading(false);
     }
@@ -110,14 +103,17 @@ export default function StaffPage() {
 
   useEffect(() => { loadStaff(); }, []);
 
-  // ── Phone display sync ──
-  useEffect(() => {
-    if (showStaffModal) {
-      setStaffPhoneDisplay(selectedStaff?.phone ? formatPhoneNumber(selectedStaff.phone) : "");
-    }
-  }, [selectedStaff, showStaffModal]);
 
-  // ── Filter ──
+  // Rol o'zgarganda pagesToAccess ni avtomatik yangilash
+  useEffect(() => {
+    if (!selectedStaff) {
+      // Yangi xodim qo'shishda rol bo'yicha standart sahifalarni o'rnatish
+      // Backenddan GET /api/staff/pages orqali dinamik pages
+      const defaultPages = user?.pagesToAccess || ROLE_DEFAULT_PAGES_OLD[staffForm.role] || [];
+      setStaffForm(f => ({ ...f, pagesToAccess: defaultPages }));
+    }
+  }, [staffForm.role, selectedStaff, user?.pagesToAccess]);
+
   const filteredStaff = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return staff.filter(
@@ -128,21 +124,34 @@ export default function StaffPage() {
     );
   }, [staff, searchQuery]);
 
-  // ── Patch helpers ──
-  const patchStaff   = (patch) => setStaffForm((f) => ({ ...f, ...patch }));
-  const patchSalary  = (patch) => setSalaryForm((f) => ({ ...f, ...patch }));
+  const patchStaff  = (patch) => setStaffForm((f) => ({ ...f, ...patch }));
+  const patchSalary = (patch) => setSalaryForm((f) => ({ ...f, ...patch }));
 
-  // ── Validate staff form ──
+  const togglePage = (pageValue) => {
+    const pages = staffForm.pagesToAccess || [];
+    if (pages.includes(pageValue)) {
+      patchStaff({ pagesToAccess: pages.filter(p => p !== pageValue) });
+    } else {
+      patchStaff({ pagesToAccess: [...pages, pageValue] });
+    }
+  };
+
+  const selectAllPages = () => {
+    patchStaff({ pagesToAccess: ALL_PAGES.map(p => p.value) });
+  };
+
+  const clearAllPages = () => {
+    patchStaff({ pagesToAccess: [] });
+  };
+
   const validateStaffForm = () => {
     const errors = {};
     if (!staffForm.name.trim())  errors.name  = "Ism kiritilishi shart!";
     if (!staffForm.phone.trim()) errors.phone = "Telefon raqami kiritilishi shart!";
     if (!selectedStaff && !staffForm.password) errors.password = "Parol kiritilishi shart!";
-    // Admin password requirement removed - managers and supporters can create staff without admin password
     return errors;
   };
 
-  // ── Save staff ──
   const handleSaveStaff = async () => {
     const errors = validateStaffForm();
     if (Object.keys(errors).length) { setStaffFormErrors(errors); return; }
@@ -151,24 +160,21 @@ export default function StaffPage() {
     try {
       const id = getId(selectedStaff);
       const payload = { ...staffForm };
-      // Don't send empty password on edit
       if (id && !payload.password) delete payload.password;
-      if (id) {
-        await updateStaff(id, payload);
-      } else {
-        await createStaff(payload);
-      }
+      if (id) { await updateStaff(id, payload); }
+      else    { await createStaff(payload); }
+      showToast(id ? "Xodim yangilandi" : "Xodim qo'shildi", "success", 3000);
       setShowStaffModal(false);
       setSelectedStaff(null);
       loadStaff();
     } catch (err) {
-      handleError("Xodimni saqlashda xatolik", err);
+      const msg = err?.response?.data?.message || "Xodimni saqlashda xatolik";
+      showToast(msg, "error", 5000);
     } finally {
       setIsSubmittingStaff(false);
     }
   };
 
-  // ── Save salary ──
   const handleSaveSalary = async () => {
     const errors = {};
     if (!salaryForm.monthlySalary || Number(salaryForm.monthlySalary) <= 0)
@@ -178,52 +184,53 @@ export default function StaffPage() {
     setIsSubmittingSalary(true);
     try {
       const staffId = getId(selectedStaff);
-      if (!staffId) { alert("Xodim ID topilmadi"); return; }
+      if (!staffId) { showToast("Xodim ID topilmadi", "error", 3000); return; }
       await setStaffSalary(staffId, {
         month:         salaryForm.month,
         monthlySalary: Number(salaryForm.monthlySalary),
         startDate:     salaryForm.startDate || undefined,
         comment:       salaryForm.comment || "",
       });
+      showToast("Maosh belgilandi", "success", 3000);
       setShowSalaryModal(false);
       setSalaryForm(emptySalaryForm());
       setSelectedStaff(null);
       loadStaff();
     } catch (err) {
-      handleError("Maosh belgilashda xatolik", err);
+      const msg = err?.response?.data?.message || "Maosh belgilashda xatolik";
+      showToast(msg, "error", 5000);
     } finally {
       setIsSubmittingSalary(false);
     }
   };
 
-  // ── Delete ──
   const handleDeleteStaff = async (staffMember) => {
     const id = getId(staffMember);
-    if (!id) { alert("Xodim ID topilmadi"); return; }
+    if (!id) { showToast("Xodim ID topilmadi", "error", 3000); return; }
     if (!window.confirm(`"${staffMember.name}"ni o'chirishni tasdiqlaysizmi?`)) return;
     try {
       await deleteStaff(id);
+      showToast("Xodim o'chirildi", "success", 3000);
       loadStaff();
     } catch (err) {
-      handleError("Xodimni o'chirishda xatolik", err);
+      const msg = err?.response?.data?.message || "Xodimni o'chirishda xatolik";
+      showToast(msg, "error", 5000);
     }
   };
 
-  // ── View history ──
   const handleViewHistory = async (staffMember) => {
     const staffId = getId(staffMember);
-    if (!staffId) { alert("Xodim ID topilmadi"); return; }
+    if (!staffId) { showToast("Xodim ID topilmadi", "error", 3000); return; }
     setSelectedStaff(staffMember);
     try {
       const res = await getStaffSalaryHistory(staffId);
       setSalaryHistory(res.data.data || res.data || []);
       setShowHistoryModal(true);
     } catch (err) {
-      handleError("Maosh tarixini yuklashda xatolik", err);
+      showToast("Maosh tarixini yuklashda xatolik", "error", 5000);
     }
   };
 
-  // ── Open modals ──
   const openAddStaffModal = () => {
     setStaffForm(emptyStaffForm());
     setSelectedStaff(null);
@@ -246,6 +253,7 @@ export default function StaffPage() {
       salaryMonth:     s?.month         || thisMonth(),
       salaryStartDate: s?.startDate?.split("T")[0] || today(),
       salaryComment:   s?.comment       || "",
+      pagesToAccess:   staffMember.pagesToAccess || [],
     });
     setSelectedStaff(staffMember);
     setStaffFormErrors({});
@@ -259,7 +267,6 @@ export default function StaffPage() {
     setShowSalaryModal(true);
   };
 
-  // ── Field component ──
   const Field = ({ label, error, children }) => (
     <div>
       <label className="block text-sm font-medium text-base-content/80 mb-1.5">{label}</label>
@@ -273,7 +280,6 @@ export default function StaffPage() {
       hasError ? "border-red-400 bg-red-50" : "border-base-300 bg-base-100"
     }`;
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-base-100 p-6">
       <div className="max-w-7xl mx-auto">
@@ -290,9 +296,11 @@ export default function StaffPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button onClick={openAddStaffModal} className="btn btn-primary btn-sm">
-            <Plus className="w-4 h-4" /> Xodim Qo'shish
-          </button>
+          {isAdmin && (
+            <button onClick={openAddStaffModal} className="btn btn-primary btn-sm">
+              <Plus className="w-4 h-4" /> Xodim Qo'shish
+            </button>
+          )}
         </div>
 
         {/* Table */}
@@ -307,10 +315,10 @@ export default function StaffPage() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-base-200 border-b border-base-300">
-                    {["Xodim", "Lavozim", "Role", "Telefon", "Holat", "Amallar"].map((h, i) => (
+                    {["Xodim", "Lavozim", "Role", "Telefon", "Ruxsatlar", "Holat", "Amallar"].map((h, i) => (
                       <th
                         key={h}
-                        className={`px-4 py-3 text-xs font-bold text-base-content/70 uppercase tracking-wider ${i === 5 ? "text-right" : "text-left"}`}
+                        className={`px-4 py-3 text-xs font-bold text-base-content/70 uppercase tracking-wider ${i === 6 ? "text-right" : "text-left"}`}
                       >
                         {h}
                       </th>
@@ -320,7 +328,7 @@ export default function StaffPage() {
                 <tbody>
                   {filteredStaff.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-16 text-center">
+                      <td colSpan={7} className="px-6 py-16 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <Users className="w-12 h-12 text-base-content/20" />
                           <p className="text-sm font-medium text-base-content/50">Xodimlar yo'q</p>
@@ -354,6 +362,27 @@ export default function StaffPage() {
                         </td>
                         <td className="px-4 py-3 text-sm text-base-content/70 font-mono">{s.phone || "—"}</td>
                         <td className="px-4 py-3">
+                          {s.pagesToAccess?.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {s.pagesToAccess.slice(0, 3).map(page => {
+                                const p = ALL_PAGES.find(ap => ap.value === page);
+                                return (
+                                  <span key={page} className="px-1.5 py-0.5 rounded text-xs bg-primary/10 text-primary font-medium">
+                                    {p?.icon} {p?.label || page}
+                                  </span>
+                                );
+                              })}
+                              {s.pagesToAccess.length > 3 && (
+                                <span className="px-1.5 py-0.5 rounded text-xs bg-base-300 text-base-content/60 font-medium">
+                                  +{s.pagesToAccess.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-base-content/40">Ruxsat yo'q</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
                           <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
                             s.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                           }`}>
@@ -362,18 +391,22 @@ export default function StaffPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <ActionBtn color="green"  title="Maosh"   onClick={() => openSalaryModal(s)}>
+                            <ActionBtn color="green" title="Maosh" onClick={() => openSalaryModal(s)}>
                               <DollarSign className="w-4 h-4" />
                             </ActionBtn>
-                            <ActionBtn color="blue"   title="Tarix"   onClick={() => handleViewHistory(s)}>
+                            <ActionBtn color="blue" title="Tarix" onClick={() => handleViewHistory(s)}>
                               <Clock className="w-4 h-4" />
                             </ActionBtn>
-                            <ActionBtn color="yellow" title="Tahrir"  onClick={() => openEditStaffModal(s)}>
-                              <Edit3 className="w-4 h-4" />
-                            </ActionBtn>
-                            <ActionBtn color="red"    title="O'chir"  onClick={() => handleDeleteStaff(s)}>
-                              <Trash2 className="w-4 h-4" />
-                            </ActionBtn>
+                            {isAdmin && (
+                              <>
+                                <ActionBtn color="yellow" title="Tahrir" onClick={() => openEditStaffModal(s)}>
+                                  <Edit3 className="w-4 h-4" />
+                                </ActionBtn>
+                                <ActionBtn color="red" title="O'chir" onClick={() => handleDeleteStaff(s)}>
+                                  <Trash2 className="w-4 h-4" />
+                                </ActionBtn>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -386,17 +419,14 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* ── Staff Modal ──────────────────────────────────────────────────────── */}
+      {/* ══════════ Staff Modal ══════════ */}
       <AnimatePresence>
         {showStaffModal && (
           <Modal onClose={() => setShowStaffModal(false)}>
-            {/* Header */}
             <ModalHeader
               title={selectedStaff ? "Xodimni Tahrirlash" : "Yangi Xodim"}
               onClose={() => setShowStaffModal(false)}
             />
-
-            {/* Error summary */}
             {Object.keys(staffFormErrors).length > 0 && (
               <div className="px-6 py-3 bg-red-50 border-b border-red-200">
                 <div className="flex items-center gap-2 text-red-700 mb-1">
@@ -408,11 +438,9 @@ export default function StaffPage() {
                 </ul>
               </div>
             )}
-
-            {/* Body */}
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
 
-              {/* Name */}
+              {/* Asosiy ma'lumotlar */}
               <Field label="Ism *" error={staffFormErrors.name}>
                 <input
                   type="text"
@@ -424,22 +452,16 @@ export default function StaffPage() {
                 />
               </Field>
 
-              {/* Phone */}
               <Field label="Telefon *" error={staffFormErrors.phone}>
                 <PhoneInput
-                  value={staffPhoneDisplay}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/\D/g, "");
-                    setStaffPhoneDisplay(e.target.value);
-                    patchStaff({ phone: raw });
-                  }}
+                  value={staffForm.phone || ""}
+                  onChange={(e) => patchStaff({ phone: e.target.value.replace(/\D/g, "") })}
                   disabled={isSubmittingStaff}
                   placeholder="+998 90 123 45 67"
                   className={inputCls(staffFormErrors.phone)}
                 />
               </Field>
 
-              {/* Password (add only) */}
               {!selectedStaff && (
                 <Field label="Parol *" error={staffFormErrors.password}>
                   <input
@@ -453,7 +475,6 @@ export default function StaffPage() {
                 </Field>
               )}
 
-              {/* Role */}
               <Field label="Role">
                 <select
                   value={staffForm.role}
@@ -467,7 +488,6 @@ export default function StaffPage() {
                 </select>
               </Field>
 
-              {/* Admin password — only for manager */}
               {staffForm.role === "manager" && (
                 <Field label="Admin Paroli *" error={staffFormErrors.adminPassword}>
                   <input
@@ -481,7 +501,6 @@ export default function StaffPage() {
                 </Field>
               )}
 
-              {/* Job title (free text — separate from role) */}
               <Field label="Lavozim (sarlavha)">
                 <input
                   type="text"
@@ -493,7 +512,6 @@ export default function StaffPage() {
                 />
               </Field>
 
-              {/* Hire date */}
               <Field label="Ishga qabul sanasi">
                 <input
                   type="date"
@@ -504,7 +522,6 @@ export default function StaffPage() {
                 />
               </Field>
 
-              {/* Specialization */}
               <Field label="Mutaxassislik">
                 <input
                   type="text"
@@ -516,10 +533,65 @@ export default function StaffPage() {
                 />
               </Field>
 
-              {/* Salary section */}
+              {/* ── Kirish huquqlari (pagesToAccess) ── */}
+              <div className="pt-4 border-t border-base-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-primary" />
+                    <p className="text-sm font-semibold text-base-content/80">Kirish huquqlari</p>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary">
+                      {staffForm.pagesToAccess?.length || 0} / {ALL_PAGES.length}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllPages}
+                      disabled={isSubmittingStaff}
+                      className="text-xs text-primary hover:underline disabled:opacity-50"
+                    >
+                      Hammasini tanlash
+                    </button>
+                    <span className="text-base-content/30">|</span>
+                    <button
+                      type="button"
+                      onClick={clearAllPages}
+                      disabled={isSubmittingStaff}
+                      className="text-xs text-error hover:underline disabled:opacity-50"
+                    >
+                      Tozalash
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {ALL_PAGES.map((page) => {
+                    const isChecked = staffForm.pagesToAccess?.includes(page.value) || false;
+                    return (
+                      <button
+                        key={page.value}
+                        type="button"
+                        disabled={isSubmittingStaff}
+                        onClick={() => togglePage(page.value)}
+                        className={`flex items-center gap-2 p-2.5 border-2 rounded-xl cursor-pointer transition-all text-left disabled:opacity-50 ${
+                          isChecked
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-base-300 hover:bg-base-200 text-base-content/70"
+                        }`}
+                      >
+                        {isChecked
+                          ? <CheckSquare className="w-4 h-4 flex-shrink-0" />
+                          : <Square className="w-4 h-4 flex-shrink-0 opacity-40" />
+                        }
+                        <span className="text-sm">{page.icon} {page.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── Maosh ── */}
               <div className="pt-4 border-t border-base-200 space-y-4">
                 <p className="text-sm font-semibold text-base-content/70">Maosh (ixtiyoriy)</p>
-
                 <Field label="Oylik maosh (UZS)">
                   <input
                     type="number"
@@ -531,7 +603,6 @@ export default function StaffPage() {
                     min={0}
                   />
                 </Field>
-
                 <Field label="Oy">
                   <input
                     type="month"
@@ -541,7 +612,6 @@ export default function StaffPage() {
                     className={inputCls(false)}
                   />
                 </Field>
-
                 <Field label="Boshlanish sanasi">
                   <input
                     type="date"
@@ -551,7 +621,6 @@ export default function StaffPage() {
                     className={inputCls(false)}
                   />
                 </Field>
-
                 <Field label="Izoh">
                   <textarea
                     value={staffForm.salaryComment}
@@ -565,7 +634,6 @@ export default function StaffPage() {
               </div>
             </div>
 
-            {/* Footer */}
             <ModalFooter>
               <button
                 onClick={() => setShowStaffModal(false)}
@@ -574,19 +642,21 @@ export default function StaffPage() {
               >
                 Bekor qilish
               </button>
-              <button
-                onClick={handleSaveStaff}
-                disabled={isSubmittingStaff}
-                className="flex-1 px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
-              >
-                {isSubmittingStaff ? <Spinner /> : selectedStaff ? "Yangilash" : "Qo'shish"}
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={handleSaveStaff}
+                  disabled={isSubmittingStaff}
+                  className="flex-1 px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                >
+                  {isSubmittingStaff ? <Spinner /> : selectedStaff ? "Yangilash" : "Qo'shish"}
+                </button>
+              )}
             </ModalFooter>
           </Modal>
         )}
       </AnimatePresence>
 
-      {/* ── Salary Modal ─────────────────────────────────────────────────────── */}
+      {/* ══════════ Salary Modal ══════════ */}
       <AnimatePresence>
         {showSalaryModal && (
           <Modal onClose={() => setShowSalaryModal(false)}>
@@ -604,7 +674,6 @@ export default function StaffPage() {
                   className={inputCls(false)}
                 />
               </Field>
-
               <Field label="Oylik Maosh (UZS) *" error={salaryFormErrors.monthlySalary}>
                 <input
                   type="number"
@@ -616,7 +685,6 @@ export default function StaffPage() {
                   min={0}
                 />
               </Field>
-
               <Field label="Boshlanish sanasi">
                 <input
                   type="date"
@@ -626,7 +694,6 @@ export default function StaffPage() {
                   className={inputCls(false)}
                 />
               </Field>
-
               <Field label="Izoh">
                 <textarea
                   value={salaryForm.comment}
@@ -658,7 +725,7 @@ export default function StaffPage() {
         )}
       </AnimatePresence>
 
-      {/* ── History Modal ─────────────────────────────────────────────────────── */}
+      {/* ══════════ History Modal ══════════ */}
       <AnimatePresence>
         {showHistoryModal && selectedStaff && (
           <Modal onClose={() => setShowHistoryModal(false)} maxW="max-w-lg">
@@ -710,15 +777,13 @@ export default function StaffPage() {
   );
 }
 
-// ── Shared sub-components ────────────────────────────────────────────────────
+// ── Sub-components ──────────────────────────────────────────────────────────
 
 function Modal({ children, onClose, maxW = "max-w-md" }) {
   return (
     <>
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={onClose}
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
       />
@@ -764,11 +829,7 @@ function ActionBtn({ color, title, onClick, children }) {
     red:    "text-red-600 hover:bg-red-50",
   };
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={`p-1.5 rounded-lg transition-colors ${colors[color]}`}
-    >
+    <button onClick={onClick} title={title} className={`p-1.5 rounded-lg transition-colors ${colors[color]}`}>
       {children}
     </button>
   );

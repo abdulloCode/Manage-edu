@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useToast } from "../../../components/Toast";
 import {
   Calendar,
   Search,
@@ -35,6 +36,7 @@ const monthStart = () => {
    ════════════════════════════════════════════════════════════ */
 
 function PaymentTypeTab() {
+  const { showToast } = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -62,7 +64,7 @@ function PaymentTypeTab() {
           err?.response?.data?.message ||
           err?.response?.data?.error ||
           "Hisobot yuklanmadi";
-        alert(msg);
+        showToast(msg, "error", 5000);
       }
     } finally {
       setLoading(false);
@@ -556,6 +558,7 @@ function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
 }
 
 function BalanceTab() {
+  const { showToast } = useToast();
   const [subTab, setSubTab] = useState("teachers");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -588,7 +591,7 @@ function BalanceTab() {
           err?.response?.data?.message ||
           err?.response?.data?.error ||
           "Balans hisoboti yuklanmadi";
-        alert(msg);
+        showToast(msg, "error", 5000);
       }
     } finally {
       setLoading(false);

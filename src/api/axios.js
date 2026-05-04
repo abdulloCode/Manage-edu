@@ -113,7 +113,7 @@ api.interceptors.response.use(
       processQueue(refreshError, null);
       setToken(null);
       localStorage.removeItem("user");
-      window.location.href = "/login";
+      window.location.href = "/login"; // API layer, refresh error bo'lganda login sahifasiga o'tkazish
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

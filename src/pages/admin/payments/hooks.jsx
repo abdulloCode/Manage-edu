@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useToast } from '../../../components/Toast'
 import {
   getAllPayments,
   createPayment,
@@ -16,7 +17,7 @@ import {
 // ─── Helpers ─────────────────────────────────────────────────
 const getId = (item) => item?._id || item?.id || null
 
-const handleError = (message, err) => {
+const handleError = (message, err, showToast = null) => {
   const status = err?.response?.status
   if (status === 404) {
     console.error(message, err)
@@ -25,7 +26,11 @@ const handleError = (message, err) => {
   const serverMsg = err?.response?.data?.message
   const fullMsg = serverMsg || message
   console.error(fullMsg, err)
-  alert(fullMsg)
+  if (showToast) {
+    showToast(fullMsg, "error", 5000);
+  } else {
+    alert(fullMsg);
+  }
 }
 
 export function usePayments() {
@@ -203,10 +208,15 @@ export async function savePayment(editingPayment, formData) {
   }
 }
 
-export async function removePayment(item) {
+export async function removePayment(item, showToast = null) {
   const id = getId(item)
   if (!id) {
-    alert("To'lov ID topilmadi")
+    const message = "To'lov ID topilmadi";
+    if (showToast) {
+      showToast(message, "error", 3000);
+    } else {
+      alert(message);
+    }
     return false
   }
   if (!window.confirm("To'lovni o'chirishni tasdiqlaysizmi?")) return false
@@ -214,7 +224,7 @@ export async function removePayment(item) {
     await deletePayment(id)
     return true
   } catch (err) {
-    handleError("To'lovni o'chirishda xatolik", err)
+    handleError("To'lovni o'chirishda xatolik", err, showToast)
     return false
   }
 }
@@ -236,10 +246,15 @@ export async function savePaymentType(editingType, typeFormData) {
   }
 }
 
-export async function removePaymentType(item) {
+export async function removePaymentType(item, showToast = null) {
   const id = getId(item)
   if (!id) {
-    alert("To'lov turi ID topilmadi")
+    const message = "To'lov turi ID topilmadi";
+    if (showToast) {
+      showToast(message, "error", 3000);
+    } else {
+      alert(message);
+    }
     return false
   }
   if (!window.confirm("To'lov turini o'chirishni tasdiqlaysizmi?")) return false
@@ -247,7 +262,7 @@ export async function removePaymentType(item) {
     await deletePaymentType(id)
     return true
   } catch (err) {
-    handleError("To'lov turini o'chirishda xatolik", err)
+    handleError("To'lov turini o'chirishda xatolik", err, showToast)
     return false
   }
 }
@@ -269,10 +284,15 @@ export async function saveStaff(editingStaff, staffData) {
   }
 }
 
-export async function removeStaff(item) {
+export async function removeStaff(item, showToast = null) {
   const id = getId(item)
   if (!id) {
-    alert('Xodim ID topilmadi')
+    const message = 'Xodim ID topilmadi';
+    if (showToast) {
+      showToast(message, "error", 3000);
+    } else {
+      alert(message);
+    }
     return false
   }
   if (!window.confirm("Xodimni o'chirishni tasdiqlaysizmi?")) return false
@@ -280,17 +300,22 @@ export async function removeStaff(item) {
     await deleteStaff(id)
     return true
   } catch (err) {
-    handleError("Xodimni o'chirishda xatolik", err)
+    handleError("Xodimni o'chirishda xatolik", err, showToast)
     return false
   }
 }
 
 // ─── Staff Salary ─────────────────────────────────────────────────────────────
 
-export async function saveStaffSalary(staffItem, formData) {
+export async function saveStaffSalary(staffItem, formData, showToast = null) {
   const staffId = getId(staffItem)
   if (!staffId) {
-    alert('Xodim ID topilmadi')
+    const message = 'Xodim ID topilmadi';
+    if (showToast) {
+      showToast(message, "error", 3000);
+    } else {
+      alert(message);
+    }
     return false
   }
   try {
@@ -303,22 +328,27 @@ export async function saveStaffSalary(staffItem, formData) {
     await setStaffSalary(staffId, data)
     return true
   } catch (err) {
-    handleError('Maosh belgilashda xatolik', err)
+    handleError('Maosh belgilashda xatolik', err, showToast)
     return false
   }
 }
 
-export async function getStaffSalaryHistoryData(staffItem) {
+export async function getStaffSalaryHistoryData(staffItem, showToast = null) {
   const staffId = getId(staffItem)
   if (!staffId) {
-    alert('Xodim ID topilmadi')
+    const message = 'Xodim ID topilmadi';
+    if (showToast) {
+      showToast(message, "error", 3000);
+    } else {
+      alert(message);
+    }
     return []
   }
   try {
     const res = await getStaffSalaryHistory(staffId)
     return res.data.data || res.data || []
   } catch (err) {
-    handleError('Maosh tarixini yuklashda xatolik', err)
+    handleError('Maosh tarixini yuklashda xatolik', err, showToast)
     return []
   }
 }

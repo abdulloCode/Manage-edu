@@ -8,8 +8,9 @@ const ROLE_HOME = {
   teacher: "/teacher/dashboard",
   student: "/student/dashboard",
   staff: "/staff/dashboard",
-  supporter: "/admin/dashboard",
-  assistant: "/admin/dashboard",
+ supporter: "/supporter/dashboard", 
+  assistant: "/assistant/dashboard", 
+
 };
 
 // Helper function to normalize role to lowercase for case-insensitive matching
