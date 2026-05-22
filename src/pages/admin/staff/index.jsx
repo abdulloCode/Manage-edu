@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Search, Edit3, Trash2, DollarSign, X, AlertCircle, Clock, Users,
-  Shield, CheckSquare, Square,
+  Shield, CheckSquare, Square, ChevronDown,
 } from "lucide-react";
 import {
   getAllStaff, setStaffSalary, getStaffSalaryHistory,
-  createStaff, updateStaff, deleteStaff,
+  createStaff, updateStaff, deleteStaff, getStaffPages,
 } from "../../../api/staff";
 import PhoneInput from "../../../components/PhoneInput";
 import { useToast } from "../../../components/Toast";
@@ -14,14 +14,6 @@ import { useIsAdmin } from "../../../utils/permissions";
 import { useAuth } from "../../../context/AuthContext";
 
 const getId = (item) => item?._id || item?.id || null;
-
-const formatPhoneNumber = (phone) => {
-  if (!phone) return "";
-  const d = phone.replace(/\D/g, "");
-  if (d.startsWith("998") && d.length === 12)
-    return `+${d.slice(0,3)} ${d.slice(3,5)} ${d.slice(5,8)} ${d.slice(8,10)} ${d.slice(10,12)}`;
-  return phone;
-};
 
 const today     = () => new Date().toISOString().slice(0, 10);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -88,6 +80,7 @@ export default function StaffPage() {
 
   const [staffForm,         setStaffForm]         = useState(emptyStaffForm());
   const [salaryForm,        setSalaryForm]        = useState(emptySalaryForm());
+  const [availablePageNames, setAvailablePageNames] = useState([]);
 
   const loadStaff = async () => {
     setLoading(true);
@@ -102,6 +95,18 @@ export default function StaffPage() {
   };
 
   useEffect(() => { loadStaff(); }, []);
+
+  useEffect(() => {
+    getStaffPages()
+      .then((res) => {
+        const pages = res.data.pages || res.data.data?.pages || [];
+        setAvailablePageNames(pages.map((p) => p.name));
+      })
+      .catch(() => {
+        // fallback: let hardcoded list work
+        setAvailablePageNames(ALL_PAGES.map((p) => p.value));
+      });
+  }, []);
 
 
   // Rol o'zgarganda pagesToAccess ni avtomatik yangilash
@@ -124,6 +129,14 @@ export default function StaffPage() {
     );
   }, [staff, searchQuery]);
 
+  const displayPages = useMemo(() => {
+    const known = ALL_PAGES.filter((p) => availablePageNames.includes(p.value));
+    const unknown = availablePageNames
+      .filter((name) => !ALL_PAGES.find((p) => p.value === name))
+      .map((name) => ({ value: name, label: name, icon: "📄" }));
+    return [...known, ...unknown];
+  }, [availablePageNames]);
+
   const patchStaff  = (patch) => setStaffForm((f) => ({ ...f, ...patch }));
   const patchSalary = (patch) => setSalaryForm((f) => ({ ...f, ...patch }));
 
@@ -137,7 +150,7 @@ export default function StaffPage() {
   };
 
   const selectAllPages = () => {
-    patchStaff({ pagesToAccess: ALL_PAGES.map(p => p.value) });
+    patchStaff({ pagesToAccess: displayPages.map(p => p.value) });
   };
 
   const clearAllPages = () => {
@@ -160,6 +173,8 @@ export default function StaffPage() {
     try {
       const id = getId(selectedStaff);
       const payload = { ...staffForm };
+      if (payload.phone && payload.phone.length === 9) payload.phone = "+998" + payload.phone;
+      if (payload.monthlySalary) payload.monthlySalary = Number(payload.monthlySalary);
       if (id && !payload.password) delete payload.password;
       if (id) { await updateStaff(id, payload); }
       else    { await createStaff(payload); }
@@ -242,7 +257,7 @@ export default function StaffPage() {
     const s = staffMember.salary;
     setStaffForm({
       name:            staffMember.name,
-      phone:           staffMember.phone,
+      phone:           staffMember.phone?.replace(/^\+?998/, "") || "",
       password:        "",
       adminPassword:   "",
       role:            staffMember.role || "staff",
@@ -266,19 +281,6 @@ export default function StaffPage() {
     setSalaryFormErrors({});
     setShowSalaryModal(true);
   };
-
-  const Field = ({ label, error, children }) => (
-    <div>
-      <label className="block text-sm font-medium text-base-content/80 mb-1.5">{label}</label>
-      {children}
-      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-    </div>
-  );
-
-  const inputCls = (hasError) =>
-    `w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50 ${
-      hasError ? "border-red-400 bg-red-50" : "border-base-300 bg-base-100"
-    }`;
 
   return (
     <div className="min-h-screen bg-base-100 p-6">
@@ -365,7 +367,7 @@ export default function StaffPage() {
                           {s.pagesToAccess?.length > 0 ? (
                             <div className="flex flex-wrap gap-1 max-w-xs">
                               {s.pagesToAccess.slice(0, 3).map(page => {
-                                const p = ALL_PAGES.find(ap => ap.value === page);
+                                const p = displayPages.find(ap => ap.value === page);
                                 return (
                                   <span key={page} className="px-1.5 py-0.5 rounded text-xs bg-primary/10 text-primary font-medium">
                                     {p?.icon} {p?.label || page}
@@ -455,7 +457,7 @@ export default function StaffPage() {
               <Field label="Telefon *" error={staffFormErrors.phone}>
                 <PhoneInput
                   value={staffForm.phone || ""}
-                  onChange={(e) => patchStaff({ phone: e.target.value.replace(/\D/g, "") })}
+                  onChange={(e) => patchStaff({ phone: e.target.value })}
                   disabled={isSubmittingStaff}
                   placeholder="+998 90 123 45 67"
                   className={inputCls(staffFormErrors.phone)}
@@ -540,52 +542,90 @@ export default function StaffPage() {
                     <Shield className="w-4 h-4 text-primary" />
                     <p className="text-sm font-semibold text-base-content/80">Kirish huquqlari</p>
                     <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary">
-                      {staffForm.pagesToAccess?.length || 0} / {ALL_PAGES.length}
+                      {staffForm.pagesToAccess?.length || 0} / {displayPages.length}
                     </span>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={selectAllPages}
-                      disabled={isSubmittingStaff}
-                      className="text-xs text-primary hover:underline disabled:opacity-50"
-                    >
-                      Hammasini tanlash
-                    </button>
-                    <span className="text-base-content/30">|</span>
-                    <button
-                      type="button"
-                      onClick={clearAllPages}
-                      disabled={isSubmittingStaff}
-                      className="text-xs text-error hover:underline disabled:opacity-50"
-                    >
-                      Tozalash
-                    </button>
-                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {ALL_PAGES.map((page) => {
-                    const isChecked = staffForm.pagesToAccess?.includes(page.value) || false;
-                    return (
-                      <button
-                        key={page.value}
-                        type="button"
-                        disabled={isSubmittingStaff}
-                        onClick={() => togglePage(page.value)}
-                        className={`flex items-center gap-2 p-2.5 border-2 rounded-xl cursor-pointer transition-all text-left disabled:opacity-50 ${
-                          isChecked
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-base-300 hover:bg-base-200 text-base-content/70"
-                        }`}
-                      >
-                        {isChecked
-                          ? <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                          : <Square className="w-4 h-4 flex-shrink-0 opacity-40" />
-                        }
-                        <span className="text-sm">{page.icon} {page.label}</span>
-                      </button>
-                    );
-                  })}
+
+                <div className="dropdown dropdown-bottom w-full">
+                  <div
+                    tabIndex={0}
+                    role="button"
+                    className={`w-full flex items-center justify-between px-3 py-2.5 border-2 rounded-xl text-sm transition-all cursor-pointer ${
+                      staffForm.pagesToAccess?.length
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-base-300 bg-base-100 text-base-content/70"
+                    }`}
+                  >
+                    <div className="flex flex-wrap gap-1">
+                      {staffForm.pagesToAccess?.length ? (
+                        staffForm.pagesToAccess.map((val) => {
+                          const p = displayPages.find((dp) => dp.value === val);
+                          return (
+                            <span
+                              key={val}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-primary-content text-xs font-bold shadow-sm"
+                            >
+                              {p?.icon} {p?.label || val}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="text-sm">Sahifalarni tanlang...</span>
+                      )}
+                    </div>
+                    <ChevronDown className="w-4 h-4 flex-shrink-0 opacity-60" />
+                  </div>
+
+                  <div
+                    tabIndex={0}
+                    className="dropdown-content z-[1] w-full p-3 mt-1 bg-base-100 rounded-xl shadow-lg border border-base-200"
+                  >
+                    <div className="flex items-center justify-between mb-2 pb-2 border-b border-base-200">
+                      <span className="text-xs font-medium text-base-content/60">Mavjud sahifalar</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); selectAllPages(); }}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Hammasini tanlash
+                        </button>
+                        <span className="text-base-content/30">|</span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); clearAllPages(); }}
+                          className="text-xs text-error hover:underline"
+                        >
+                          Tozalash
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                      {displayPages.map((page) => {
+                        const isChecked = staffForm.pagesToAccess?.includes(page.value) || false;
+                        return (
+                          <label
+                            key={page.value}
+                            className={`flex items-center gap-2 p-2.5 border-2 rounded-xl cursor-pointer transition-all text-left ${
+                              isChecked
+                                ? "border-primary bg-primary text-primary-content shadow-md"
+                                : "border-base-300 hover:bg-base-200 text-base-content/70"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className={`checkbox checkbox-sm ${isChecked ? "checkbox-primary bg-white border-white" : "checkbox-primary"}`}
+                              checked={isChecked}
+                              onChange={() => togglePage(page.value)}
+                            />
+                            <span className="text-sm font-medium select-none">{page.icon} {page.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -778,6 +818,21 @@ export default function StaffPage() {
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
+
+const inputCls = (hasError) =>
+  `w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50 ${
+    hasError ? "border-red-400 bg-red-50" : "border-base-300 bg-base-100"
+  }`;
+
+function Field({ label, error, children }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-base-content/80 mb-1.5">{label}</label>
+      {children}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
 
 function Modal({ children, onClose, maxW = "max-w-md" }) {
   return (

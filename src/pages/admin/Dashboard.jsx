@@ -66,12 +66,18 @@ const getDk = (payment) => {
 };
 
 import { useAuth } from "../../context/AuthContext";
+import { useHasPage } from "../../utils/permissions";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { user } = useAuth();
   const isManager = user?.role?.toLowerCase()?.trim() === 'manager';
+  const hasStudents = useHasPage('students');
+  const hasTeachers = useHasPage('teachers');
+  const hasGroups = useHasPage('groups');
+  const hasPayments = useHasPage('payments');
+  const hasReports = useHasPage('reports');
   const [selectedDay, setSelectedDay] = useState("Sha");
   const [viewMode, setViewMode] = useState("room");
   const [activeSection, setActiveSection] = useState("schedule"); // schedule, absent, rating, payments
@@ -93,11 +99,12 @@ export default function Dashboard() {
   const [loadingGroupsStudents, setLoadingGroupsStudents] = useState(false);
 
   useEffect(() => {
+    const needStudents = hasStudents || hasGroups || hasPayments || hasReports;
     Promise.all([
-      getAllGroups(),
-      getAllTeachers(),
-      getStudents(),
-      getAllRooms(),
+      hasGroups ? getAllGroups() : Promise.resolve({ data: { data: [] } }),
+      hasTeachers ? getAllTeachers() : Promise.resolve({ data: { data: [] } }),
+      needStudents ? getStudents() : Promise.resolve({ data: { data: [] } }),
+      hasGroups ? getAllRooms() : Promise.resolve({ data: { data: [] } }),
     ]).then(([gRes, tRes, sRes, rRes]) => {
       const gData = gRes.data?.data ?? gRes.data ?? [];
       const tData = tRes.data?.data ?? tRes.data ?? [];
@@ -127,15 +134,18 @@ export default function Dashboard() {
         rooms: rData,
       });
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Bugungi attendance ma'lumotlarini yuklash
   useEffect(() => {
-    loadTodayAttendance();
+    if (hasGroups) loadTodayAttendance();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Attendance ma'lumotlarini avtomatik yangilash (har 5 daqiqada)
   useEffect(() => {
+    if (!hasGroups) return;
     const interval = setInterval(
       () => {
         loadTodayAttendance();
@@ -144,6 +154,7 @@ export default function Dashboard() {
     ); // 5 daqiqa
 
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadTodayAttendance = async () => {
@@ -216,7 +227,15 @@ export default function Dashboard() {
 
   // Asosiy jadval sectioniga qaytish
   const handleBackToSchedule = () => {
-    setActiveSection("schedule");
+    if (hasGroups) {
+      setActiveSection("schedule");
+    } else if (hasPayments) {
+      setActiveSection("payments");
+    } else if (hasReports) {
+      setActiveSection("rating");
+    } else if (hasGroups) {
+      setActiveSection("absent");
+    }
   };
 
   // Payment statistikasini hisoblash
@@ -286,11 +305,13 @@ export default function Dashboard() {
 
   // Baho ma'lumotlarini yuklash
   useEffect(() => {
-    loadRatings();
+    if (hasReports) loadRatings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Baho ma'lumotlarini avtomatik yangilash (har 10 daqiqada)
   useEffect(() => {
+    if (!hasReports) return;
     const interval = setInterval(
       () => {
         loadRatings();
@@ -299,6 +320,7 @@ export default function Dashboard() {
     ); // 10 daqiqa
 
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadRatings = async () => {
@@ -319,7 +341,8 @@ export default function Dashboard() {
 
   // Payment ma'lumotlarini yuklash
   useEffect(() => {
-    loadPayments();
+    if (hasPayments) loadPayments();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Guruhlar uchun o'quvchilar ma'lumotlarini yuklash
@@ -376,17 +399,17 @@ export default function Dashboard() {
 
   // Guruhlar yuklangandan keyin o'quvchilarni ham yuklash
   useEffect(() => {
-    if (data.groups.length > 0) {
+    if (hasGroups && data.groups.length > 0) {
       loadGroupsStudents();
     }
-  }, [data.groups]);
+  }, [hasGroups, data.groups]);
 
   // Kun o'zgarganda guruh o'quvchilarini yangilash
   useEffect(() => {
-    if (data.groups.length > 0) {
+    if (hasGroups && data.groups.length > 0) {
       loadGroupsStudents();
     }
-  }, [selectedDay]);
+  }, [hasGroups, selectedDay]);
 
   const loadPayments = async () => {
     setLoadingPayments(true);
@@ -505,112 +528,124 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 p-4 font-sans text-gray-900">
       {/* ── HEADER (Soddalashtirilgan) ── */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Dars jadvali</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {hasGroups ? "Dars jadvali" : "Boshqaruv paneli"}
+        </h1>
         <p className="text-sm text-gray-500 mt-1">CRM tizimi</p>
       </div>
 
       {/* ── STATS GRID (Faqat so'ralganlar) ── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-emerald-500/10">
-            <Users className="w-5 h-5 text-emerald-600" />
+        {hasStudents && (
+          <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-emerald-500/10">
+              <Users className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
+                O'quvchilar
+              </p>
+              <h4 className="text-lg font-bold text-gray-900">
+                {data.students.length}
+              </h4>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-              O'quvchilar
-            </p>
-            <h4 className="text-lg font-bold text-gray-900">
-              {data.students.length}
-            </h4>
-          </div>
-        </div>
+        )}
 
-        <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-blue-500/10">
-            <UserCheck className="w-5 h-5 text-blue-600" />
+        {hasTeachers && (
+          <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/10">
+              <UserCheck className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
+                O'qituvchilar
+              </p>
+              <h4 className="text-lg font-bold text-gray-900">
+                {data.teachers.length}
+              </h4>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-              O'qituvchilar
-            </p>
-            <h4 className="text-lg font-bold text-gray-900">
-              {data.teachers.length}
-            </h4>
-          </div>
-        </div>
+        )}
 
-        <div
-          className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "absent" ? "border-red-500 bg-red-50" : "border-gray-200 hover:bg-red-50"}`}
-          onClick={handleShowAbsent}
-        >
+        {hasGroups && (
           <div
-            className={`p-2 rounded-lg ${activeSection === "absent" ? "bg-red-600" : "bg-red-500/10"}`}
+            className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "absent" ? "border-red-500 bg-red-50" : "border-gray-200 hover:bg-red-50"}`}
+            onClick={handleShowAbsent}
           >
-            <UserMinus
-              className={`w-5 h-5 ${activeSection === "absent" ? "text-white" : "text-red-600"}`}
-            />
-          </div>
-          <div>
-            <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-              Kelmaganlar
-            </p>
-            <h4
-              className={`text-lg font-bold ${activeSection === "absent" ? "text-red-700" : "text-red-600"}`}
+            <div
+              className={`p-2 rounded-lg ${activeSection === "absent" ? "bg-red-600" : "bg-red-500/10"}`}
             >
-              {absentStudentsCount}
-            </h4>
+              <UserMinus
+                className={`w-5 h-5 ${activeSection === "absent" ? "text-white" : "text-red-600"}`}
+              />
+            </div>
+            <div>
+              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
+                Kelmaganlar
+              </p>
+              <h4
+                className={`text-lg font-bold ${activeSection === "absent" ? "text-red-700" : "text-red-600"}`}
+              >
+                {absentStudentsCount}
+              </h4>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div
-          className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "rating" ? "border-amber-500 bg-amber-50" : "border-gray-200 hover:bg-amber-50"}`}
-          onClick={handleShowRating}
-        >
+        {hasReports && (
           <div
-            className={`p-2 rounded-lg ${activeSection === "rating" ? "bg-amber-600" : "bg-amber-500/10"}`}
+            className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "rating" ? "border-amber-500 bg-amber-50" : "border-gray-200 hover:bg-amber-50"}`}
+            onClick={handleShowRating}
           >
-            <Trophy
-              className={`w-5 h-5 ${activeSection === "rating" ? "text-white" : "text-amber-600"}`}
-            />
-          </div>
-          <div>
-            <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-              Reyting
-            </p>
-            <h4
-              className={`text-lg font-bold ${activeSection === "rating" ? "text-amber-700" : "text-amber-600"}`}
+            <div
+              className={`p-2 rounded-lg ${activeSection === "rating" ? "bg-amber-600" : "bg-amber-500/10"}`}
             >
-              {studentRatings.length}
-            </h4>
+              <Trophy
+                className={`w-5 h-5 ${activeSection === "rating" ? "text-white" : "text-amber-600"}`}
+              />
+            </div>
+            <div>
+              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
+                Reyting
+              </p>
+              <h4
+                className={`text-lg font-bold ${activeSection === "rating" ? "text-amber-700" : "text-amber-600"}`}
+              >
+                {studentRatings.length}
+              </h4>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div
-          className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "payments" ? "border-emerald-500 bg-emerald-50" : "border-gray-200 hover:bg-emerald-50"}`}
-          onClick={handleShowPayments}
-        >
+        {hasPayments && (
           <div
-            className={`p-2 rounded-lg ${activeSection === "payments" ? "bg-emerald-600" : "bg-emerald-500/10"}`}
+            className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "payments" ? "border-emerald-500 bg-emerald-50" : "border-gray-200 hover:bg-emerald-50"}`}
+            onClick={handleShowPayments}
           >
-            <Wallet
-              className={`w-5 h-5 ${activeSection === "payments" ? "text-white" : "text-emerald-600"}`}
-            />
-          </div>
-          <div>
-            <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-              To'lovlar
-            </p>
-            <h4
-              className={`text-lg font-bold ${activeSection === "payments" ? "text-emerald-700" : "text-emerald-600"}`}
+            <div
+              className={`p-2 rounded-lg ${activeSection === "payments" ? "bg-emerald-600" : "bg-emerald-500/10"}`}
             >
-              {paymentsData.length}
-            </h4>
+              <Wallet
+                className={`w-5 h-5 ${activeSection === "payments" ? "text-white" : "text-emerald-600"}`}
+              />
+            </div>
+            <div>
+              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
+                To'lovlar
+              </p>
+              <h4
+                className={`text-lg font-bold ${activeSection === "payments" ? "text-emerald-700" : "text-emerald-600"}`}
+              >
+                {paymentsData.length}
+              </h4>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── CONTROLS (Faqat schedule section) ── */}
-      {activeSection === "schedule" && (
+      {activeSection === "schedule" && hasGroups && (
         <div className="bg-white border border-gray-200 p-3 rounded-xl flex justify-between items-center mb-4 shadow-sm">
           <div className="flex gap-1 flex-wrap">
             {DAYS.map((d) => (
@@ -649,6 +684,10 @@ export default function Dashboard() {
 
       {/* ── SECTION HEADER ── */}
       {activeSection !== "schedule" && (
+        (activeSection === "absent" && hasGroups) ||
+        (activeSection === "rating" && hasReports) ||
+        (activeSection === "payments" && hasPayments)
+      ) && (
         <div className="bg-white border border-gray-200 p-4 rounded-xl flex items-center justify-between mb-4 shadow-sm">
           <div className="flex items-center gap-3">
             <button
@@ -693,7 +732,7 @@ export default function Dashboard() {
       )}
 
       {/* ── SCHEDULE TABLE (Faqat schedule section) ── */}
-      {activeSection === "schedule" && (
+      {activeSection === "schedule" && hasGroups && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-separate border-spacing-0">
@@ -881,7 +920,7 @@ export default function Dashboard() {
       )}
 
       {/* ── ABSENT STUDENTS TABLE (Faqat absent section) ── */}
-      {activeSection === "absent" && (
+      {activeSection === "absent" && hasGroups && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
@@ -988,7 +1027,7 @@ export default function Dashboard() {
       )}
 
       {/* ── RATING TABLE (Faqat rating section) ── */}
-      {activeSection === "rating" && (
+      {activeSection === "rating" && hasReports && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
@@ -1144,7 +1183,7 @@ export default function Dashboard() {
       )}
 
       {/* ── PAYMENTS SECTION (Faqat payments section) ── */}
-      {activeSection === "payments" && (
+      {activeSection === "payments" && hasPayments && (
         <div className="space-y-6">
           {loadingPayments ? (
             <div className="flex justify-center py-20">

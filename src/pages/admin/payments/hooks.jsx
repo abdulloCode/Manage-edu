@@ -38,6 +38,7 @@ export function usePayments() {
   const [paymentTypes, setPaymentTypes] = useState([])
   const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(false)
+  const { showToast } = useToast()
 
   const [filters, setFilters] = useState({
     startDate: '',
@@ -53,11 +54,11 @@ export function usePayments() {
       const res = await getAllPayments(filters)
       setPayments(res.data.payments || res.data.data || res.data || [])
     } catch (err) {
-      handleError("To'lovlar yuklanmadi", err)
+      handleError("To'lovlar yuklanmadi", err, showToast)
     } finally {
       setLoading(false)
     }
-  }, [filters])
+  }, [filters, showToast])
 
   const loadPaymentTypes = useCallback(async () => {
     try {
@@ -65,12 +66,12 @@ export function usePayments() {
       setPaymentTypes(res.data.data || res.data || [])
     } catch (err) {
       if (err.response?.status === 403) {
-        handleError("Sizda to'lovlarni boshqarish uchun ruxsat yo'q", err)
+        handleError("Sizda to'lovlarni boshqarish uchun ruxsat yo'q", err, showToast)
       } else {
-        handleError("To'lov turlari yuklanmadi", err)
+        handleError("To'lov turlari yuklanmadi", err, showToast)
       }
     }
-  }, [])
+  }, [showToast])
 
   // ✅ useEffect lar hammasi useCallback lardan keyin
   useEffect(() => {
@@ -86,9 +87,9 @@ export function usePayments() {
       const res = await getAllStaff()
       setStaff(res.data.data || res.data || [])
     } catch (err) {
-      handleError("Xodimlarni yuklashda xatolik", err)
+      handleError("Xodimlarni yuklashda xatolik", err, showToast)
     }
-  }, [])
+  }, [showToast])
 
   return {
     payments,

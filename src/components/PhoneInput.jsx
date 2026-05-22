@@ -20,10 +20,10 @@ export default function PhoneInput({ value, onChange, className = '', placeholde
   }, [value])
 
   const handleChange = (e) => {
-    const digits = e.target.value.replace(/\D/g, '')
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 9)
     const formatted = formatPhone(digits)
     setDisplayValue(formatted)
-    onChange({ target: { value: '+998' + digits } })
+    onChange({ target: { value: digits } })
   }
 
   return (
@@ -40,6 +40,7 @@ export default function PhoneInput({ value, onChange, className = '', placeholde
         onChange={handleChange}
         required={required}
         disabled={disabled}
+        maxLength={14}
         autoComplete="tel"
       />
     </div>

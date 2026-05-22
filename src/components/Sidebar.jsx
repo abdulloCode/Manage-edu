@@ -43,7 +43,7 @@ const PAGES_MAP = {
   "payment-reports": { label: "To'lov hisobotlari", icon: ReceiptIcon },
 };
 let cachedPagesMap = null;
-const DYNAMIC_ROLES = ["staff", "manager", "receptionist"];
+const DYNAMIC_ROLES = ["manager", "supporter", "assistant", "staff"];
 
 function getDynamicLinks(role, pagesToAccess, pagesMap) {
   const pages = Array.isArray(pagesToAccess) ? pagesToAccess : [];
@@ -63,9 +63,6 @@ export default function Sidebar({ collapsed, onToggle, onNavClick }) {
   const navigate = useNavigate();
   const role = (user?.role ?? "student").toLowerCase().trim();
   const [pagesMap, setPagesMap] = useState(cachedPagesMap || PAGES_MAP);
-  console.log("user:", user);
-  console.log("role:", role);
-  console.log("pagesToAccess:", user?.pagesToAccess);
   useEffect(() => {
     if (cachedPagesMap) return;
     getStaffPages()
@@ -85,9 +82,13 @@ export default function Sidebar({ collapsed, onToggle, onNavClick }) {
       .catch(() => {});
   }, []);
 
-  const links = DYNAMIC_ROLES.includes(role)
-    ? getDynamicLinks(role, user?.pagesToAccess || [], pagesMap)
-    : NAV[role] ?? NAV.student;
+  const links = (() => {
+    if (role === "admin") return NAV.admin;
+    if (DYNAMIC_ROLES.includes(role)) {
+      return getDynamicLinks(role, user?.pagesToAccess || [], pagesMap);
+    }
+    return NAV[role] ?? NAV.student;
+  })();
 
   const handleLogout = async () => {
     try {

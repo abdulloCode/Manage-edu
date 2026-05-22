@@ -165,6 +165,8 @@ function CreateModal({ onClose, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState(null);
+  const [phoneDisplay, setPhoneDisplay] = useState("");
+  const [parentPhoneDisplay, setParentPhoneDisplay] = useState("");
 
   const handlePhoneChange = (e) => {
     const rawPhone = e.target.value.replace(/\D/g, "");
@@ -195,7 +197,7 @@ function CreateModal({ onClose, onCreated }) {
     const fetchGroups = async () => {
       if (!form.courseId) {
         setAvailableGroups([]);
-        setForm(prev => ({ ...prev, groupId: "" }));
+        setForm((prev) => ({ ...prev, groupId: "" }));
         return;
       }
 
@@ -203,19 +205,20 @@ function CreateModal({ onClose, onCreated }) {
         const res = await getAllGroups();
         const allGroups = res.data.data || res.data || [];
         // Filter groups that have the selected course
-       const courseGroups = allGroups.filter(g =>
-  g.courseId === form.courseId ||
-  g.course?._id === form.courseId ||
-  g.course?.id === form.courseId
-);
+        const courseGroups = allGroups.filter(
+          (g) =>
+            g.courseId === form.courseId ||
+            g.course?._id === form.courseId ||
+            g.course?.id === form.courseId,
+        );
         setAvailableGroups(courseGroups);
 
         // Auto-select the first available group
         if (courseGroups.length > 0) {
           const firstGroupId = courseGroups[0]._id || courseGroups[0].id;
-          setForm(prev => ({ ...prev, groupId: firstGroupId }));
+          setForm((prev) => ({ ...prev, groupId: firstGroupId }));
         } else {
-          setForm(prev => ({ ...prev, groupId: "" }));
+          setForm((prev) => ({ ...prev, groupId: "" }));
         }
       } catch (err) {
         console.error("Guruhlarni yuklashda xatolik:", err);
@@ -234,7 +237,8 @@ function CreateModal({ onClose, onCreated }) {
     if (!form.phone?.trim()) errors.phone = "Telefon raqamini kiriting";
     if (!form.password?.trim()) errors.password = "Parolni kiriting";
     if (!form.courseId) errors.courseId = "Kursni tanlang";
-    if (!form.parentPhone?.trim()) errors.parentPhone = "Ota-ona telefonini kiriting";
+    if (!form.parentPhone?.trim())
+      errors.parentPhone = "Ota-ona telefonini kiriting";
 
     if (Object.keys(errors).length > 0) {
       setError(errors[Object.keys(errors)[0]]);
@@ -314,27 +318,37 @@ function CreateModal({ onClose, onCreated }) {
               >
                 <option value="">Kursni tanlang...</option>
                 {courses.map((course) => {
-                  const courseColor = course.color || '#6366f1';
+                  const courseColor = course.color || "#6366f1";
                   return (
                     <option
                       key={course._id || course.id}
                       value={course._id || course.id}
-                      style={{ backgroundColor: courseColor + '20', color: courseColor }}
+                      style={{
+                        backgroundColor: courseColor + "20",
+                        color: courseColor,
+                      }}
                     >
                       {course.name || course.title}
                     </option>
                   );
                 })}
               </select>
-              {courses.find(c => (c._id || c.id) === form.courseId) && (
+              {courses.find((c) => (c._id || c.id) === form.courseId) && (
                 <div
                   className="text-xs px-2 py-1 rounded font-medium text-center"
                   style={{
-                    backgroundColor: (courses.find(c => (c._id || c.id) === form.courseId)?.color || '#6366f1') + '20',
-                    color: courses.find(c => (c._id || c.id) === form.courseId)?.color || '#6366f1'
+                    backgroundColor:
+                      (courses.find((c) => (c._id || c.id) === form.courseId)
+                        ?.color || "#6366f1") + "20",
+                    color:
+                      courses.find((c) => (c._id || c.id) === form.courseId)
+                        ?.color || "#6366f1",
                   }}
                 >
-                  {courses.find(c => (c._id || c.id) === form.courseId)?.name || courses.find(c => (c._id || c.id) === form.courseId)?.title}
+                  {courses.find((c) => (c._id || c.id) === form.courseId)
+                    ?.name ||
+                    courses.find((c) => (c._id || c.id) === form.courseId)
+                      ?.title}
                 </div>
               )}
             </div>
@@ -350,16 +364,19 @@ function CreateModal({ onClose, onCreated }) {
             >
               <option value="">Guruhni tanlang...</option>
               {availableGroups.map((group) => {
-                const courseColor = group.course?.color || '#6366f1';
+                const courseColor = group.course?.color || "#6366f1";
                 return (
                   <option
                     key={group._id || group.id}
                     value={group._id || group.id}
-                    style={{ backgroundColor: courseColor + '20', color: courseColor }}
+                    style={{
+                      backgroundColor: courseColor + "20",
+                      color: courseColor,
+                    }}
                   >
                     {group.name}
-                    {group.teacher ? ` - ${group.teacher.name}` : ""}
-                    [{group.currentStudents || 0}/${group.maxStudents}]
+                    {group.teacher ? ` - ${group.teacher.name}` : ""}[
+                    {group.currentStudents || 0}/${group.maxStudents}]
                   </option>
                 );
               })}
@@ -841,63 +858,61 @@ export default function StudentsPage() {
     fetchCourses();
   }, []);
 
-const fetchStudents = useCallback(async () => {
-  setLoading(true);
-  setError(null);
-  try {
-    const params = { page, limit: 50 };
-    if (debouncedSearch) params.search = debouncedSearch;
-    if (hasGroup !== "all") params.hasGroup = hasGroup === "true";
-    if (courseFilter !== "all") params.courseId = courseFilter;
+  const fetchStudents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = { page, limit: 50 };
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (hasGroup !== "all") params.hasGroup = hasGroup === "true";
+      if (courseFilter !== "all") params.courseId = courseFilter;
 
-    const { data } = await getStudents(params);
+      const { data } = await getStudents(params);
 
-    console.log("Raw API response:", data); // ← tekshirish uchun
+      console.log("Raw API response:", data); // ← tekshirish uchun
 
-    const studentsList = data.data || data.students || data || [];
+      const studentsList = data.data || data.students || data || [];
 
-    const studentsWithCourse = studentsList.map((s) => ({
-      ...s,
-      course: s.courseId
-        ? { _id: s.courseId, name: s.courseName, title: s.courseName }
-        : null,
-      group: s.groupId
-        ? { _id: s.groupId, name: s.groupName }
-        : null,
-    }));
-console.log("Student 0:", JSON.stringify(studentsList[7], null, 2));
-    setStudents(studentsWithCourse);
-    setPagination(
-      data.pagination || {
-        page: 1,
-        totalPages: 1,
-        total: studentsList.length,
-      }
+      const studentsWithCourse = studentsList.map((s) => ({
+        ...s,
+        course: s.courseId
+          ? { _id: s.courseId, name: s.courseName, title: s.courseName }
+          : null,
+        group: s.groupId ? { _id: s.groupId, name: s.groupName } : null,
+      }));
+      console.log("Student 0:", JSON.stringify(studentsList[7], null, 2));
+      setStudents(studentsWithCourse);
+      setPagination(
+        data.pagination || {
+          page: 1,
+          totalPages: 1,
+          total: studentsList.length,
+        },
+      );
+    } catch (err) {
+      console.error("fetchStudents xatolik:", err);
+      setError(err.response?.data?.error ?? "Failed to load students");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearch, hasGroup, courseFilter]); // courses yo'q
+  const handleCreated = () => {
+    fetchStudents();
+  };
+
+  const handleUpdated = (updated) => {
+    const updatedId = getId(updated);
+    setStudents((prev) =>
+      prev.map((s) => (getId(s) === updatedId ? { ...s, ...updated } : s)),
     );
-  } catch (err) {
-    console.error("fetchStudents xatolik:", err);
-    setError(err.response?.data?.error ?? "Failed to load students");
-  } finally {
-    setLoading(false);
-  }
-}, [page, debouncedSearch, hasGroup, courseFilter]); // courses yo'q
-const handleCreated = () => {
-  fetchStudents();
-};
-
-const handleUpdated = (updated) => {
-  const updatedId = getId(updated);
-  setStudents((prev) =>
-    prev.map((s) => (getId(s) === updatedId ? { ...s, ...updated } : s))
-  );
-};
+  };
   const handleDeleted = (id) => {
     setStudents((prev) => prev.filter((s) => getId(s) !== id));
   };
   useEffect(() => {
-  console.log("useEffect triggered");
-  fetchStudents();
-}, [fetchStudents]);
+    console.log("useEffect triggered");
+    fetchStudents();
+  }, [fetchStudents]);
   const handleAssigned = (updated) => {
     const updatedId = getId(updated);
     setStudents((prev) =>
@@ -995,12 +1010,15 @@ const handleUpdated = (updated) => {
         >
           <option value="all">Barcha kurslar</option>
           {courses.map((course) => {
-            const courseColor = course.color || '#6366f1'; // Default blue color
+            const courseColor = course.color || "#6366f1"; // Default blue color
             return (
               <option
                 key={course._id || course.id}
                 value={course._id || course.id}
-                style={{ backgroundColor: courseColor + '20', color: courseColor }}
+                style={{
+                  backgroundColor: courseColor + "20",
+                  color: courseColor,
+                }}
               >
                 {course.name || course.title}
               </option>
@@ -1063,20 +1081,25 @@ const handleUpdated = (updated) => {
                           <span
                             className="text-xs px-2 py-1 rounded-full font-medium"
                             style={{
-                              backgroundColor: (s.course?.color || '#6366f1') + '20',
-                              color: s.course?.color || '#6366f1',
-                              border: `1px solid ${s.course?.color || '#6366f1'}`
+                              backgroundColor:
+                                (s.course?.color || "#6366f1") + "20",
+                              color: s.course?.color || "#6366f1",
+                              border: `1px solid ${s.course?.color || "#6366f1"}`,
                             }}
                           >
-                            {s.courseName || s.course?.name || s.course?.title || "Noma'lum kurs"}
+                            {s.courseName ||
+                              s.course?.name ||
+                              s.course?.title ||
+                              "Noma'lum kurs"}
                           </span>
                         ) : s.group?.course ? (
                           <span
                             className="text-xs px-2 py-1 rounded-full font-medium"
                             style={{
-                              backgroundColor: (s.group.course?.color || '#6366f1') + '20',
-                              color: s.group.course?.color || '#6366f1',
-                              border: `1px solid ${s.group.course?.color || '#6366f1'}`
+                              backgroundColor:
+                                (s.group.course?.color || "#6366f1") + "20",
+                              color: s.group.course?.color || "#6366f1",
+                              border: `1px solid ${s.group.course?.color || "#6366f1"}`,
                             }}
                           >
                             {s.group.course.title || s.group.course.name}
