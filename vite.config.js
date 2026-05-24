@@ -9,6 +9,18 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: { '@': '/src' },
     },
+    build: {
+      chunkSizeWarningLimit: 800,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
+            'vendor-ui':     ['framer-motion', 'lucide-react'],
+            'vendor-http':   ['axios'],
+          },
+        },
+      },
+    },
     server: {
       proxy: {
         '/api': {

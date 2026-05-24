@@ -1,1180 +1,938 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import {
-  getStudents,
-  getStudentById,
-  createStudent,
-  updateStudent,
-  deleteStudent,
-  assignStudentGroup,
+  getStudents, createStudent, updateStudent,
+  deleteStudent, assignStudentGroup,
 } from "../../api/students";
 import { getAllGroups } from "../../api/groups";
 import { getAllCourses } from "../../api/courses";
 import { useDebounce } from "../../hooks/useDebounce";
 import PhoneInput from "../../components/PhoneInput";
+import {
+  Plus, Search, Eye, Edit3, Trash2, Users, X,
+  AlertCircle, UserPlus, BookOpen, Phone,
+} from "lucide-react";
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-const fmt = (n) => Number(n ?? 0).toLocaleString("ru-RU");
 const getId = (item) => item?._id || item?.id || null;
-const STATUS_BADGE = {
-  active: "badge-success",
-  inactive: "badge-warning",
-  suspended: "badge-error",
-  graduated: "badge-info",
-  deleted: "badge-ghost",
-};
+const fmt   = (n)    => Number(n ?? 0).toLocaleString("ru-RU");
 
+const STATUS_LABEL = {
+  active:    { label: "Faol",      cls: "bg-emerald-100 text-emerald-700" },
+  inactive:  { label: "Nofaol",    cls: "bg-yellow-100 text-yellow-700"   },
+  suspended: { label: "To'xtatilgan", cls: "bg-red-100 text-red-700"      },
+  graduated: { label: "Bitirgan",  cls: "bg-blue-100 text-blue-700"       },
+  deleted:   { label: "O'chirilgan", cls: "bg-gray-100 text-gray-500"     },
+};
 const STATUS_OPTIONS = ["active", "inactive", "suspended", "graduated"];
 
-function BalanceCell({ value }) {
-  const n = Number(value ?? 0);
+// ── helpers ───────────────────────────────────────────────────
+const inputCls = (err) =>
+  `w-full px-4 py-2.5 bg-white border-2 rounded-xl text-sm font-medium outline-none transition-all disabled:opacity-50 ${
+    err ? "border-red-400 bg-red-50" : "border-gray-200 focus:border-indigo-400"
+  }`;
+
+function Field({ label, error, children }) {
   return (
-    <span
-      className={`font-semibold text-sm ${n < 0 ? "text-error" : "text-success"}`}
-    >
-      {fmt(n)}
-    </span>
-  );
-}
-
-// ─── modals ─────────────────────────────────────────────────────────────────
-
-function Modal({ onClose, title, children, wide }) {
-  return (
-    <div className="modal modal-open">
-      <div className={`modal-box ${wide ? "max-w-2xl" : "max-w-md"}`}>
-        <button
-          onClick={onClose}
-          className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3"
-        >
-          ✕
-        </button>
-        <h3 className="font-bold text-lg mb-4">{title}</h3>
-        {children}
-      </div>
-      <div className="modal-backdrop" onClick={onClose} />
-    </div>
-  );
-}
-
-function DetailModal({ student, onClose }) {
-  return (
-    <Modal onClose={onClose} title="Student Details" wide>
-      <div className="grid grid-cols-2 gap-3">
-        <InfoRow label="Name" value={student.name} />
-        <InfoRow label="Phone" value={student.phone} />
-        <InfoRow label="Role" value={student.role} />
-        <InfoRow
-          label="Status"
-          value={
-            <span
-              className={`badge badge-sm ${STATUS_BADGE[student.status] ?? "badge-ghost"} capitalize`}
-            >
-              {student.status}
-            </span>
-          }
-        />
-        <InfoRow
-          label="Balance"
-          value={
-            <span
-              className={
-                Number(student.balance) < 0
-                  ? "text-error font-semibold"
-                  : "text-success font-semibold"
-              }
-            >
-              {fmt(student.balance)} UZS
-            </span>
-          }
-        />
-        <InfoRow
-          label="Expected Payments"
-          value={`${fmt(student.expectedPayments)} UZS`}
-        />
-        <InfoRow
-          label="Actual Payments"
-          value={`${fmt(student.actualPayments)} UZS`}
-        />
-      </div>
-
-      {/* Group Information */}
-      {student.group && (
-        <div className="mt-4">
-          <p className="text-xs text-base-content/50 uppercase tracking-wider mb-2">
-            Group Information
-          </p>
-          <div className="bg-base-200 rounded-lg p-3 space-y-2">
-            <InfoRow label="Group" value={student.group.name} />
-            {student.group.course && (
-              <InfoRow label="Course" value={student.group.course.title} />
-            )}
-            {student.group.teacher && (
-              <InfoRow label="Teacher" value={student.group.teacher.name} />
-            )}
-            <InfoRow
-              label="Students"
-              value={`${student.group.currentStudents}/${student.group.maxStudents}`}
-            />
-          </div>
-        </div>
-      )}
-
-      {student.unpaidMonths?.length > 0 && (
-        <div className="mt-4">
-          <p className="text-xs text-base-content/50 uppercase tracking-wider mb-2">
-            Unpaid Months
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {student.unpaidMonths.map((m) => (
-              <span
-                key={m}
-                className="badge badge-error badge-outline badge-sm"
-              >
-                {m}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function InfoRow({ label, value }) {
-  return (
-    <div className="bg-base-200 rounded-lg px-3 py-2">
-      <p className="text-xs text-base-content/50 mb-0.5">{label}</p>
-      <div className="text-sm font-medium">{value}</div>
-    </div>
-  );
-}
-
-function CreateModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    password: "",
-    courseId: "",
-    parentPhone: "",
-    groupId: "",
-  });
-  const [courses, setCourses] = useState([]);
-  const [availableGroups, setAvailableGroups] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
-  const [error, setError] = useState(null);
-  const [phoneDisplay, setPhoneDisplay] = useState("");
-  const [parentPhoneDisplay, setParentPhoneDisplay] = useState("");
-
-  const handlePhoneChange = (e) => {
-    const rawPhone = e.target.value.replace(/\D/g, "");
-    setForm({ ...form, phone: rawPhone });
-  };
-
-  const handleParentPhoneChange = (e) => {
-    const rawParentPhone = e.target.value.replace(/\D/g, "");
-    setForm({ ...form, parentPhone: rawParentPhone });
-  };
-
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        const res = await getAllCourses();
-        setCourses(res.data.data || res.data || []);
-      } catch (err) {
-        console.error("Kurslarni yuklashda xatolik:", err);
-      } finally {
-        setFetching(false);
-      }
-    };
-    fetchCourses();
-  }, []);
-
-  // Load available groups when course is selected
-  useEffect(() => {
-    const fetchGroups = async () => {
-      if (!form.courseId) {
-        setAvailableGroups([]);
-        setForm((prev) => ({ ...prev, groupId: "" }));
-        return;
-      }
-
-      try {
-        const res = await getAllGroups();
-        const allGroups = res.data.data || res.data || [];
-        // Filter groups that have the selected course
-        const courseGroups = allGroups.filter(
-          (g) =>
-            g.courseId === form.courseId ||
-            g.course?._id === form.courseId ||
-            g.course?.id === form.courseId,
-        );
-        setAvailableGroups(courseGroups);
-
-        // Auto-select the first available group
-        if (courseGroups.length > 0) {
-          const firstGroupId = courseGroups[0]._id || courseGroups[0].id;
-          setForm((prev) => ({ ...prev, groupId: firstGroupId }));
-        } else {
-          setForm((prev) => ({ ...prev, groupId: "" }));
-        }
-      } catch (err) {
-        console.error("Guruhlarni yuklashda xatolik:", err);
-      }
-    };
-    fetchGroups();
-  }, [form.courseId]);
-
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const errors = {};
-    if (!form.name?.trim()) errors.name = "Ismni kiriting";
-    if (!form.phone?.trim()) errors.phone = "Telefon raqamini kiriting";
-    if (!form.password?.trim()) errors.password = "Parolni kiriting";
-    if (!form.courseId) errors.courseId = "Kursni tanlang";
-    if (!form.parentPhone?.trim())
-      errors.parentPhone = "Ota-ona telefonini kiriting";
-
-    if (Object.keys(errors).length > 0) {
-      setError(errors[Object.keys(errors)[0]]);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await createStudent(form);
-
-      // If groupId is set, assign to group
-      if (form.groupId) {
-        await assignStudentGroup(data._id || data.id, form.groupId);
-      }
-
-      onCreated(data);
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.error ?? "Failed to create student");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Modal onClose={onClose} title="Yangi o'quvchi qo'shish" wide>
-      {error && (
-        <div className="alert alert-error py-2 text-sm mb-3">
-          <span>{error}</span>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <FormField label="To'liq ismi *" required>
-          <input
-            className="input input-bordered w-full"
-            value={form.name}
-            onChange={set("name")}
-            required
-            placeholder="Ali Karimov"
-          />
-        </FormField>
-        <FormField label="Telefon *" required>
-          <PhoneInput
-            value={phoneDisplay}
-            onChange={handlePhoneChange}
-            required
-            className="w-full border-2 border-transparent bg-slate-50 outline-none focus:border-violet-500 focus:bg-white"
-          />
-        </FormField>
-        <FormField label="Parol *" required>
-          <input
-            type="password"
-            className="input input-bordered w-full"
-            value={form.password}
-            onChange={set("password")}
-            required
-            placeholder="••••••••"
-          />
-        </FormField>
-        <FormField label="Kurs *" required>
-          {fetching ? (
-            <div className="flex items-center gap-2">
-              <span className="loading loading-spinner loading-sm"></span>
-              <span className="text-sm text-base-content/50">
-                Kurslar yuklanmoqda...
-              </span>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <select
-                className="select select-bordered w-full"
-                value={form.courseId}
-                onChange={set("courseId")}
-                required
-              >
-                <option value="">Kursni tanlang...</option>
-                {courses.map((course) => {
-                  const courseColor = course.color || "#6366f1";
-                  return (
-                    <option
-                      key={course._id || course.id}
-                      value={course._id || course.id}
-                      style={{
-                        backgroundColor: courseColor + "20",
-                        color: courseColor,
-                      }}
-                    >
-                      {course.name || course.title}
-                    </option>
-                  );
-                })}
-              </select>
-              {courses.find((c) => (c._id || c.id) === form.courseId) && (
-                <div
-                  className="text-xs px-2 py-1 rounded font-medium text-center"
-                  style={{
-                    backgroundColor:
-                      (courses.find((c) => (c._id || c.id) === form.courseId)
-                        ?.color || "#6366f1") + "20",
-                    color:
-                      courses.find((c) => (c._id || c.id) === form.courseId)
-                        ?.color || "#6366f1",
-                  }}
-                >
-                  {courses.find((c) => (c._id || c.id) === form.courseId)
-                    ?.name ||
-                    courses.find((c) => (c._id || c.id) === form.courseId)
-                      ?.title}
-                </div>
-              )}
-            </div>
-          )}
-        </FormField>
-
-        {availableGroups.length > 0 && (
-          <FormField label="Guruh (avtomatik tanlanadi)">
-            <select
-              className="select select-bordered w-full"
-              value={form.groupId}
-              onChange={(e) => setForm({ ...form, groupId: e.target.value })}
-            >
-              <option value="">Guruhni tanlang...</option>
-              {availableGroups.map((group) => {
-                const courseColor = group.course?.color || "#6366f1";
-                return (
-                  <option
-                    key={group._id || group.id}
-                    value={group._id || group.id}
-                    style={{
-                      backgroundColor: courseColor + "20",
-                      color: courseColor,
-                    }}
-                  >
-                    {group.name}
-                    {group.teacher ? ` - ${group.teacher.name}` : ""}[
-                    {group.currentStudents || 0}/${group.maxStudents}]
-                  </option>
-                );
-              })}
-            </select>
-          </FormField>
-        )}
-
-        <FormField label="Ota-ona telefoni *" required>
-          <PhoneInput
-            value={parentPhoneDisplay}
-            onChange={handleParentPhoneChange}
-            required
-            className="w-full border-2 border-transparent bg-slate-50 outline-none focus:border-violet-500 focus:bg-white"
-          />
-        </FormField>
-        <div className="modal-action mt-1">
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={onClose}
-          >
-            Bekor qilish
-          </button>
-          <button
-            type="submit"
-            className={`btn btn-primary btn-sm ${loading ? "loading" : ""}`}
-            disabled={loading}
-          >
-            Qo'shish
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function EditModal({ student, onClose, onUpdated }) {
-  const [form, setForm] = useState({
-    name: student.name ?? "",
-    phone: student.phone ?? "",
-    status: student.status ?? "active",
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handlePhoneChange = (e) => {
-    const rawPhone = e.target.value.replace(/\D/g, "");
-    setForm({ ...form, phone: rawPhone });
-  };
-
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await updateStudent(getId(student), form);
-      onUpdated(data);
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.error ?? "Failed to update student");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Modal onClose={onClose} title="O'quvchini tahrirlash" wide>
-      {error && (
-        <div className="alert alert-error py-2 text-sm mb-3">
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Student Info */}
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-base-content/70 mb-3">
-          Asosiy ma'lumotlar
-        </h3>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <FormField label="To'liq ismi">
-            <input
-              className="input input-bordered w-full"
-              value={form.name}
-              onChange={set("name")}
-              placeholder="Ali Karimov"
-            />
-          </FormField>
-          <FormField label="Telefon">
-            <PhoneInput
-              value={phoneDisplay}
-              onChange={handlePhoneChange}
-              className="w-full border-2 border-transparent bg-slate-50 outline-none focus:border-violet-500 focus:bg-white"
-            />
-          </FormField>
-          <FormField label="Holati">
-            <select
-              className="select select-bordered w-full"
-              value={form.status}
-              onChange={set("status")}
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s} className="capitalize">
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          <div className="modal-action mt-1">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={onClose}
-            >
-              Bekor qilish
-            </button>
-            <button
-              type="submit"
-              className={`btn btn-primary btn-sm ${loading ? "loading" : ""}`}
-              disabled={loading}
-            >
-              Saqlash
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Group & Course Info - Shows assignment button */}
-      <div className="mt-4 pt-4 border-t border-base-200">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-base-content/70">
-            Guruh va kurs ma'lumotlari
-          </h3>
-        </div>
-
-        {student.group ? (
-          <div className="bg-base-200 rounded-lg p-3 space-y-2">
-            <InfoRow label="Guruh" value={student.group.name} />
-            {student.group.course && (
-              <InfoRow label="Kurs" value={student.group.course.title} />
-            )}
-            {student.group.teacher && (
-              <InfoRow label="O'qituvchi" value={student.group.teacher.name} />
-            )}
-            <InfoRow
-              label="O'quvchilar"
-              value={`${student.group.currentStudents || 0}/${student.group.maxStudents}`}
-            />
-          </div>
-        ) : (
-          <div className="alert alert-info py-2 text-sm">
-            <span>O'quvchi hech qaysi guruhga biriktirilmagan</span>
-          </div>
-        )}
-
-        <p className="text-xs text-base-content/50 mt-2">
-          Guruhni o'zgartirish uchun quyidagi "Guruh" tugmasini bosing
-        </p>
-      </div>
-    </Modal>
-  );
-}
-
-function AssignGroupModal({ student, onClose, onAssigned }) {
-  const [groupId, setGroupId] = useState(
-    student.group?.id || student.group?._id || "",
-  );
-  const [groups, setGroups] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetchGroups = async () => {
-      setFetching(true);
-      try {
-        const { data } = await getAllGroups();
-        setGroups(data.data || data || []);
-      } catch (err) {
-        console.error("Failed to load groups:", err);
-      } finally {
-        setFetching(false);
-      }
-    };
-    fetchGroups();
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!groupId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await assignStudentGroup(getId(student), groupId);
-      // Include the selected group info in the response
-      const selectedGroup = groups.find((g) => (g._id || g.id) === groupId);
-      onAssigned({
-        ...data,
-        group: selectedGroup,
-      });
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.error ?? "Failed to assign group");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const selectedGroup = groups.find((g) => (g._id || g.id) === groupId);
-
-  return (
-    <Modal
-      onClose={onClose}
-      title={`Guruhga biriktirish — ${student.name}`}
-      wide
-    >
-      {error && (
-        <div className="alert alert-error py-2 text-sm mb-3">
-          <span>{error}</span>
-        </div>
-      )}
-
-      {fetching ? (
-        <div className="flex justify-center py-8">
-          <span className="loading loading-spinner loading-md text-primary" />
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <FormField label="Guruhni tanlang *" required>
-            <select
-              className="select select-bordered w-full"
-              value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
-              required
-            >
-              <option value="">Guruhni tanlang...</option>
-              {groups.map((g) => {
-                const studentCount =
-                  g.currentStudents || g.students?.length || 0;
-                const isFull = studentCount >= g.maxStudents;
-                return (
-                  <option
-                    key={g._id || g.id}
-                    value={g._id || g.id}
-                    disabled={isFull}
-                  >
-                    {g.name}{" "}
-                    {g.course ? `(${g.course.title || g.course.name})` : ""}{" "}
-                    {g.teacher ? `- ${g.teacher.name}` : ""} [{studentCount}/
-                    {g.maxStudents} ta]
-                    {isFull && " - TO'LA"}
-                  </option>
-                );
-              })}
-            </select>
-          </FormField>
-
-          {selectedGroup && (
-            <div className="bg-base-200 rounded-lg p-4 space-y-3">
-              <p className="text-sm font-semibold text-base-content/70">
-                Guruh haqida ma'lumot:
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <InfoRow label="Guruh nomi" value={selectedGroup.name} />
-                <InfoRow
-                  label="O'quvchilar"
-                  value={`${selectedGroup.currentStudents || selectedGroup.students?.length || 0}/${selectedGroup.maxStudents}`}
-                />
-                {selectedGroup.course && (
-                  <InfoRow
-                    label="Kurs"
-                    value={
-                      selectedGroup.course.title || selectedGroup.course.name
-                    }
-                  />
-                )}
-                {selectedGroup.teacher && (
-                  <InfoRow
-                    label="O'qituvchi"
-                    value={selectedGroup.teacher.name}
-                  />
-                )}
-                {selectedGroup.schedule?.days?.length > 0 && (
-                  <InfoRow
-                    label="Dars kunlari"
-                    value={`${selectedGroup.schedule.days.slice(0, 3).join(", ")}${selectedGroup.schedule.days.length > 3 ? "..." : ""}`}
-                  />
-                )}
-                {selectedGroup.schedule?.fromHour && (
-                  <InfoRow
-                    label="Vaqt"
-                    value={`${selectedGroup.schedule.fromHour} - ${selectedGroup.schedule.toHour}`}
-                  />
-                )}
-                <InfoRow
-                  label="Oylik to'lov"
-                  value={`${Number(selectedGroup.monthlyFeePerStudent || 0).toLocaleString()} UZS`}
-                />
-              </div>
-
-              {/* Show students in this group */}
-              {selectedGroup.students && selectedGroup.students.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-base-300">
-                  <p className="text-xs font-semibold text-base-content/70 mb-2">
-                    Guruhdagi o'quvchilar:
-                  </p>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {selectedGroup.students.map((s, i) => (
-                      <div
-                        key={s.id || s._id || i}
-                        className="text-xs py-1 px-2 bg-base-300 rounded"
-                      >
-                        {s.name} {s.phone ? `(${s.phone})` : ""}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="modal-action mt-1">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={onClose}
-            >
-              Bekor qilish
-            </button>
-            <button
-              type="submit"
-              className={`btn btn-primary btn-sm ${loading ? "loading" : ""}`}
-              disabled={loading || !groupId}
-            >
-              Biriktirish
-            </button>
-          </div>
-        </form>
-      )}
-    </Modal>
-  );
-}
-
-function DeleteConfirmModal({ student, onClose, onDeleted }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleDelete = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await deleteStudent(getId(student));
-      onDeleted(getId(student));
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.error ?? "Failed to delete student");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Modal onClose={onClose} title="Delete Student">
-      {error && (
-        <div className="alert alert-error py-2 text-sm mb-3">
-          <span>{error}</span>
-        </div>
-      )}
-      <p className="text-sm text-base-content/70 mb-1">
-        Are you sure you want to delete{" "}
-        <span className="font-semibold text-base-content">{student.name}</span>?
-      </p>
-      <p className="text-xs text-base-content/40 mb-4">
-        This is a soft delete — the student will be excluded from all future
-        queries.
-      </p>
-      <div className="modal-action">
-        <button className="btn btn-ghost btn-sm" onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          className={`btn btn-error btn-sm ${loading ? "loading" : ""}`}
-          onClick={handleDelete}
-          disabled={loading}
-        >
-          Delete
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-function FormField({ label, children, required }) {
-  return (
-    <div className="form-control">
-      <label className="label pb-1">
-        <span className="label-text font-medium">
-          {label}
-          {required && <span className="text-error ml-0.5">*</span>}
-        </span>
+    <div>
+      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">
+        {label}
       </label>
+      {children}
+      {error && (
+        <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" />{error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Modal({ children, onClose, maxW = "max-w-lg" }) {
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={onClose} />
+      <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className={`bg-white rounded-2xl shadow-2xl w-full ${maxW} pointer-events-auto flex flex-col max-h-[90vh] animate-[modalIn_0.2s_ease-out]`}
+          style={{ animation: "modalIn 0.18s cubic-bezier(0.22,1,0.36,1)" }}
+        >
+          {children}
+        </div>
+      </div>
+      <style>{`@keyframes modalIn{from{opacity:0;transform:scale(0.96) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+    </>
+  );
+}
+
+function ModalHead({ icon, title, sub, onClose, iconBg = "bg-indigo-100", iconColor = "text-indigo-600" }) {
+  return (
+    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+      <div className="flex items-center gap-3">
+        <div className={`w-9 h-9 rounded-xl ${iconBg} flex items-center justify-center`}>
+          <span className={iconColor}>{icon}</span>
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-gray-900">{title}</h2>
+          {sub && <p className="text-xs text-gray-400">{sub}</p>}
+        </div>
+      </div>
+      <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+        <X className="w-4 h-4 text-gray-400" />
+      </button>
+    </div>
+  );
+}
+
+function ModalFoot({ children }) {
+  return (
+    <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex gap-3 flex-shrink-0 rounded-b-2xl">
       {children}
     </div>
   );
 }
 
-// ─── pagination ──────────────────────────────────────────────────────────────
+function Btn({ onClick, disabled, variant = "primary", children, type = "button" }) {
+  const cls = {
+    primary: "bg-indigo-600 hover:bg-indigo-700 text-white",
+    ghost:   "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50",
+    danger:  "bg-red-600 hover:bg-red-700 text-white",
+    green:   "bg-emerald-600 hover:bg-emerald-700 text-white",
+  }[variant];
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${cls}`}
+    >
+      {children}
+    </button>
+  );
+}
 
+function Spinner({ color = "border-indigo-500" }) {
+  return <div className={`w-4 h-4 border-2 ${color} border-t-transparent rounded-full animate-spin`} />;
+}
+
+// ── CreateModal ───────────────────────────────────────────────
+function CreateModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({
+    name: "", phone: "", password: "", parentPhone: "", courseId: "", groupId: "",
+  });
+  const [courses, setCourses]         = useState([]);
+  const [groups, setGroups]           = useState([]);
+  const [filteredGroups, setFilteredGroups] = useState([]);
+  const [loading, setLoading]         = useState(false);
+  const [fetching, setFetching]       = useState(true);
+  const [error, setError]             = useState("");
+
+  const patch = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    Promise.all([getAllCourses(), getAllGroups()])
+      .then(([cRes, gRes]) => {
+        setCourses(cRes.data?.data || cRes.data || []);
+        setGroups(gRes.data?.data  || gRes.data  || []);
+      })
+      .catch(() => setError("Ma'lumotlarni yuklashda xatolik"))
+      .finally(() => setFetching(false));
+  }, []);
+
+  // Course o'zgarganda guruhlarni filter qil
+  useEffect(() => {
+    if (!form.courseId) { setFilteredGroups([]); patch("groupId")(""); return; }
+    const cid = form.courseId;
+    const fg = groups.filter((g) =>
+      g.courseId === cid ||
+      (g.course && (g.course._id === cid || g.course.id === cid))
+    );
+    setFilteredGroups(fg);
+    patch("groupId")(fg.length > 0 ? getId(fg[0]) : "");
+  }, [form.courseId, groups]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim())        return setError("Ism kiritilishi shart");
+    if (!form.phone.trim())       return setError("Telefon kiritilishi shart");
+    if (!form.password.trim())    return setError("Parol kiritilishi shart");
+    if (!form.courseId)           return setError("Kurs tanlanishi shart");
+    if (!form.parentPhone.trim()) return setError("Ota-ona telefoni kiritilishi shart");
+
+    setLoading(true); setError("");
+    try {
+      const payload = {
+        name:        form.name.trim(),
+        phone:       form.phone.length === 9 ? "+998" + form.phone : form.phone,
+        password:    form.password,
+        parentPhone: form.parentPhone.length === 9 ? "+998" + form.parentPhone : form.parentPhone,
+        courseId:    form.courseId,
+      };
+      const { data } = await createStudent(payload);
+      const studentId = getId(data?.student || data);
+
+      if (form.groupId && studentId) {
+        await assignStudentGroup(studentId, form.groupId);
+      }
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || err.response?.data?.error || "Xatolik yuz berdi");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead
+        icon={<UserPlus className="w-5 h-5" />}
+        title="Yangi o'quvchi"
+        sub="Ma'lumotlarni to'ldiring"
+        onClose={onClose}
+      />
+
+      {error && (
+        <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-600">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+        <Field label="To'liq ism *">
+          <input
+            className={inputCls(false)}
+            value={form.name}
+            onChange={(e) => patch("name")(e.target.value)}
+            placeholder="Ali Karimov"
+            autoFocus
+          />
+        </Field>
+
+        <Field label="Telefon *">
+          <PhoneInput
+            value={form.phone}
+            onChange={(e) => patch("phone")(e.target.value)}
+            className="border-gray-200 focus:border-indigo-400"
+          />
+        </Field>
+
+        <Field label="Parol *">
+          <input
+            type="password"
+            className={inputCls(false)}
+            value={form.password}
+            onChange={(e) => patch("password")(e.target.value)}
+            placeholder="••••••••"
+          />
+        </Field>
+
+        <Field label="Ota-ona telefoni *">
+          <PhoneInput
+            value={form.parentPhone}
+            onChange={(e) => patch("parentPhone")(e.target.value)}
+            className="border-gray-200 focus:border-indigo-400"
+          />
+        </Field>
+
+        <Field label="Kurs *">
+          {fetching ? (
+            <div className="flex items-center gap-2 py-2">
+              <Spinner /><span className="text-sm text-gray-400">Yuklanmoqda...</span>
+            </div>
+          ) : (
+            <select
+              className={inputCls(false)}
+              value={form.courseId}
+              onChange={(e) => patch("courseId")(e.target.value)}
+            >
+              <option value="">Kurs tanlang...</option>
+              {courses.map((c) => (
+                <option key={getId(c)} value={getId(c)}>
+                  {c.name || c.title}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+
+        {filteredGroups.length > 0 && (
+          <Field label="Guruh (ixtiyoriy)">
+            <select
+              className={inputCls(false)}
+              value={form.groupId}
+              onChange={(e) => patch("groupId")(e.target.value)}
+            >
+              <option value="">Guruh tanlang...</option>
+              {filteredGroups.map((g) => {
+                const cnt = g.currentStudents || g.students?.length || 0;
+                const full = cnt >= g.maxStudents;
+                return (
+                  <option key={getId(g)} value={getId(g)} disabled={full}>
+                    {g.name} — {g.teacher?.name || "Ustoz yo'q"} [{cnt}/{g.maxStudents}]{full ? " (To'la)" : ""}
+                  </option>
+                );
+              })}
+            </select>
+          </Field>
+        )}
+
+        {form.courseId && !fetching && filteredGroups.length === 0 && (
+          <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+            Bu kurs uchun mavjud guruh yo'q
+          </div>
+        )}
+      </form>
+
+      <ModalFoot>
+        <Btn variant="ghost" onClick={onClose} disabled={loading}>Bekor qilish</Btn>
+        <Btn variant="primary" onClick={handleSubmit} disabled={loading || fetching} type="submit">
+          {loading ? <><Spinner color="border-white" />Saqlanmoqda...</> : "Qo'shish"}
+        </Btn>
+      </ModalFoot>
+    </Modal>
+  );
+}
+
+// ── EditModal ─────────────────────────────────────────────────
+function EditModal({ student, onClose, onUpdated }) {
+  const [form, setForm] = useState({
+    name:   student.name   ?? "",
+    phone:  (student.phone ?? "").replace(/^\+?998/, ""),
+    status: student.status ?? "active",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  const patch = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault();
+    if (!form.name.trim()) return setError("Ism kiritilishi shart");
+    setLoading(true); setError("");
+    try {
+      const payload = {
+        name:   form.name.trim(),
+        phone:  form.phone.length === 9 ? "+998" + form.phone : form.phone,
+        status: form.status,
+      };
+      const { data } = await updateStudent(getId(student), payload);
+      onUpdated(data?.student || data);
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || "Xatolik yuz berdi");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead
+        icon={<Edit3 className="w-5 h-5" />}
+        title="O'quvchini tahrirlash"
+        sub={student.name}
+        onClose={onClose}
+        iconBg="bg-amber-100"
+        iconColor="text-amber-600"
+      />
+
+      {error && (
+        <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-600">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+        </div>
+      )}
+
+      <div className="p-6 space-y-4 overflow-y-auto flex-1">
+        <Field label="To'liq ism">
+          <input
+            className={inputCls(false)}
+            value={form.name}
+            onChange={(e) => patch("name")(e.target.value)}
+            placeholder="Ali Karimov"
+          />
+        </Field>
+
+        <Field label="Telefon">
+          <PhoneInput
+            value={form.phone}
+            onChange={(e) => patch("phone")(e.target.value)}
+            className="border-gray-200 focus:border-indigo-400"
+          />
+        </Field>
+
+        <Field label="Holat">
+          <select
+            className={inputCls(false)}
+            value={form.status}
+            onChange={(e) => patch("status")(e.target.value)}
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>{STATUS_LABEL[s]?.label || s}</option>
+            ))}
+          </select>
+        </Field>
+
+        {/* Guruh ma'lumotlari */}
+        {student.group && (
+          <div className="pt-3 border-t border-gray-100">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Hozirgi guruh</p>
+            <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 space-y-1">
+              <p><span className="text-gray-400 text-xs">Guruh:</span> {student.group?.name || "—"}</p>
+              {student.group?.course && <p><span className="text-gray-400 text-xs">Kurs:</span> {student.group.course?.title || student.group.course?.name}</p>}
+              {student.group?.teacher && <p><span className="text-gray-400 text-xs">Ustoz:</span> {student.group.teacher?.name}</p>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <ModalFoot>
+        <Btn variant="ghost" onClick={onClose} disabled={loading}>Bekor qilish</Btn>
+        <Btn variant="primary" onClick={handleSubmit} disabled={loading}>
+          {loading ? <><Spinner color="border-white" />Saqlanmoqda...</> : "Saqlash"}
+        </Btn>
+      </ModalFoot>
+    </Modal>
+  );
+}
+
+// ── AssignGroupModal ──────────────────────────────────────────
+function AssignGroupModal({ student, courses, onClose, onAssigned }) {
+  const [courseId,  setCourseId]  = useState(
+    student.courseId || getId(student.group?.course) || ""
+  );
+  const [groupId,   setGroupId]   = useState(
+    getId(student.group) || ""
+  );
+  const [allGroups,      setAllGroups]      = useState([]);
+  const [filteredGroups, setFilteredGroups] = useState([]);
+  const [loading,  setLoading]    = useState(false);
+  const [fetching, setFetching]   = useState(true);
+  const [error,    setError]      = useState("");
+
+  useEffect(() => {
+    getAllGroups()
+      .then((res) => {
+        const g = res.data?.data || res.data || [];
+        setAllGroups(g);
+      })
+      .catch(() => setError("Guruhlarni yuklashda xatolik"))
+      .finally(() => setFetching(false));
+  }, []);
+
+  useEffect(() => {
+    if (!courseId) { setFilteredGroups(allGroups); return; }
+    setFilteredGroups(
+      allGroups.filter((g) =>
+        g.courseId === courseId ||
+        (g.course && (g.course._id === courseId || g.course.id === courseId))
+      )
+    );
+    setGroupId("");
+  }, [courseId, allGroups]);
+
+  const selectedGroup = allGroups.find((g) => getId(g) === groupId);
+
+  const handleSubmit = async () => {
+    if (!groupId) return setError("Guruh tanlanishi shart");
+    setLoading(true); setError("");
+    try {
+      await assignStudentGroup(getId(student), groupId);
+      onAssigned();
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || err.response?.data?.error || "Xatolik yuz berdi");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead
+        icon={<Users className="w-5 h-5" />}
+        title="Guruhga biriktirish"
+        sub={student.name}
+        onClose={onClose}
+        iconBg="bg-green-100"
+        iconColor="text-green-600"
+      />
+
+      {error && (
+        <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-600">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+        </div>
+      )}
+
+      {fetching ? (
+        <div className="flex justify-center py-16"><Spinner /></div>
+      ) : (
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Kurs filter */}
+          <Field label="Kurs bo'yicha filter">
+            <select
+              className={inputCls(false)}
+              value={courseId}
+              onChange={(e) => setCourseId(e.target.value)}
+            >
+              <option value="">Barcha kurslar</option>
+              {courses.map((c) => (
+                <option key={getId(c)} value={getId(c)}>{c.name || c.title}</option>
+              ))}
+            </select>
+          </Field>
+
+          {/* Guruh tanlash */}
+          <Field label="Guruh *">
+            <select
+              className={inputCls(false)}
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+            >
+              <option value="">Guruh tanlang...</option>
+              {filteredGroups.map((g) => {
+                const cnt  = g.currentStudents || g.students?.length || 0;
+                const full = cnt >= g.maxStudents;
+                return (
+                  <option key={getId(g)} value={getId(g)} disabled={full}>
+                    {g.name} — {g.teacher?.name || "Ustoz yo'q"} [{cnt}/{g.maxStudents}]{full ? " ✗ To'la" : ""}
+                  </option>
+                );
+              })}
+            </select>
+          </Field>
+
+          {/* Tanlangan guruh haqida */}
+          {selectedGroup && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2 text-sm">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Guruh ma'lumotlari</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  ["Nomi",        selectedGroup.name],
+                  ["Ustoz",       selectedGroup.teacher?.name || "—"],
+                  ["Kurs",        selectedGroup.course?.title || selectedGroup.course?.name || "—"],
+                  ["O'quvchilar", `${selectedGroup.currentStudents || 0}/${selectedGroup.maxStudents}`],
+                  ["Kunlar",      selectedGroup.schedule?.days?.join(", ") || "—"],
+                  ["Vaqt",        selectedGroup.schedule?.fromHour ? `${selectedGroup.schedule.fromHour}–${selectedGroup.schedule.toHour}` : "—"],
+                  ["Oylik to'lov", `${Number(selectedGroup.monthlyFeePerStudent || 0).toLocaleString()} UZS`],
+                ].map(([l, v]) => (
+                  <div key={l} className="bg-white rounded-lg px-3 py-2">
+                    <p className="text-gray-400 mb-0.5">{l}</p>
+                    <p className="font-semibold text-gray-800">{v}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <ModalFoot>
+        <Btn variant="ghost" onClick={onClose} disabled={loading}>Bekor qilish</Btn>
+        <Btn variant="green" onClick={handleSubmit} disabled={loading || !groupId}>
+          {loading ? <><Spinner color="border-white" />Biriktirilmoqda...</> : "Biriktirish"}
+        </Btn>
+      </ModalFoot>
+    </Modal>
+  );
+}
+
+// ── DetailModal ───────────────────────────────────────────────
+function DetailModal({ student, courses, onClose }) {
+  const course = courses.find((c) => getId(c) === student.courseId);
+  const balance = Number(student.balance ?? 0);
+
+  return (
+    <Modal onClose={onClose}>
+      <ModalHead
+        icon={<Eye className="w-5 h-5" />}
+        title="O'quvchi ma'lumotlari"
+        sub={student.name}
+        onClose={onClose}
+        iconBg="bg-blue-100"
+        iconColor="text-blue-600"
+      />
+
+      <div className="p-6 space-y-4 overflow-y-auto flex-1 text-sm">
+        {/* Avatar */}
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-lg">
+            {student.name?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "??"}
+          </div>
+          <div>
+            <p className="font-bold text-gray-900 text-base">{student.name}</p>
+            <p className="text-gray-500 text-xs font-mono">{student.phone}</p>
+            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_LABEL[student.status]?.cls || "bg-gray-100 text-gray-600"}`}>
+              {STATUS_LABEL[student.status]?.label || student.status}
+            </span>
+          </div>
+        </div>
+
+        {/* Info grid */}
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            ["Balans", <span className={`font-bold ${balance < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(balance)} UZS</span>],
+            ["Ota-ona tel.", student.parentPhone || "—"],
+            ["Kurs", course?.name || student.courseName || "—"],
+            ["Qo'shilgan", student.createdAt ? new Date(student.createdAt).toLocaleDateString("uz-UZ") : "—"],
+          ].map(([l, v]) => (
+            <div key={l} className="bg-gray-50 rounded-xl px-3 py-2.5">
+              <p className="text-xs text-gray-400 mb-0.5">{l}</p>
+              <div className="text-sm font-medium text-gray-800">{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Guruh */}
+        {student.group && (
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Guruh</p>
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-1.5 text-xs">
+              {[
+                ["Guruh", student.group.name],
+                ["Kurs",  student.group.course?.title || student.group.course?.name || "—"],
+                ["Ustoz", student.group.teacher?.name || "—"],
+                ["O'quvchilar", `${student.group.currentStudents || 0}/${student.group.maxStudents}`],
+              ].map(([l, v]) => (
+                <div key={l} className="flex items-center justify-between">
+                  <span className="text-gray-500">{l}:</span>
+                  <span className="font-semibold text-gray-800">{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* To'lanmagan oylar */}
+        {student.unpaidMonths?.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">To'lanmagan oylar</p>
+            <div className="flex flex-wrap gap-1.5">
+              {student.unpaidMonths.map((m) => (
+                <span key={m} className="px-2 py-1 bg-red-100 text-red-600 text-xs font-semibold rounded-lg">{m}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <ModalFoot>
+        <Btn variant="ghost" onClick={onClose}>Yopish</Btn>
+      </ModalFoot>
+    </Modal>
+  );
+}
+
+// ── DeleteModal ───────────────────────────────────────────────
+function DeleteModal({ student, onClose, onDeleted }) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  const handleDelete = async () => {
+    setLoading(true);
+    try {
+      await deleteStudent(getId(student));
+      onDeleted(getId(student));
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || "Xatolik yuz berdi");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} maxW="max-w-sm">
+      <ModalHead
+        icon={<Trash2 className="w-5 h-5" />}
+        title="O'chirishni tasdiqlang"
+        onClose={onClose}
+        iconBg="bg-red-100"
+        iconColor="text-red-600"
+      />
+      <div className="p-6">
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">{error}</div>
+        )}
+        <p className="text-sm text-gray-600">
+          <span className="font-semibold text-gray-900">{student.name}</span>ni o'chirishni tasdiqlaysizmi?
+        </p>
+        <p className="text-xs text-gray-400 mt-1">Bu amal qaytarilmaydi.</p>
+      </div>
+      <ModalFoot>
+        <Btn variant="ghost" onClick={onClose} disabled={loading}>Bekor</Btn>
+        <Btn variant="danger" onClick={handleDelete} disabled={loading}>
+          {loading ? <><Spinner color="border-white" />O'chirilmoqda...</> : "O'chirish"}
+        </Btn>
+      </ModalFoot>
+    </Modal>
+  );
+}
+
+// ── Pagination ─────────────────────────────────────────────────
 function Pagination({ page, totalPages, onChange }) {
   if (totalPages <= 1) return null;
-  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   return (
-    <div className="join">
+    <div className="flex items-center gap-1">
       <button
-        className="join-item btn btn-sm"
-        disabled={page === 1}
-        onClick={() => onChange(page - 1)}
-      >
-        «
-      </button>
-      {pages.map((p) => (
+        onClick={() => onChange(page - 1)} disabled={page === 1}
+        className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+      >←</button>
+      {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map((p) => (
         <button
-          key={p}
-          className={`join-item btn btn-sm ${p === page ? "btn-active" : ""}`}
-          onClick={() => onChange(p)}
-        >
-          {p}
-        </button>
+          key={p} onClick={() => onChange(p)}
+          className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${p === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 hover:bg-gray-50"}`}
+        >{p}</button>
       ))}
       <button
-        className="join-item btn btn-sm"
-        disabled={page === totalPages}
-        onClick={() => onChange(page + 1)}
-      >
-        »
-      </button>
+        onClick={() => onChange(page + 1)} disabled={page === totalPages}
+        className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+      >→</button>
     </div>
   );
 }
 
-// ─── main page ───────────────────────────────────────────────────────────────
-
+// ── MAIN PAGE ─────────────────────────────────────────────────
 export default function StudentsPage() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
-  const isManager = user?.role === "manager";
-  const canCreate = isAdmin || isManager;
+  const canEdit = user?.role === "admin" || user?.role === "manager";
 
-  const [students, setStudents] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 1,
-  });
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [hasGroup, setHasGroup] = useState("all");
+  const [students,   setStudents]   = useState([]);
+  const [courses,    setCourses]    = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [page,       setPage]       = useState(1);
+  const [search,     setSearch]     = useState("");
+  const [hasGroup,   setHasGroup]   = useState("all");
   const [courseFilter, setCourseFilter] = useState("all");
-  const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [modal, setModal] = useState(null); // { type, student? }
+  const [loading,    setLoading]    = useState(false);
+  const [modal,      setModal]      = useState(null);
 
   const debouncedSearch = useDebounce(search, 400);
 
-  // Load courses for filtering
   useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        const res = await getAllCourses();
-        setCourses(res.data.data || res.data || []);
-      } catch (err) {
-        console.error("Kurslarni yuklashda xatolik:", err);
-      }
-    };
-    fetchCourses();
+    getAllCourses()
+      .then((res) => setCourses(res.data?.data || res.data || []))
+      .catch(() => {});
   }, []);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const params = { page, limit: 50 };
-      if (debouncedSearch) params.search = debouncedSearch;
+      if (debouncedSearch) params.search    = debouncedSearch;
       if (hasGroup !== "all") params.hasGroup = hasGroup === "true";
       if (courseFilter !== "all") params.courseId = courseFilter;
 
       const { data } = await getStudents(params);
-
-      console.log("Raw API response:", data); // ← tekshirish uchun
-
-      const studentsList = data.data || data.students || data || [];
-
-      const studentsWithCourse = studentsList.map((s) => ({
-        ...s,
-        course: s.courseId
-          ? { _id: s.courseId, name: s.courseName, title: s.courseName }
-          : null,
-        group: s.groupId ? { _id: s.groupId, name: s.groupName } : null,
-      }));
-      console.log("Student 0:", JSON.stringify(studentsList[7], null, 2));
-      setStudents(studentsWithCourse);
-      setPagination(
-        data.pagination || {
-          page: 1,
-          totalPages: 1,
-          total: studentsList.length,
-        },
-      );
-    } catch (err) {
-      console.error("fetchStudents xatolik:", err);
-      setError(err.response?.data?.error ?? "Failed to load students");
+      const list = data?.data || data?.students || data || [];
+      setStudents(list);
+      setPagination(data?.pagination || { page: 1, totalPages: 1, total: list.length });
+    } catch {
+      setStudents([]);
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, hasGroup, courseFilter]); // courses yo'q
-  const handleCreated = () => {
-    fetchStudents();
-  };
+  }, [page, debouncedSearch, hasGroup, courseFilter]);
 
+  useEffect(() => { fetchStudents(); }, [fetchStudents]);
+
+  const open  = (type, student = null) => setModal({ type, student });
+  const close = () => setModal(null);
+
+  const handleDeleted = (id) => setStudents((prev) => prev.filter((s) => getId(s) !== id));
   const handleUpdated = (updated) => {
-    const updatedId = getId(updated);
-    setStudents((prev) =>
-      prev.map((s) => (getId(s) === updatedId ? { ...s, ...updated } : s)),
-    );
+    const uid = getId(updated);
+    setStudents((prev) => prev.map((s) => getId(s) === uid ? { ...s, ...updated } : s));
   };
-  const handleDeleted = (id) => {
-    setStudents((prev) => prev.filter((s) => getId(s) !== id));
-  };
-  useEffect(() => {
-    console.log("useEffect triggered");
-    fetchStudents();
-  }, [fetchStudents]);
-  const handleAssigned = (updated) => {
-    const updatedId = getId(updated);
-    setStudents((prev) =>
-      prev.map((s) =>
-        getId(s) === updatedId
-          ? { ...s, ...updated, group: updated.group || s.group }
-          : s,
-      ),
-    );
-  };
-
-  const open = (type, student = null) => setModal({ type, student });
-  const closeModal = () => setModal(null);
 
   return (
-    <div className=" p-4 flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-base-content">Students</h1>
-          <p className="text-sm text-base-content/50 mt-0.5">
-            {pagination.total} total students
-          </p>
-        </div>
-        {canCreate && (
-          <button
-            className="btn btn-primary btn-sm gap-2"
-            onClick={() => open("create")}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 4v16m8-8H4"
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-4">
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">O'quvchilar</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{pagination.total} ta o'quvchi</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Qidirish..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all shadow-sm w-52"
               />
-            </svg>
-            Add Student
-          </button>
-        )}
-      </div>
+            </div>
 
-      {/* Search & Filter */}
-      <div className="flex items-center gap-2">
-        <label className="input input-bordered input-sm flex items-center gap-2 w-full max-w-xs">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-3.5 h-3.5 text-base-content/40 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            type="text"
-            placeholder="Qidirish..."
-            className="grow bg-transparent outline-none text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="text-base-content/30 hover:text-base-content text-xs"
+            {/* Guruh filter */}
+            <select
+              value={hasGroup}
+              onChange={(e) => { setHasGroup(e.target.value); setPage(1); }}
+              className="py-2.5 px-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400 shadow-sm"
             >
-              ✕
-            </button>
-          )}
-        </label>
-        <select
-          value={hasGroup}
-          onChange={(e) => setHasGroup(e.target.value)}
-          className="select select-bordered select-sm w-44"
-        >
-          <option value="all">Barcha</option>
-          <option value="true">Guruhda</option>
-          <option value="false">Guruhsiz</option>
-        </select>
-        <select
-          value={courseFilter}
-          onChange={(e) => setCourseFilter(e.target.value)}
-          className="select select-bordered select-sm w-44"
-        >
-          <option value="all">Barcha kurslar</option>
-          {courses.map((course) => {
-            const courseColor = course.color || "#6366f1"; // Default blue color
-            return (
-              <option
-                key={course._id || course.id}
-                value={course._id || course.id}
-                style={{
-                  backgroundColor: courseColor + "20",
-                  color: courseColor,
-                }}
-              >
-                {course.name || course.title}
-              </option>
-            );
-          })}
-        </select>
-      </div>
+              <option value="all">Barcha</option>
+              <option value="true">Guruhda</option>
+              <option value="false">Guruhsiz</option>
+            </select>
 
-      {/* Table card */}
-      <div className="card bg-base-100 shadow-sm border border-base-200">
-        <div className="card-body p-0">
-          {error && (
-            <div className="alert alert-error m-4 py-2 text-sm">
-              <span>{error}</span>
+            {/* Kurs filter */}
+            <select
+              value={courseFilter}
+              onChange={(e) => { setCourseFilter(e.target.value); setPage(1); }}
+              className="py-2.5 px-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400 shadow-sm"
+            >
+              <option value="all">Barcha kurslar</option>
+              {courses.map((c) => (
+                <option key={getId(c)} value={getId(c)}>{c.name || c.title}</option>
+              ))}
+            </select>
+
+            {canEdit && (
+              <button
+                onClick={() => open("create")}
+                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />O'quvchi qo'shish
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-3">
+              <Spinner /><p className="text-sm text-gray-400">Yuklanmoqda...</p>
+            </div>
+          ) : students.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 gap-3">
+              <Users className="w-14 h-14 text-gray-200" />
+              <p className="text-sm text-gray-400">O'quvchilar topilmadi</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    {["#", "O'quvchi", "Telefon", "Balans", "Kurs", "Guruh", "Holat", "Amallar"].map((h, i) => (
+                      <th
+                        key={h}
+                        className={`px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide ${i === 7 ? "text-right" : "text-left"}`}
+                      >{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {students.map((s, idx) => {
+                    const balance = Number(s.balance ?? 0);
+                    const status  = STATUS_LABEL[s.status] || { label: s.status, cls: "bg-gray-100 text-gray-600" };
+                    // Course: from courses list (has color), fallback to s.courseName
+                    const course  = courses.find((c) => getId(c) === s.courseId);
+                    const courseName = course?.name || s.courseName || s.course?.name || s.course?.title || "";
+                    const courseColor = course?.color || "#6366f1";
+
+                    return (
+                      <tr key={getId(s)} className="hover:bg-gray-50/70 transition-colors">
+                        <td className="px-4 py-3.5 text-xs text-gray-400 font-mono">
+                          {(page - 1) * 50 + idx + 1}
+                        </td>
+
+                        {/* O'quvchi */}
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                              {s.name?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "??"}
+                            </div>
+                            <p className="text-sm font-semibold text-gray-900">{s.name}</p>
+                          </div>
+                        </td>
+
+                        {/* Telefon */}
+                        <td className="px-4 py-3.5">
+                          <span className="text-xs text-gray-500 font-mono">{s.phone || "—"}</span>
+                        </td>
+
+                        {/* Balans */}
+                        <td className="px-4 py-3.5">
+                          <span className={`text-sm font-bold ${balance < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                            {fmt(balance)}
+                          </span>
+                        </td>
+
+                        {/* Kurs */}
+                        <td className="px-4 py-3.5">
+                          {courseName ? (
+                            <span
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold"
+                              style={{
+                                background: courseColor + "18",
+                                color: courseColor,
+                                border: `1px solid ${courseColor}40`,
+                              }}
+                            >
+                              {courseName}
+                            </span>
+                          ) : <span className="text-gray-300 text-xs">—</span>}
+                        </td>
+
+                        {/* Guruh */}
+                        <td className="px-4 py-3.5">
+                          {s.group?.name || s.groupName ? (
+                            <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-100">
+                              {s.group?.name || s.groupName}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-300">Guruhsiz</span>
+                          )}
+                        </td>
+
+                        {/* Holat */}
+                        <td className="px-4 py-3.5">
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${status.cls}`}>
+                            {status.label}
+                          </span>
+                        </td>
+
+                        {/* Amallar */}
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <ActionBtn title="Ko'rish" color="blue" onClick={() => open("detail", s)}>
+                              <Eye className="w-3.5 h-3.5" />
+                            </ActionBtn>
+                            {canEdit && (
+                              <>
+                                <ActionBtn title="Tahrirlash" color="amber" onClick={() => open("edit", s)}>
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </ActionBtn>
+                                <ActionBtn title="Guruhga biriktirish" color="green" onClick={() => open("assign", s)}>
+                                  <Users className="w-3.5 h-3.5" />
+                                </ActionBtn>
+                                <ActionBtn title="O'chirish" color="red" onClick={() => open("delete", s)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </ActionBtn>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="table table-sm">
-              <thead>
-                <tr className="text-xs text-base-content/50 uppercase bg-base-200/50">
-                  <th>Name</th>
-                  <th>Phone</th>
-                  <th className="text-right">Balance</th>
-                  <th>Course</th>
-                  <th>Created At</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-12">
-                      <span className="loading loading-spinner loading-md text-primary" />
-                    </td>
-                  </tr>
-                ) : students.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="text-center py-12 text-base-content/30"
-                    >
-                      No students found
-                    </td>
-                  </tr>
-                ) : (
-                  students.map((s) => (
-                    <tr key={s.id} className="hover">
-                      <td>
-                        <div className="font-medium text-sm">{s.name}</div>
-                      </td>
-                      <td className="text-base-content/60 text-xs font-mono">
-                        {s.phone}
-                      </td>
-                      <td className="text-right">
-                        <BalanceCell value={s.balance} />
-                      </td>
-                      <td>
-                        {s.courseId ? (
-                          <span
-                            className="text-xs px-2 py-1 rounded-full font-medium"
-                            style={{
-                              backgroundColor:
-                                (s.course?.color || "#6366f1") + "20",
-                              color: s.course?.color || "#6366f1",
-                              border: `1px solid ${s.course?.color || "#6366f1"}`,
-                            }}
-                          >
-                            {s.courseName ||
-                              s.course?.name ||
-                              s.course?.title ||
-                              "Noma'lum kurs"}
-                          </span>
-                        ) : s.group?.course ? (
-                          <span
-                            className="text-xs px-2 py-1 rounded-full font-medium"
-                            style={{
-                              backgroundColor:
-                                (s.group.course?.color || "#6366f1") + "20",
-                              color: s.group.course?.color || "#6366f1",
-                              border: `1px solid ${s.group.course?.color || "#6366f1"}`,
-                            }}
-                          >
-                            {s.group.course.title || s.group.course.name}
-                          </span>
-                        ) : (
-                          <span className="text-base-content/20 text-xs">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <span className="text-xs text-base-content/70">
-                          {s.createdAt
-                            ? new Date(s.createdAt).toLocaleDateString(
-                                "uz-UZ",
-                                {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                },
-                              )
-                            : "—"}
-                        </span>
-                      </td>
-                      <td className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            className="btn btn-ghost btn-xs"
-                            onClick={() => open("detail", s)}
-                          >
-                            View
-                          </button>
-                          {canCreate && (
-                            <>
-                              <button
-                                className="btn btn-ghost btn-xs"
-                                onClick={() => open("edit", s)}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="btn btn-ghost btn-xs"
-                                onClick={() => open("assign", s)}
-                              >
-                                Group
-                              </button>
-                              <button
-                                className="btn btn-ghost btn-xs text-error hover:bg-error/10"
-                                onClick={() => open("delete", s)}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
           {/* Pagination */}
           {!loading && students.length > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-base-200">
-              <span className="text-xs text-base-content/40">
-                Page {pagination.page} of {pagination.totalPages} —{" "}
-                {pagination.total} records
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+              <span className="text-xs text-gray-400">
+                {pagination.total} ta dan {students.length} ta ko'rsatilmoqda
               </span>
-              <Pagination
-                page={page}
-                totalPages={pagination.totalPages}
-                onChange={setPage}
-              />
+              <Pagination page={page} totalPages={pagination.totalPages} onChange={setPage} />
             </div>
           )}
         </div>
@@ -1182,32 +940,34 @@ export default function StudentsPage() {
 
       {/* Modals */}
       {modal?.type === "create" && (
-        <CreateModal onClose={closeModal} onCreated={handleCreated} />
+        <CreateModal onClose={close} onCreated={() => { fetchStudents(); close(); }} />
       )}
       {modal?.type === "detail" && (
-        <DetailModal student={modal.student} onClose={closeModal} />
+        <DetailModal student={modal.student} courses={courses} onClose={close} />
       )}
       {modal?.type === "edit" && (
-        <EditModal
-          student={modal.student}
-          onClose={closeModal}
-          onUpdated={handleUpdated}
-        />
+        <EditModal student={modal.student} onClose={close} onUpdated={(u) => { handleUpdated(u); close(); }} />
       )}
       {modal?.type === "assign" && (
-        <AssignGroupModal
-          student={modal.student}
-          onClose={closeModal}
-          onAssigned={handleAssigned}
-        />
+        <AssignGroupModal student={modal.student} courses={courses} onClose={close} onAssigned={() => { fetchStudents(); close(); }} />
       )}
       {modal?.type === "delete" && (
-        <DeleteConfirmModal
-          student={modal.student}
-          onClose={closeModal}
-          onDeleted={handleDeleted}
-        />
+        <DeleteModal student={modal.student} onClose={close} onDeleted={(id) => { handleDeleted(id); close(); }} />
       )}
     </div>
+  );
+}
+
+function ActionBtn({ title, color, onClick, children }) {
+  const cls = {
+    blue:  "text-blue-600 hover:bg-blue-50",
+    amber: "text-amber-600 hover:bg-amber-50",
+    green: "text-emerald-600 hover:bg-emerald-50",
+    red:   "text-red-600 hover:bg-red-50",
+  }[color];
+  return (
+    <button onClick={onClick} title={title} className={`p-1.5 rounded-lg transition-colors ${cls}`}>
+      {children}
+    </button>
   );
 }

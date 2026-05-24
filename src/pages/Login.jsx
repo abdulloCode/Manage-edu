@@ -3,21 +3,17 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const ROLE_HOME = {
-  admin: "/admin/dashboard",
-  manager: "/manager/dashboard",
-  teacher: "/teacher/dashboard",
-  student: "/student/dashboard",
-  staff: "/staff/dashboard",
- supporter: "/supporter/dashboard", 
-  assistant: "/assistant/dashboard", 
-
+  admin:     "/admin/dashboard",
+  manager:   "/manager/dashboard",
+  teacher:   "/teacher/dashboard",
+  student:   "/student/dashboard",
+  staff:     "/staff/dashboard",
+  supporter: "/supporter/dashboard",
+  assistant: "/assistant/dashboard",
 };
 
-// Helper function to normalize role to lowercase for case-insensitive matching
 function getRoleHome(role) {
-  const normalizedRole = role?.toLowerCase()?.trim();
-  console.log("Login - User role:", role, "Normalized:", normalizedRole);
-  return ROLE_HOME[normalizedRole] ?? "/student/dashboard";
+  return ROLE_HOME[role?.toLowerCase()?.trim()] ?? "/student/dashboard";
 }
 
 function formatPhone(digits) {
@@ -30,41 +26,65 @@ function formatPhone(digits) {
   return out;
 }
 
-/* Entrance animation hook */
-function useEntrance(delay = 0) {
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setShow(true), delay);
-    return () => clearTimeout(t);
-  }, [delay]);
-  return show;
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+    </svg>
+  );
+}
+
+function GradientOrb({ className }) {
+  return <div className={`absolute rounded-full blur-3xl opacity-20 animate-pulse ${className}`} />;
+}
+
+function FeatureItem({ icon, text }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white flex-shrink-0 text-base">
+        {icon}
+      </div>
+      <span className="text-sm text-white/80 font-medium">{text}</span>
+    </div>
+  );
 }
 
 export default function Login() {
-  const { login, loading, error, isAuthenticated, initialized, user } =
-    useAuth();
+  const { login, loading, error, isAuthenticated, initialized, user } = useAuth();
   const navigate = useNavigate();
-  const [phoneDisplay, setPhoneDisplay] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
 
-  const rightIn = useEntrance(150);
-  const formIn = useEntrance(300);
+  const [phoneDisplay, setPhoneDisplay] = useState("");
+  const [password, setPassword]         = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [mounted, setMounted]           = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 60);
+    return () => clearTimeout(t);
+  }, []);
 
   if (!initialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-100">
-        <div className="relative">
-          <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-[3px] border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+          <p className="text-sm text-slate-400 font-medium">Yuklanmoqda...</p>
         </div>
       </div>
     );
   }
 
   if (isAuthenticated && user) {
-    return (
-      <Navigate to={getRoleHome(user.role)} replace />
-    );
+    return <Navigate to={getRoleHome(user.role)} replace />;
   }
 
   const handlePhoneChange = (e) => {
@@ -77,264 +97,211 @@ export default function Login() {
     const phone = phoneDisplay.replace(/\D/g, "");
     try {
       const loggedUser = await login({ phone, password });
-      console.log("Login - Logged user:", loggedUser);
-      navigate(getRoleHome(loggedUser.role), {
-        replace: true,
-      });
+      navigate(getRoleHome(loggedUser.role), { replace: true });
     } catch {
       /* error shown via context */
     }
   };
 
-  const panelTransition = (inView) => ({
-    opacity: inView ? 1 : 0,
-    transform: inView ? "translateY(0)" : "translateY(16px)",
-    transition:
-      "opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1)",
-  });
-
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-base-100"
-      style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
-    >
-      <div
-        className="h-full w-full max-w-[400px] px-6 sm:px-0"
-        style={panelTransition(rightIn)}
-      >
-        {/* Top bar */}
+    <div className="min-h-screen flex bg-slate-50">
 
-        <div className="flex justify-between items-center mb-auto">
-          <div className="flex lg:hidden items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-              <div className="w-4 h-4 rounded-full bg-base-100" />
-            </div>
-            <span className="font-medium text-sm text-base-content">
-              CRM Portal
-            </span>
-          </div>
-          <div className="hidden lg:block" />
+      {/* ── LEFT PANEL ── */}
+      <div className="hidden lg:flex lg:w-[52%] relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 flex-col justify-between p-12">
+        <GradientOrb className="w-80 h-80 bg-violet-400 -top-20 -left-20" />
+        <GradientOrb className="w-96 h-96 bg-indigo-300 bottom-0 right-0" />
+        <GradientOrb className="w-56 h-56 bg-blue-400 top-1/2 left-1/3" />
 
-          <div className="flex items-center gap-1.5 cursor-pointer group">
-            <svg
-              className="w-4 h-4 text-base-content/70 transition-colors group-hover:text-base-content/60"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" strokeLinecap="round" />
+        <div
+          className="absolute inset-0 opacity-[0.07]"
+          style={{ backgroundImage: `radial-gradient(circle, white 1px, transparent 1px)`, backgroundSize: "28px 28px" }}
+        />
+
+        {/* Logo */}
+        <div
+          className="relative z-10 flex items-center gap-3"
+          style={{ opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(-12px)", transition: "all 0.7s cubic-bezier(0.22,1,0.36,1)" }}
+        >
+          <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+              <path d="M6 12v5c3 3 9 3 12 0v-5" />
             </svg>
-            <span className="text-sm text-base-content/70 group-hover:text-base-content/70 transition-colors">
-              Sign Up
-            </span>
+          </div>
+          <div>
+            <p className="text-white font-bold text-base leading-tight tracking-tight">Manage Edu</p>
+            <p className="text-indigo-200 text-xs font-medium">CRM Platform</p>
           </div>
         </div>
 
-        {/* Form */}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-full max-w-[360px]" style={panelTransition(formIn)}>
-            <div className="mb-8">
-              <h1
-                className="text-base-content mb-2"
-                style={{
-                  fontFamily: "'Playfair Display', Georgia, serif",
-                  fontSize: "34px",
-                  fontWeight: 600,
-                  letterSpacing: "-0.5px",
-                }}
-              >
-                Welcome back
-              </h1>
-              <p className="text-sm text-base-content/70 font-light">
-                Enter your credentials to access your account
-              </p>
+        {/* Center text */}
+        <div
+          className="relative z-10 space-y-8"
+          style={{ opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(20px)", transition: "all 0.8s 0.15s cubic-bezier(0.22,1,0.36,1)" }}
+        >
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/20 rounded-full backdrop-blur-sm">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-white/80 text-xs font-medium">Ta'lim markazi boshqarish tizimi</span>
             </div>
+            <h1 className="text-white font-bold leading-[1.15] tracking-tight" style={{ fontSize: "clamp(28px, 3.5vw, 42px)" }}>
+              O'quv markazingizni<br />
+              <span className="text-indigo-200">professional</span> boshqaring
+            </h1>
+            <p className="text-white/65 text-sm leading-relaxed max-w-sm">
+              O'quvchilar, o'qituvchilar, guruhlar va to'lovlarni bir joydan qulay va tez boshqaring.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <FeatureItem icon="👨‍🎓" text="O'quvchilar va guruhlarni boshqarish" />
+            <FeatureItem icon="💳" text="To'lovlar va moliyaviy hisobotlar" />
+            <FeatureItem icon="📊" text="Real vaqt statistika va tahlil" />
+            <FeatureItem icon="🔐" text="Rol asosida ruxsatlar tizimi" />
+          </div>
+        </div>
 
-            {/* Error */}
-            {error && (
-              <div className="alert alert-error flex items-center gap-2.5 px-4 py-3 rounded-2xl mb-5 text-sm animate-[slideIn_0.3s_ease-out]">
-                <svg
-                  className="w-4 h-4 shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
+        {/* Stats */}
+        <div
+          className="relative z-10 grid grid-cols-3 gap-4"
+          style={{ opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(16px)", transition: "all 0.8s 0.3s cubic-bezier(0.22,1,0.36,1)" }}
+        >
+          {[
+            { num: "500+", label: "O'quvchilar" },
+            { num: "50+",  label: "O'qituvchilar" },
+            { num: "99%",  label: "Ishonchlilik" },
+          ].map((s) => (
+            <div key={s.label} className="bg-white/10 border border-white/15 rounded-2xl p-4 backdrop-blur-sm text-center">
+              <p className="text-white font-bold text-xl">{s.num}</p>
+              <p className="text-white/60 text-xs mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── RIGHT PANEL ── */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+
+        {/* Mobile logo */}
+        <div className="lg:hidden flex items-center gap-2.5 mb-10">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+              <path d="M6 12v5c3 3 9 3 12 0v-5" />
+            </svg>
+          </div>
+          <p className="font-bold text-gray-900 text-sm">Manage Edu CRM</p>
+        </div>
+
+        <div
+          className="w-full max-w-[400px]"
+          style={{ opacity: mounted ? 1 : 0, transform: mounted ? "translateY(0)" : "translateY(20px)", transition: "all 0.7s 0.2s cubic-bezier(0.22,1,0.36,1)" }}
+        >
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-1.5">Tizimga kirish</h2>
+            <p className="text-sm text-gray-500">Telefon raqamingiz va parolingizni kiriting</p>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-2xl mb-5">
+              <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#ef4444" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                 </svg>
-                <span>{error}</span>
               </div>
-            )}
+              <p className="text-sm text-red-700 font-medium">{error}</p>
+            </div>
+          )}
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              {/* Phone */}
-              <div className="relative group">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Phone */}
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Telefon raqam</label>
+              <div className="relative flex items-center">
+                <div className="absolute left-0 flex items-center h-full pl-4 pr-3 border-r border-gray-200 pointer-events-none">
+                  <span className="text-sm font-semibold text-gray-500 whitespace-nowrap">+998</span>
+                </div>
                 <input
                   type="tel"
                   inputMode="numeric"
-                  placeholder="Phone number"
+                  placeholder="(90) 123-45-67"
                   value={phoneDisplay}
                   onChange={handlePhoneChange}
                   required
                   autoComplete="tel"
-                  className="w-full text-sm text-base-content outline-none transition-all duration-300 placeholder:text-base-content/60 border border-base-300 focus:border-primary focus:ring-4 focus:ring-primary/10"
-                  style={{
-                    height: "54px",
-                    borderRadius: "14px",
-                    padding: "0 20px",
-                    fontSize: "14px",
-                    fontWeight: 400,
-                  }}
+                  className="w-full pl-[72px] pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-2xl text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
                 />
               </div>
+            </div>
 
-              {/* Password */}
-              <div className="relative group">
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Parol</label>
+              <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder="Password"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="w-full text-sm text-base-content outline-none transition-all duration-300 placeholder:text-base-content/60 border border-base-300 focus:border-primary focus:ring-4 focus:ring-primary/10"
-                  style={{
-                    height: "54px",
-                    borderRadius: "14px",
-                    padding: "0 48px 0 20px",
-                    fontSize: "14px",
-                    fontWeight: 400,
-                  }}
+                  className="w-full px-4 py-3.5 pr-12 bg-white border-2 border-gray-200 rounded-2xl text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
                 />
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-base-content/60 hover:text-base-content/60 transition-colors duration-200"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  {showPassword ? (
-                    <svg
-                      className="w-[18px] h-[18px]"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M3.98 8.223A10.477 10.477 0 001.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"
-                      />
-                    </svg>
-                  ) : (
-                    <svg
-                      className="w-[18px] h-[18px]"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                  )}
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
+            </div>
 
-              {/* Forgot password */}
-              <div className="flex justify-end">
-                <a
-                  href="#"
-                  // className="text-sm font-medium transition-all duration-200 hover:opacity-70"
-                  className="text-primary"
-                >
-                  Forgot password?
-                </a>
-              </div>
-
-              {/* Submit */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex items-center justify-center gap-2.5 text-primary-content font-medium transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] bg-primary shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 hover:-translate-y-px"
-                style={{
-                  height: "54px",
-                  borderRadius: "14px",
-                  border: "none",
-                  fontSize: "15px",
-                  fontWeight: 500,
-                  letterSpacing: "0.2px",
-                }}
-              >
-                {loading ? (
-                  <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                ) : (
-                  <>
-                    <span>Sign In</span>
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                      />
-                    </svg>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-between items-center mt-auto pt-6 border-t border-base-200">
-          <span className="text-xs text-base-content/60 font-light">
-            © 2026 CRM Portal
-          </span>
-          <div className="flex items-center gap-4 text-xs text-base-content/60 font-light">
-            <a
-              href="#"
-              className="hover:text-base-content/50 transition-colors duration-200"
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2.5 py-3.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-sm font-semibold rounded-2xl shadow-lg shadow-indigo-500/25 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-2"
             >
-              Contact Us
-            </a>
-            {/* <span className="flex items-center gap-1 cursor-pointer hover:text-base-content/50 transition-colors duration-200">
-              English
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </span> */}
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Kirish...</span>
+                </>
+              ) : (
+                <>
+                  <span>Kirish</span>
+                  <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400 font-medium">Manage Edu CRM</span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-2">
+            {[
+              { label: "Admin",   color: "bg-purple-50 text-purple-600 border-purple-100" },
+              { label: "Manager", color: "bg-blue-50 text-blue-600 border-blue-100"       },
+              { label: "Teacher", color: "bg-green-50 text-green-600 border-green-100"    },
+              { label: "Student", color: "bg-amber-50 text-amber-600 border-amber-100"    },
+            ].map((r) => (
+              <span key={r.label} className={`px-3 py-1 rounded-full text-xs font-semibold border ${r.color}`}>
+                {r.label}
+              </span>
+            ))}
           </div>
         </div>
+
+        <p className="mt-10 text-xs text-gray-400 text-center">
+          © 2026 Manage Edu CRM. Barcha huquqlar himoyalangan.
+        </p>
       </div>
     </div>
   );

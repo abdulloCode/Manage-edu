@@ -21,7 +21,6 @@ import {
   Plus,
 } from "lucide-react";
 
-// API importlaringiz
 import { getAllGroups, getAllRooms } from "../../api/groups";
 import { getAllTeachers } from "../../api/teacher";
 import { getStudents, getStudentById } from "../../api/students";
@@ -65,6 +64,69 @@ const getDk = (payment) => {
   return "credit";
 };
 
+// ─── DaisyUI GROUP COLORS ─────────────────────────────────────
+const GROUP_COLORS = {
+  EKY: {
+    badge: "badge-success",
+    card: "border-l-4 border-success bg-success/10",
+    dot: "bg-success",
+  },
+  EMU: {
+    badge: "badge-neutral",
+    card: "border-l-4 border-neutral bg-neutral/10",
+    dot: "bg-neutral",
+  },
+  OON: {
+    badge: "badge-info",
+    card: "border-l-4 border-info bg-info/10",
+    dot: "bg-info",
+  },
+  OSS: {
+    badge: "badge-info",
+    card: "border-l-4 border-info bg-info/10",
+    dot: "bg-info",
+  },
+  TXA: {
+    badge: "badge-error",
+    card: "border-l-4 border-error bg-error/10",
+    dot: "bg-error",
+  },
+  EMA: {
+    badge: "badge-error",
+    card: "border-l-4 border-error/70 bg-error/5",
+    dot: "bg-error/70",
+  },
+};
+
+const getGroupColor = (groupName = "") => {
+  const prefix = Object.keys(GROUP_COLORS).find((k) =>
+    groupName.startsWith(k),
+  );
+  return (
+    GROUP_COLORS[prefix] ?? {
+      badge: "badge-warning",
+      card: "border-l-4 border-warning bg-warning/10",
+      dot: "bg-warning",
+    }
+  );
+};
+
+const getStatus = (fromHour, toHour) => {
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const start = timeToMinutes(fromHour);
+  const end = timeToMinutes(toHour);
+  if (cur < start)
+    return { label: "Kutilmoqda", cls: "badge-ghost", dot: "bg-base-300" };
+  if (cur < end)
+    return {
+      label: "Darsda",
+      cls: "badge-success",
+      dot: "bg-success animate-pulse",
+    };
+  return { label: "Tugadi", cls: "badge-error", dot: "bg-error" };
+};
+
 import { useAuth } from "../../context/AuthContext";
 import { useHasPage } from "../../utils/permissions";
 
@@ -72,15 +134,16 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { user } = useAuth();
-  const isManager = user?.role?.toLowerCase()?.trim() === 'manager';
-  const hasStudents = useHasPage('students');
-  const hasTeachers = useHasPage('teachers');
-  const hasGroups = useHasPage('groups');
-  const hasPayments = useHasPage('payments');
-  const hasReports = useHasPage('reports');
+  const isManager = user?.role?.toLowerCase()?.trim() === "manager";
+  const hasStudents = useHasPage("students");
+  const hasTeachers = useHasPage("teachers");
+  const hasGroups = useHasPage("groups");
+  const hasPayments = useHasPage("payments");
+  const hasReports = useHasPage("reports");
+
   const [selectedDay, setSelectedDay] = useState("Sha");
   const [viewMode, setViewMode] = useState("room");
-  const [activeSection, setActiveSection] = useState("schedule"); // schedule, absent, rating, payments
+  const [activeSection, setActiveSection] = useState("schedule");
   const [data, setData] = useState({
     groups: [],
     teachers: [],
@@ -94,8 +157,12 @@ export default function Dashboard() {
   const [loadingRatings, setLoadingRatings] = useState(false);
   const [paymentsData, setPaymentsData] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
-  const [paymentModal, setPaymentModal] = useState({ show: false, payment: null, mode: 'edit' });
-  const [groupsStudentsData, setGroupsStudentsData] = useState({}); // Har bir guruh uchun o'quvchilar
+  const [paymentModal, setPaymentModal] = useState({
+    show: false,
+    payment: null,
+    mode: "edit",
+  });
+  const [groupsStudentsData, setGroupsStudentsData] = useState({});
   const [loadingGroupsStudents, setLoadingGroupsStudents] = useState(false);
 
   useEffect(() => {
@@ -111,10 +178,6 @@ export default function Dashboard() {
       const sData = sRes.data?.data ?? sRes.data ?? [];
       const rData = rRes.data?.data ?? rRes.data ?? [];
 
-      console.log("API Response - Groups:", gData);
-      console.log("API Response - Teachers:", tData);
-      console.log("API Response - Rooms:", rData);
-
       const mappedGroups = gData.map((g) => {
         const teacher = tData.find((t) => (t._id || t.id) === g.teacherId);
         const room = rData.find((r) => (r._id || r.id) === g.roomId);
@@ -124,8 +187,6 @@ export default function Dashboard() {
           roomName: room?.name ?? "",
         };
       });
-
-      console.log("Mapped Groups:", mappedGroups);
 
       setData({
         groups: mappedGroups,
@@ -137,22 +198,16 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Bugungi attendance ma'lumotlarini yuklash
   useEffect(() => {
     if (hasGroups) loadTodayAttendance();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Attendance ma'lumotlarini avtomatik yangilash (har 5 daqiqada)
   useEffect(() => {
     if (!hasGroups) return;
-    const interval = setInterval(
-      () => {
-        loadTodayAttendance();
-      },
-      5 * 60 * 1000,
-    ); // 5 daqiqa
-
+    const interval = setInterval(() => {
+      loadTodayAttendance();
+    }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -162,30 +217,21 @@ export default function Dashboard() {
     try {
       const res = await getAllAttendances({ limit: 1000 });
       const allAttendance = res.data?.data || res.data || [];
-
-      // Bugungi sanadagi attendance ma'lumotlarini filter qilish
       const today = new Date().toISOString().split("T")[0];
       const todayAttendance = allAttendance.filter((a) => a.date === today);
-
       setAttendanceData(todayAttendance);
-      console.log("Bugungi attendance:", todayAttendance);
     } catch (err) {
       console.error("Attendance yuklashda xatolik:", err);
-      setAttendanceData([]); // Xatolik bo'lsa bo'sh array qo'yish
+      setAttendanceData([]);
     } finally {
       setLoadingAttendance(false);
     }
   };
 
-  // Kelmagan o'quvchilarni hisoblash
   const absentStudentsCount = useMemo(() => {
-    const absentCount = attendanceData.filter(
-      (a) => a.status === "absent",
-    ).length;
-    return absentCount;
+    return attendanceData.filter((a) => a.status === "absent").length;
   }, [attendanceData]);
 
-  // Kelmagan o'quvchilar ro'yxatini olish
   const getAbsentStudents = () => {
     const absent = attendanceData.filter((a) => a.status === "absent");
     return absent.map((a) => {
@@ -208,24 +254,20 @@ export default function Dashboard() {
     });
   };
 
-  // Kelmagan o'quvchilar sectioniga o'tish
   const handleShowAbsent = () => {
     const absent = getAbsentStudents();
     setAbsentStudents(absent);
     setActiveSection("absent");
   };
 
-  // Reyting sectioniga o'tish
   const handleShowRating = () => {
     setActiveSection("rating");
   };
 
-  // Payment sectioniga o'tish
   const handleShowPayments = () => {
     setActiveSection("payments");
   };
 
-  // Asosiy jadval sectioniga qaytish
   const handleBackToSchedule = () => {
     if (hasGroups) {
       setActiveSection("schedule");
@@ -233,12 +275,9 @@ export default function Dashboard() {
       setActiveSection("payments");
     } else if (hasReports) {
       setActiveSection("rating");
-    } else if (hasGroups) {
-      setActiveSection("absent");
     }
   };
 
-  // Payment statistikasini hisoblash
   const paymentStats = useMemo(() => {
     if (!Array.isArray(paymentsData) || paymentsData.length === 0) {
       return {
@@ -260,7 +299,6 @@ export default function Dashboard() {
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const netBalance = totalIncome - totalExpense;
 
-    // Bugungi to'lovlar
     const today = new Date().toISOString().split("T")[0];
     const todayPayments = paymentsData.filter((p) => p.date === today);
     const todayIncome = todayPayments
@@ -270,7 +308,6 @@ export default function Dashboard() {
       .filter((p) => p.type?.dk === "debit")
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-    // Oylik statistika
     const currentMonth = new Date().toISOString().slice(0, 7);
     const monthPayments = paymentsData.filter((p) =>
       p.month?.startsWith(currentMonth),
@@ -281,16 +318,6 @@ export default function Dashboard() {
     const monthExpense = monthPayments
       .filter((p) => p.type?.dk === "debit")
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-
-    console.log("Payment stats calculated:", {
-      totalIncome,
-      totalExpense,
-      netBalance,
-      todayIncome,
-      todayExpense,
-      monthIncome,
-      monthExpense,
-    });
 
     return {
       totalIncome,
@@ -303,22 +330,16 @@ export default function Dashboard() {
     };
   }, [paymentsData]);
 
-  // Baho ma'lumotlarini yuklash
   useEffect(() => {
     if (hasReports) loadRatings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Baho ma'lumotlarini avtomatik yangilash (har 10 daqiqada)
   useEffect(() => {
     if (!hasReports) return;
-    const interval = setInterval(
-      () => {
-        loadRatings();
-      },
-      10 * 60 * 1000,
-    ); // 10 daqiqa
-
+    const interval = setInterval(() => {
+      loadRatings();
+    }, 10 * 60 * 1000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -329,8 +350,6 @@ export default function Dashboard() {
       const res = await getAllRatings();
       const allRatings = res.data?.data || res.data || [];
       setRatingsData(allRatings);
-      console.log("Baho ma'lumotlari:", allRatings);
-      console.log("Baho ma'lumotlari turi:", Array.isArray(allRatings) ? 'Array' : typeof allRatings);
     } catch (err) {
       console.error("Baho yuklashda xatolik:", err);
       setRatingsData([]);
@@ -339,72 +358,80 @@ export default function Dashboard() {
     }
   };
 
-  // Payment ma'lumotlarini yuklash
   useEffect(() => {
     if (hasPayments) loadPayments();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Guruhlar uchun o'quvchilar ma'lumotlarini yuklash
   const loadGroupsStudents = async () => {
     setLoadingGroupsStudents(true);
     try {
       const groupsStudentsMap = {};
-
       for (const group of data.groups) {
         if (group.studentIds && Array.isArray(group.studentIds)) {
           const students = await Promise.all(
-            group.studentIds.map(studentId =>
+            group.studentIds.map((studentId) =>
               getStudentById(studentId)
-                .then(res => res.data?.data || res.data)
-                .catch(() => null)
-            )
+                .then((res) => res.data?.data || res.data)
+                .catch(() => null),
+            ),
           );
-
-          groupsStudentsMap[group._id || group.id] = students.filter(s => s !== null);
+          groupsStudentsMap[group._id || group.id] = students.filter(
+            (s) => s !== null,
+          );
         } else {
           groupsStudentsMap[group._id || group.id] = [];
         }
       }
-
       setGroupsStudentsData(groupsStudentsMap);
-      console.log('Guruhlar uchun o\'quvchilar yuklandi:', groupsStudentsMap);
     } catch (err) {
-      console.error('Guruh o\'quvchilarini yuklashda xatolik:', err);
+      console.error("Guruh o'quvchilarini yuklashda xatolik:", err);
       setGroupsStudentsData({});
     } finally {
       setLoadingGroupsStudents(false);
     }
   };
 
-  // Payment ma'lumotlarini boshqarish
   const handlePaymentAction = async (action, payment) => {
     try {
-      if (action === 'delete') {
+      if (action === "delete") {
         await deletePayment(payment._id || payment.id);
-        setPaymentsData(prev => prev.filter(p => (p._id || p.id) !== (payment._id || payment.id)));
-      } else if (action === 'edit') {
+        setPaymentsData((prev) =>
+          prev.filter(
+            (p) => (p._id || p.id) !== (payment._id || payment.id),
+          ),
+        );
+      } else if (action === "edit") {
         await updatePayment(payment._id || payment.id, payment);
-        setPaymentsData(prev => prev.map(p => (p._id || p.id) === (payment._id || payment.id) ? { ...payment, ...p } : p));
-      } else if (action === 'add') {
+        setPaymentsData((prev) =>
+          prev.map((p) =>
+            (p._id || p.id) === (payment._id || payment.id)
+              ? { ...payment, ...p }
+              : p,
+          ),
+        );
+      } else if (action === "add") {
         const { data } = await createPayment(payment);
-        setPaymentsData(prev => [data, ...prev]);
+        setPaymentsData((prev) => [data, ...prev]);
       }
-      await loadPayments(); // Reload payments
+      await loadPayments();
     } catch (err) {
-      console.error('Payment action failed:', err);
-      showToast('Amalga o\'tkazildi: ' + err.response?.data?.message || 'Xatolik yuz berdi', 'error', 5000);
+      console.error("Payment action failed:", err);
+      showToast(
+        "Amalga o'tkazildi: " + err.response?.data?.message ||
+          "Xatolik yuz berdi",
+        "error",
+        5000,
+      );
     }
   };
 
-  // Guruhlar yuklangandan keyin o'quvchilarni ham yuklash
   useEffect(() => {
     if (hasGroups && data.groups.length > 0) {
       loadGroupsStudents();
     }
   }, [hasGroups, data.groups]);
 
-  // Kun o'zgarganda guruh o'quvchilarini yangilash
   useEffect(() => {
     if (hasGroups && data.groups.length > 0) {
       loadGroupsStudents();
@@ -414,12 +441,12 @@ export default function Dashboard() {
   const loadPayments = async () => {
     setLoadingPayments(true);
     try {
-      // Managerlar uchun getMyPayments API'sini ishlatamiz
-      const res = isManager ? await getMyPayments() : await getAllPayments({ limit: 1000 });
+      const res = isManager
+        ? await getMyPayments()
+        : await getAllPayments({ limit: 1000 });
       const allPayments =
         res.data?.payments || res.data?.data || res.data || [];
       setPaymentsData(Array.isArray(allPayments) ? allPayments : []);
-      console.log("To'lov ma'lumotlari (Manager: " + isManager + "):", allPayments);
     } catch (err) {
       console.error("To'lovlar yuklashda xatolik:", err);
       setPaymentsData([]);
@@ -428,23 +455,13 @@ export default function Dashboard() {
     }
   };
 
-  // O'quvchilarning baholarini gurhlash va hisoblash
   const studentRatings = useMemo(() => {
-    if (!Array.isArray(ratingsData) || !Array.isArray(data.students)) {
-      console.log("Rating data or students data is not array:", {
-        ratingsData,
-        students: data.students,
-      });
-      return [];
-    }
+    if (!Array.isArray(ratingsData) || !Array.isArray(data.students)) return [];
 
     const studentScoreMap = {};
-
-    // Barcha baholarni guruhlashingiz
     ratingsData.forEach((rating) => {
       const studentId = rating.studentId || rating._id;
       if (!studentId) return;
-
       if (!studentScoreMap[studentId]) {
         studentScoreMap[studentId] = {
           studentId,
@@ -460,308 +477,297 @@ export default function Dashboard() {
       }
     });
 
-    // BARCHA o'quvchilarni qo'shish
     const result = data.students.map((student) => {
       const studentId = student._id || student.id;
-      const studentRatings = studentScoreMap[studentId];
+      const sr = studentScoreMap[studentId];
       const group = data.groups.find(
         (g) => (g._id || g.id) === student?.groupId,
       );
       const teacherId =
-        studentRatings && studentRatings.teacherIds.size > 0
-          ? Array.from(studentRatings.teacherIds)[0]
+        sr && sr.teacherIds.size > 0
+          ? Array.from(sr.teacherIds)[0]
           : group?.teacherId;
       const teacher = data.teachers.find((t) => (t._id || t.id) === teacherId);
-
       return {
         studentId,
-        totalScore: studentRatings?.totalScore || 0,
-        ratingCount: studentRatings?.ratingCount || 0,
+        totalScore: sr?.totalScore || 0,
+        ratingCount: sr?.ratingCount || 0,
         studentName: student?.name || "Noma'lum",
         studentSurname: student?.surname || "",
         studentPhone: student?.phone || "—",
         groupName: group?.name || "—",
         teacherName: teacher?.name || "Noma'lum",
         averageScore:
-          studentRatings?.ratingCount > 0
-            ? (studentRatings.totalScore / studentRatings.ratingCount).toFixed(
-                2,
-              )
+          sr?.ratingCount > 0
+            ? (sr.totalScore / sr.ratingCount).toFixed(2)
             : "0",
       };
     });
 
-    // Bahosiga bo'yicha saralash (yuqoridan pastga)
-    const sortedResult = result.sort((a, b) => b.totalScore - a.totalScore);
-    console.log('Student ratings calculated:', { total: sortedResult.length, top5: sortedResult.slice(0, 5) });
-    return sortedResult;
+    return result.sort((a, b) => b.totalScore - a.totalScore);
   }, [ratingsData, data.students, data.groups, data.teachers]);
 
   const columns = useMemo(
     () => (viewMode === "room" ? data.rooms : data.teachers),
     [viewMode, data],
   );
+
   const dayGroups = useMemo(() => {
-    const filtered = data.groups.filter((g) =>
-      g.schedule?.days?.includes(selectedDay),
-    );
-    console.log("Selected Day:", selectedDay);
-    console.log("All Groups:", data.groups);
-    console.log("Filtered Groups for day:", filtered);
-    console.log("Columns (rooms/teachers):", columns);
-    console.log("View Mode:", viewMode);
-
-    return filtered;
-  }, [data.groups, selectedDay, columns, viewMode]);
-
-  const getGroupStyles = (groupName) => {
-    if (groupName?.startsWith("EKY")) return "bg-[#4ADE80] text-white";
-    if (groupName?.startsWith("EMU")) return "bg-[#000000] text-white";
-    if (groupName?.startsWith("OON") || groupName?.startsWith("OSS"))
-      return "bg-[#2DD4BF] text-white";
-    if (groupName?.startsWith("TXA")) return "bg-[#EF4444] text-white";
-    if (groupName?.startsWith("EMA")) return "bg-[#7F1D1D] text-white";
-    return "bg-[#FACC15] text-black";
-  };
+    return data.groups.filter((g) => g.schedule?.days?.includes(selectedDay));
+  }, [data.groups, selectedDay]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 font-sans text-gray-900">
-      {/* ── HEADER (Soddalashtirilgan) ── */}
+    <div className="min-h-screen bg-base-200 p-4 font-sans">
+      {/* ── HEADER ── */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-base-content">
           {hasGroups ? "Dars jadvali" : "Boshqaruv paneli"}
         </h1>
-        <p className="text-sm text-gray-500 mt-1">CRM tizimi</p>
+        <p className="text-sm text-base-content/50 mt-1">CRM tizimi</p>
       </div>
 
-      {/* ── STATS GRID (Faqat so'ralganlar) ── */}
+      {/* ── STATS GRID ── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {hasStudents && (
-          <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-emerald-500/10">
-              <Users className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-                O'quvchilar
-              </p>
-              <h4 className="text-lg font-bold text-gray-900">
-                {data.students.length}
-              </h4>
+          <div className="card bg-base-100 shadow-sm border border-base-200">
+            <div className="card-body p-4 flex-row items-center gap-3">
+              <div className="p-2 rounded-lg bg-success/10">
+                <Users className="w-5 h-5 text-success" />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
+                  O'quvchilar
+                </p>
+                <h4 className="text-lg font-bold">{data.students.length}</h4>
+              </div>
             </div>
           </div>
         )}
 
         {hasTeachers && (
-          <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-sm flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10">
-              <UserCheck className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-                O'qituvchilar
-              </p>
-              <h4 className="text-lg font-bold text-gray-900">
-                {data.teachers.length}
-              </h4>
+          <div className="card bg-base-100 shadow-sm border border-base-200">
+            <div className="card-body p-4 flex-row items-center gap-3">
+              <div className="p-2 rounded-lg bg-info/10">
+                <UserCheck className="w-5 h-5 text-info" />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
+                  O'qituvchilar
+                </p>
+                <h4 className="text-lg font-bold">{data.teachers.length}</h4>
+              </div>
             </div>
           </div>
         )}
 
         {hasGroups && (
           <div
-            className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "absent" ? "border-red-500 bg-red-50" : "border-gray-200 hover:bg-red-50"}`}
+            className={`card shadow-sm cursor-pointer transition-colors ${
+              activeSection === "absent"
+                ? "bg-error/10 border-2 border-error"
+                : "bg-base-100 border border-base-200 hover:bg-error/5"
+            }`}
             onClick={handleShowAbsent}
           >
-            <div
-              className={`p-2 rounded-lg ${activeSection === "absent" ? "bg-red-600" : "bg-red-500/10"}`}
-            >
-              <UserMinus
-                className={`w-5 h-5 ${activeSection === "absent" ? "text-white" : "text-red-600"}`}
-              />
-            </div>
-            <div>
-              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-                Kelmaganlar
-              </p>
-              <h4
-                className={`text-lg font-bold ${activeSection === "absent" ? "text-red-700" : "text-red-600"}`}
+            <div className="card-body p-4 flex-row items-center gap-3">
+              <div
+                className={`p-2 rounded-lg ${activeSection === "absent" ? "bg-error" : "bg-error/10"}`}
               >
-                {absentStudentsCount}
-              </h4>
+                <UserMinus
+                  className={`w-5 h-5 ${activeSection === "absent" ? "text-white" : "text-error"}`}
+                />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
+                  Kelmaganlar
+                </p>
+                <h4 className="text-lg font-bold text-error">
+                  {absentStudentsCount}
+                </h4>
+              </div>
             </div>
           </div>
         )}
 
         {hasReports && (
           <div
-            className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "rating" ? "border-amber-500 bg-amber-50" : "border-gray-200 hover:bg-amber-50"}`}
+            className={`card shadow-sm cursor-pointer transition-colors ${
+              activeSection === "rating"
+                ? "bg-warning/10 border-2 border-warning"
+                : "bg-base-100 border border-base-200 hover:bg-warning/5"
+            }`}
             onClick={handleShowRating}
           >
-            <div
-              className={`p-2 rounded-lg ${activeSection === "rating" ? "bg-amber-600" : "bg-amber-500/10"}`}
-            >
-              <Trophy
-                className={`w-5 h-5 ${activeSection === "rating" ? "text-white" : "text-amber-600"}`}
-              />
-            </div>
-            <div>
-              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-                Reyting
-              </p>
-              <h4
-                className={`text-lg font-bold ${activeSection === "rating" ? "text-amber-700" : "text-amber-600"}`}
+            <div className="card-body p-4 flex-row items-center gap-3">
+              <div
+                className={`p-2 rounded-lg ${activeSection === "rating" ? "bg-warning" : "bg-warning/10"}`}
               >
-                {studentRatings.length}
-              </h4>
+                <Trophy
+                  className={`w-5 h-5 ${activeSection === "rating" ? "text-white" : "text-warning"}`}
+                />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
+                  Reyting
+                </p>
+                <h4 className="text-lg font-bold text-warning">
+                  {studentRatings.length}
+                </h4>
+              </div>
             </div>
           </div>
         )}
 
         {hasPayments && (
           <div
-            className={`bg-white p-4 border rounded-xl shadow-sm flex items-center gap-3 cursor-pointer transition-colors ${activeSection === "payments" ? "border-emerald-500 bg-emerald-50" : "border-gray-200 hover:bg-emerald-50"}`}
+            className={`card shadow-sm cursor-pointer transition-colors ${
+              activeSection === "payments"
+                ? "bg-success/10 border-2 border-success"
+                : "bg-base-100 border border-base-200 hover:bg-success/5"
+            }`}
             onClick={handleShowPayments}
           >
-            <div
-              className={`p-2 rounded-lg ${activeSection === "payments" ? "bg-emerald-600" : "bg-emerald-500/10"}`}
-            >
-              <Wallet
-                className={`w-5 h-5 ${activeSection === "payments" ? "text-white" : "text-emerald-600"}`}
-              />
-            </div>
-            <div>
-              <p className="text-[9px] font-bold text-gray-500 uppercase leading-none mb-1">
-                To'lovlar
-              </p>
-              <h4
-                className={`text-lg font-bold ${activeSection === "payments" ? "text-emerald-700" : "text-emerald-600"}`}
+            <div className="card-body p-4 flex-row items-center gap-3">
+              <div
+                className={`p-2 rounded-lg ${activeSection === "payments" ? "bg-success" : "bg-success/10"}`}
               >
-                {paymentsData.length}
-              </h4>
+                <Wallet
+                  className={`w-5 h-5 ${activeSection === "payments" ? "text-white" : "text-success"}`}
+                />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
+                  To'lovlar
+                </p>
+                <h4 className="text-lg font-bold text-success">
+                  {paymentsData.length}
+                </h4>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── CONTROLS (Faqat schedule section) ── */}
+      {/* ── CONTROLS (schedule section) ── */}
       {activeSection === "schedule" && hasGroups && (
-        <div className="bg-white border border-gray-200 p-3 rounded-xl flex justify-between items-center mb-4 shadow-sm">
-          <div className="flex gap-1 flex-wrap">
-            {DAYS.map((d) => (
-              <button
-                key={d.key}
-                onClick={() => setSelectedDay(d.key)}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${selectedDay === d.key ? "bg-[#4F46E5] text-white shadow-md" : "text-gray-600 hover:bg-gray-100"}`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex bg-gray-100 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode("room")}
-                className={`px-4 py-1.5 rounded-md text-xs font-bold ${viewMode === "room" ? "bg-[#4F46E5] text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
-              >
-                Xona
-              </button>
-              <button
-                onClick={() => setViewMode("teacher")}
-                className={`px-4 py-1.5 rounded-md text-xs font-bold ${viewMode === "teacher" ? "bg-[#4F46E5] text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
-              >
-                Ustoz
-              </button>
+        <div className="card bg-base-100 border border-base-200 shadow-sm mb-4">
+          <div className="card-body p-3 flex-row justify-between items-center flex-wrap gap-2">
+            <div className="flex gap-1 flex-wrap">
+              {DAYS.map((d) => (
+                <button
+                  key={d.key}
+                  onClick={() => setSelectedDay(d.key)}
+                  className={`btn btn-sm ${selectedDay === d.key ? "btn-primary" : "btn-ghost"}`}
+                >
+                  {d.label}
+                </button>
+              ))}
             </div>
-            <div className="flex gap-2 border-l border-gray-300 pl-3">
-              <LayoutGrid className="w-4 h-4 text-indigo-600" />
-              <List className="w-4 h-4 text-gray-400" />
-              <Maximize2 className="w-4 h-4 text-indigo-600" />
+            <div className="flex items-center gap-3">
+              <div className="join">
+                <button
+                  onClick={() => setViewMode("room")}
+                  className={`btn btn-sm join-item ${viewMode === "room" ? "btn-primary" : "btn-ghost"}`}
+                >
+                  Xona
+                </button>
+                <button
+                  onClick={() => setViewMode("teacher")}
+                  className={`btn btn-sm join-item ${viewMode === "teacher" ? "btn-primary" : "btn-ghost"}`}
+                >
+                  Ustoz
+                </button>
+              </div>
+              <div className="flex gap-2 border-l border-base-300 pl-3">
+                <LayoutGrid className="w-4 h-4 text-primary" />
+                <List className="w-4 h-4 text-base-content/40" />
+                <Maximize2 className="w-4 h-4 text-primary" />
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* ── SECTION HEADER ── */}
-      {activeSection !== "schedule" && (
-        (activeSection === "absent" && hasGroups) ||
-        (activeSection === "rating" && hasReports) ||
-        (activeSection === "payments" && hasPayments)
-      ) && (
-        <div className="bg-white border border-gray-200 p-4 rounded-xl flex items-center justify-between mb-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleBackToSchedule}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
-            </button>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">
+      {activeSection !== "schedule" &&
+        ((activeSection === "absent" && hasGroups) ||
+          (activeSection === "rating" && hasReports) ||
+          (activeSection === "payments" && hasPayments)) && (
+          <div className="card bg-base-100 border border-base-200 shadow-sm mb-4">
+            <div className="card-body p-4 flex-row items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleBackToSchedule}
+                  className="btn btn-ghost btn-sm btn-square"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h2 className="text-lg font-bold">
+                    {activeSection === "absent"
+                      ? "Kelmagan O'quvchilar"
+                      : activeSection === "rating"
+                        ? "O'quvchilar Reytingi"
+                        : "To'lovlar Haqida"}
+                  </h2>
+                  <p className="text-xs text-base-content/50">
+                    {activeSection === "absent"
+                      ? `${new Date().toLocaleDateString("uz-UZ")}`
+                      : activeSection === "rating"
+                        ? `Baholangan o'quvchilar (${studentRatings.length} ta)`
+                        : `Bugungi va oylik to'lovlar (${paymentsData.length} ta)`}
+                  </p>
+                </div>
+              </div>
+              <div
+                className={`badge badge-lg font-bold ${
+                  activeSection === "absent"
+                    ? "badge-error"
+                    : activeSection === "rating"
+                      ? "badge-warning"
+                      : "badge-success"
+                }`}
+              >
                 {activeSection === "absent"
-                  ? "Kelmagan O'quvchilar"
+                  ? `${absentStudents.length} ta kelmagan`
                   : activeSection === "rating"
-                    ? "O'quvchilar Reytingi"
-                    : "To'lovlar Haqida"}
-              </h2>
-              <p className="text-xs text-gray-500">
-                {activeSection === "absent"
-                  ? `${new Date().toLocaleDateString("uz-UZ")}`
-                  : activeSection === "rating"
-                    ? `Baholangan o'quvchilar (${studentRatings.length} ta)`
-                    : `Bugungi va oylik to'lovlar xulosasi (${paymentsData.length} ta)`}
-              </p>
+                    ? `${studentRatings.length} ta o'quvchi`
+                    : `${paymentsData.length} ta to'lov`}
+              </div>
             </div>
           </div>
-          <div
-            className={`px-4 py-2 rounded-xl font-bold ${
-              activeSection === "absent"
-                ? "bg-red-100 text-red-700"
-                : activeSection === "rating"
-                  ? "bg-amber-100 text-amber-700"
-                  : "bg-emerald-100 text-emerald-700"
-            }`}
-          >
-            {activeSection === "absent"
-              ? `${absentStudents.length} ta kelmagan`
-              : activeSection === "rating"
-                ? `${studentRatings.length} ta o'quvchi`
-                : `${paymentsData.length} ta to'lov`}
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* ── SCHEDULE TABLE (Faqat schedule section) ── */}
+      {/* ── SCHEDULE TABLE ── */}
       {activeSection === "schedule" && hasGroups && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="card bg-base-100 border border-base-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-separate border-spacing-0">
-              <thead className="bg-gray-100">
+              <thead className="bg-base-200">
                 <tr>
-                  <th className="p-3 border-r border-b border-gray-200 w-24 sticky left-0 bg-gray-100 z-30 text-xs font-bold text-gray-600 uppercase text-center">
+                  <th className="p-3 border-r border-b border-base-300 w-24 sticky left-0 bg-base-200 z-30 text-xs font-bold text-base-content/60 uppercase text-center">
                     Vaqt
                   </th>
-                  {columns.map((col, idx) => (
+                  {columns.map((col) => (
                     <th
                       key={col._id || col.id}
-                      className="p-3 border-r border-b border-gray-200 min-w-[150px] text-center text-xs font-semibold text-gray-900"
+                      className="p-3 border-r border-b border-base-300 min-w-[180px] text-center text-xs font-semibold text-base-content"
                     >
-                      {col.name || idx + 1}
+                      {col.name}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {TIME_SLOTS.map((slot, slotIdx) => (
-                  <tr key={slot} className="hover:bg-gray-50/50">
-                    <td className="p-3 border-r border-b border-gray-200 text-center text-xs font-semibold text-gray-600 bg-white sticky left-0 z-10">
+                  <tr key={slot} className="hover:bg-base-200/30">
+                    <td className="p-3 border-r border-b border-base-200 text-center text-xs font-semibold text-base-content/60 bg-base-100 sticky left-0 z-10">
                       {slot}
                     </td>
                     {columns.map((col) => {
                       const colId = col._id || col.id;
                       const slotTime = slotStartMinutes(slot);
 
-                      // Find group that starts at this slot
                       const group = dayGroups.find(
                         (g) =>
                           (viewMode === "room"
@@ -771,7 +777,6 @@ export default function Dashboard() {
                           slotTime === timeToMinutes(g.schedule.fromHour),
                       );
 
-                      // Check if this slot is occupied by a group that started earlier
                       const isOccupied = dayGroups.some(
                         (g) =>
                           (viewMode === "room"
@@ -783,12 +788,8 @@ export default function Dashboard() {
                           slotTime < timeToMinutes(g.schedule.toHour),
                       );
 
-                      // Skip cell if occupied (it's part of a rowspan)
-                      if (isOccupied) {
-                        return null;
-                      }
+                      if (isOccupied) return null;
 
-                      // If group found, render it with simple card design
                       if (group && group.schedule?.toHour) {
                         const fromMinutes = timeToMinutes(
                           group.schedule.fromHour,
@@ -799,101 +800,158 @@ export default function Dashboard() {
                           (toMinutes - fromMinutes) / 30,
                         );
 
-                        // API dan o'quvchilar ma'lumotlari
-                        const groupStudents = groupsStudentsData[group._id || group.id] || [];
-                        const currentStudentsCount = groupStudents.length || group.currentStudents || 0;
+                        const groupStudents =
+                          groupsStudentsData[group._id || group.id] || [];
+                        const currentStudentsCount =
+                          groupStudents.length || group.currentStudents || 0;
                         const maxStudents = group.maxStudents || 12;
 
-                        // Guruh o'qituvchisi ma'lumotlari
-                        const teacher = data.teachers.find(t => (t._id || t.id) === group.teacherId);
-                        const teacherName = teacher?.name || group.teacherName || "Noma'lum";
-
-                        // Bugungi attendance ma'lumotlari (agar guruh uchun bo'lsa)
-                        const today = new Date().toISOString().split('T')[0];
-                        const groupAttendance = attendanceData.filter(a =>
-                          (a.groupId === group._id || a.groupId === group.id) && a.date === today
+                        const teacher = data.teachers.find(
+                          (t) => (t._id || t.id) === group.teacherId,
                         );
-                        const presentCount = groupAttendance.filter(a => a.status === 'present').length;
-                        const absentCount = groupAttendance.filter(a => a.status === 'absent').length;
+                        const teacherName =
+                          teacher?.name || group.teacherName || "Noma'lum";
 
-                        // Hozirgi vaqtni hisoblash
-                        const now = new Date();
-                        const currentHour = now.getHours();
-                        const currentMinute = now.getMinutes();
-                        const currentTotalMinutes = currentHour * 60 + currentMinute;
+                        const today = new Date().toISOString().split("T")[0];
+                        const groupAttendance = attendanceData.filter(
+                          (a) =>
+                            (a.groupId === group._id ||
+                              a.groupId === group.id) &&
+                            a.date === today,
+                        );
+                        const presentCount = groupAttendance.filter(
+                          (a) => a.status === "present",
+                        ).length;
+                        const absentCount = groupAttendance.filter(
+                          (a) => a.status === "absent",
+                        ).length;
 
-                        const startMinutes = timeToMinutes(group.schedule.fromHour);
-                        const endMinutes = timeToMinutes(group.schedule.toHour);
-
-                        // Dars holati
-                        let status = 'kutilmoqda'; // kutilmoqda, boshlandi, davom etmoqda, tugadi
-                        let statusText = 'Kutilmoqda';
-                        let statusColor = 'text-gray-500';
-
-                        if (currentTotalMinutes < startMinutes) {
-                          status = 'kutilmoqda';
-                          statusText = 'Kutilmoqda';
-                          statusColor = 'text-gray-500';
-                        } else if (currentTotalMinutes >= startMinutes && currentTotalMinutes < endMinutes) {
-                          status = 'davom etmoqda';
-                          statusText = 'Darsda';
-                          statusColor = 'text-green-500';
-                        } else if (currentTotalMinutes >= endMinutes) {
-                          status = 'tugadi';
-                          statusText = 'Tugadi';
-                          statusColor = 'text-red-500';
-                        }
+                        const colors = getGroupColor(group.name);
+                        const status = getStatus(
+                          group.schedule.fromHour,
+                          group.schedule.toHour,
+                        );
 
                         return (
                           <td
                             key={`${colId}-${slotIdx}`}
                             rowSpan={span}
-                            className={`p-3 align-top border-[3px] border-white shadow-md z-10 rounded-[18px] transition-all hover:scale-[1.02] cursor-pointer ${getGroupStyles(group.name)}`}
-                            style={{ minWidth: "160px" }}
-                            onClick={() => navigate(`/admin/groups?groupId=${group._id || group.id}`)}
+                            className="p-1.5 align-top border border-base-200"
+                            style={{ minWidth: "180px" }}
+                            onClick={() =>
+                              navigate(
+                                `/admin/groups?groupId=${group._id || group.id}`,
+                              )
+                            }
                           >
-                            <div className="flex flex-col h-full justify-between">
-                              {/* Yuqori qism: Guruh va Vaqt */}
-                              <div>
-                                <div className="text-[13px] font-black font-['Sora'] leading-tight mb-1 drop-shadow-sm">
-                                  {group.name} {group.schedule.fromHour}-
-                                  {group.schedule.toHour}
-                                </div>
-
-                                <div className="text-[12px] font-bold opacity-90 truncate mb-1">
-                                  {teacherName}
-                                </div>
-
-                                <div className="text-[11px] font-medium opacity-85 mb-2">
-                                  Xona: {group.roomName}
-                                </div>
-
-                                {/* Dars holati */}
-                                <div className="text-[10px] font-bold mb-3">
-                                  <span className={statusColor}>●</span> {statusText}
-                                </div>
-                              </div>
-
-                              {/* Pastki qism: Statistika (API ma'lumotlari bilan) */}
-                              <div className="flex items-center gap-3 pt-2 border-t border-black/5">
-                                {/* Bugungi attendance */}
-                                <div className="flex items-center gap-1 text-[11px] font-bold">
-                                  <span className="opacity-70">✅</span>
-                                  <span>{presentCount}/{currentStudentsCount}</span>
-                                </div>
-
-                                {/* O'quvchilar soni */}
-                                <div className="flex items-center gap-1 text-[11px] font-bold">
-                                  <span className="opacity-70">👥</span>
-                                  <span>
-                                    {currentStudentsCount}/{maxStudents}
+                            {/* ── DaisyUI Card ── */}
+                            <div
+                              className={`card card-compact w-full h-full cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 rounded-xl bg-base-100 ${colors.card}`}
+                            >
+                              <div className="card-body gap-1.5 p-3">
+                                {/* Header: nom + status */}
+                                <div className="flex items-start justify-between gap-1">
+                                  <span className="font-black text-sm leading-tight text-base-content">
+                                    {group.name}
+                                  </span>
+                                  <span
+                                    className={`badge badge-sm ${status.cls} shrink-0`}
+                                  >
+                                    <span
+                                      className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${status.dot}`}
+                                    />
+                                    {status.label}
                                   </span>
                                 </div>
 
-                                {/* Kelmaganlar */}
-                                <div className="flex items-center gap-1 text-[11px] font-bold">
-                                  <span className="opacity-70">❌</span>
-                                  <span>{absentCount}</span>
+                                {/* Vaqt */}
+                                <div className="flex items-center gap-1 text-xs text-base-content/60 font-semibold">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="w-3.5 h-3.5"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <circle cx="12" cy="12" r="10" />
+                                    <polyline points="12 6 12 12 16 14" />
+                                  </svg>
+                                  {group.schedule.fromHour} –{" "}
+                                  {group.schedule.toHour}
+                                </div>
+
+                                <div className="divider my-0 h-px" />
+
+                                {/* O'qituvchi */}
+                                <div className="flex items-center gap-1.5 text-xs text-base-content/80">
+                                  <div className="avatar placeholder">
+                                    <div className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[9px] font-bold flex items-center justify-center">
+                                      {teacherName?.charAt(0)?.toUpperCase() ||
+                                        "?"}
+                                    </div>
+                                  </div>
+                                  <span className="truncate font-medium">
+                                    {teacherName}
+                                  </span>
+                                </div>
+
+                                {/* Xona */}
+                                <div className="flex items-center gap-1 text-xs text-base-content/50">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="w-3.5 h-3.5"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                                    <polyline points="9 22 9 12 15 12 15 22" />
+                                  </svg>
+                                  {group.roomName}
+                                </div>
+
+                                {/* Stats badges */}
+                                <div className="flex items-center gap-1.5 pt-1 mt-auto flex-wrap">
+                                  <div
+                                    className="tooltip tooltip-bottom"
+                                    data-tip="Kelganlar / Jami"
+                                  >
+                                    <div className="badge badge-sm badge-success gap-1 font-bold">
+                                      ✅ {presentCount}/{currentStudentsCount}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className="tooltip tooltip-bottom"
+                                    data-tip="O'quvchi / Sig'im"
+                                  >
+                                    <div className="badge badge-sm badge-info gap-1 font-bold">
+                                      👥 {currentStudentsCount}/{maxStudents}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className="tooltip tooltip-bottom"
+                                    data-tip="Kelmaganlar"
+                                  >
+                                    <div
+                                      className={`badge badge-sm gap-1 font-bold ${absentCount > 0 ? "badge-error" : "badge-ghost"}`}
+                                    >
+                                      ❌ {absentCount}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Progress bar */}
+                                <div
+                                  className="tooltip tooltip-bottom w-full"
+                                  data-tip={`${currentStudentsCount} / ${maxStudents} o'quvchi`}
+                                >
+                                  <progress
+                                    className="progress progress-primary w-full h-1.5"
+                                    value={currentStudentsCount}
+                                    max={maxStudents}
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -901,11 +959,11 @@ export default function Dashboard() {
                         );
                       }
 
-                      // Empty cell
+                      // Bo'sh katak
                       return (
                         <td
                           key={`${colId}-${slotIdx}`}
-                          className="border-r border-b border-gray-200 text-center text-gray-400 text-xs"
+                          className="border-r border-b border-base-200 text-center text-base-content/30 text-xs"
                         >
                           —
                         </td>
@@ -919,53 +977,34 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── ABSENT STUDENTS TABLE (Faqat absent section) ── */}
+      {/* ── ABSENT STUDENTS TABLE ── */}
       {activeSection === "absent" && hasGroups && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="card bg-base-100 border border-base-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="table table-zebra w-full">
               <thead>
-                <tr className="bg-red-50 border-b border-gray-200">
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    #
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Ism
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Familiya
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Telefon
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Guruh
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Ustoz
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">
-                    Balans
-                  </th>
+                <tr className="bg-error/10">
+                  <th>#</th>
+                  <th>Ism</th>
+                  <th>Familiya</th>
+                  <th>Telefon</th>
+                  <th>Guruh</th>
+                  <th>Ustoz</th>
+                  <th className="text-right">Balans</th>
                 </tr>
               </thead>
               <tbody>
                 {loadingAttendance ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center">
-                      <div className="flex justify-center">
-                        <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
-                      </div>
+                    <td colSpan={7} className="text-center py-12">
+                      <span className="loading loading-spinner loading-lg text-error" />
                     </td>
                   </tr>
                 ) : absentStudents.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-12 text-center text-gray-400"
-                    >
-                      <div className="flex flex-col items-center">
-                        <UserCheck className="w-16 h-16 text-gray-200 mx-auto mb-3" />
+                    <td colSpan={7} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-2 text-base-content/40">
+                        <UserCheck className="w-16 h-16" />
                         <p className="text-sm font-medium">
                           Bugun hamma keldi!
                         </p>
@@ -974,45 +1013,40 @@ export default function Dashboard() {
                   </tr>
                 ) : (
                   absentStudents.map((student, idx) => (
-                    <tr
-                      key={student._id || student.id || idx}
-                      className="border-b border-gray-100 hover:bg-red-50 transition-colors"
-                    >
-                      <td className="px-4 py-3 text-sm text-gray-500">
+                    <tr key={student._id || student.id || idx}>
+                      <td className="text-sm text-base-content/50">
                         {idx + 1}
                       </td>
-                      <td className="px-4 py-3">
+                      <td>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-bold text-xs">
-                            {student.studentName
-                              ?.split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .toUpperCase()
-                              .slice(0, 2) || "??"}
+                          <div className="avatar placeholder">
+                            <div className="w-8 h-8 rounded-full bg-error/20 text-error font-bold text-xs flex items-center justify-center">
+                              {student.studentName
+                                ?.split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()
+                                .slice(0, 2) || "??"}
+                            </div>
                           </div>
-                          <span className="font-medium text-gray-900">
+                          <span className="font-medium">
                             {student.studentName}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
+                      <td className="text-sm">
                         {student.studentSurname || "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {student.studentPhone}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-block px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+                      <td className="text-sm">{student.studentPhone}</td>
+                      <td>
+                        <span className="badge badge-error badge-sm font-bold">
                           {student.groupName}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {student.teacherName}
-                      </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="text-sm">{student.teacherName}</td>
+                      <td className="text-right">
                         <span
-                          className={`inline-block px-3 py-1 rounded-lg text-sm font-bold ${student.balance >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                          className={`badge font-bold ${student.balance >= 0 ? "badge-success" : "badge-error"}`}
                         >
                           {student.balance.toLocaleString()} UZS
                         </span>
@@ -1026,148 +1060,116 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── RATING TABLE (Faqat rating section) ── */}
+      {/* ── RATING TABLE ── */}
       {activeSection === "rating" && hasReports && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="card bg-base-100 border border-base-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="table table-zebra w-full">
               <thead>
-                <tr className="bg-amber-50 border-b border-gray-200">
-                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">
-                    #
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Ism
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Familiya
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Telefon
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Guruh
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                    Ustoz
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">
-                    Baholar soni
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">
-                    O'rtacha
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">
-                    Jami
-                  </th>
+                <tr className="bg-warning/10">
+                  <th className="text-center">#</th>
+                  <th>Ism</th>
+                  <th>Familiya</th>
+                  <th>Telefon</th>
+                  <th>Guruh</th>
+                  <th>Ustoz</th>
+                  <th className="text-center">Baholar soni</th>
+                  <th className="text-center">O'rtacha</th>
+                  <th className="text-center">Jami</th>
                 </tr>
               </thead>
               <tbody>
                 {loadingRatings ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center">
-                      <div className="flex justify-center">
-                        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                      </div>
+                    <td colSpan={9} className="text-center py-12">
+                      <span className="loading loading-spinner loading-lg text-warning" />
                     </td>
                   </tr>
                 ) : studentRatings.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={9}
-                      className="px-4 py-12 text-center text-gray-400"
-                    >
-                      <div className="flex flex-col items-center">
-                        <Users className="w-16 h-16 text-gray-200 mx-auto mb-3" />
-                        <p className="text-sm font-medium">
-                          O'quvchilar topilmadi
-                        </p>
+                    <td colSpan={9} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-2 text-base-content/40">
+                        <Users className="w-16 h-16" />
+                        <p className="text-sm">O'quvchilar topilmadi</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   studentRatings.map((student, idx) => (
-                    <tr
-                      key={student.studentId}
-                      className="border-b border-gray-100 hover:bg-amber-50 transition-colors"
-                    >
-                      <td className="px-4 py-3 text-center">
+                    <tr key={student.studentId}>
+                      <td className="text-center">
                         {idx < 3 ? (
                           <div
-                            className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${
+                            className={`badge badge-md font-bold ${
                               idx === 0
-                                ? "bg-amber-500 text-white"
+                                ? "badge-warning"
                                 : idx === 1
-                                  ? "bg-gray-400 text-white"
-                                  : "bg-amber-700 text-white"
+                                  ? "badge-ghost"
+                                  : "badge-error"
                             }`}
                           >
                             {idx + 1}
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-500">
+                          <span className="text-sm text-base-content/50">
                             {idx + 1}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td>
                         <div className="flex items-center gap-3">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${
-                              idx < 3
-                                ? "bg-gradient-to-br from-amber-400 to-amber-600"
-                                : "bg-gray-200 text-gray-600"
-                            }`}
-                          >
-                            {student.studentName
-                              ?.split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .toUpperCase()
-                              .slice(0, 2) || "??"}
+                          <div className="avatar placeholder">
+                            <div
+                              className={`w-8 h-8 rounded-full font-bold text-xs flex items-center justify-center ${
+                                idx < 3
+                                  ? "bg-warning/20 text-warning"
+                                  : "bg-base-200 text-base-content/60"
+                              }`}
+                            >
+                              {student.studentName
+                                ?.split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()
+                                .slice(0, 2) || "??"}
+                            </div>
                           </div>
-                          <span
-                            className={`font-medium ${idx < 3 ? "text-gray-900" : "text-gray-700"}`}
-                          >
+                          <span className="font-medium">
                             {student.studentName}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
+                      <td className="text-sm">
                         {student.studentSurname || "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {student.studentPhone}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-block px-2 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full">
+                      <td className="text-sm">{student.studentPhone}</td>
+                      <td>
+                        <span className="badge badge-warning badge-sm font-bold">
                           {student.groupName}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {student.teacherName}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded">
+                      <td className="text-sm">{student.teacherName}</td>
+                      <td className="text-center">
+                        <span className="badge badge-info badge-sm font-bold">
                           {student.ratingCount}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <TrendingUp className="w-4 h-4 text-amber-500" />
-                          <span className="font-bold text-amber-600">
+                          <TrendingUp className="w-4 h-4 text-warning" />
+                          <span className="font-bold text-warning">
                             {student.averageScore}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="text-center">
                         <span
-                          className={`inline-block px-3 py-1 rounded-lg text-sm font-bold ${
+                          className={`badge font-bold ${
                             student.totalScore >= 50
-                              ? "bg-green-100 text-green-700"
+                              ? "badge-success"
                               : student.totalScore >= 30
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-red-100 text-red-700"
+                                ? "badge-warning"
+                                : "badge-error"
                           }`}
                         >
                           {student.totalScore}
@@ -1182,79 +1184,75 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── PAYMENTS SECTION (Faqat payments section) ── */}
+      {/* ── PAYMENTS SECTION ── */}
       {activeSection === "payments" && hasPayments && (
         <div className="space-y-6">
           {loadingPayments ? (
             <div className="flex justify-center py-20">
-              <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              <span className="loading loading-spinner loading-lg text-success" />
             </div>
           ) : (
             <>
-              {/* Statistics Cards */}
+              {/* Stats cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Bugungi kirim */}
-                <div className="bg-white p-5 border border-emerald-100 rounded-xl shadow-sm">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-3 rounded-xl bg-emerald-50">
-                      <ArrowUpCircle className="w-6 h-6 text-emerald-600" />
+                <div className="card bg-base-100 border border-success/20 shadow-sm">
+                  <div className="card-body p-5 flex-row items-center gap-3">
+                    <div className="p-3 rounded-xl bg-success/10">
+                      <ArrowUpCircle className="w-6 h-6 text-success" />
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 font-medium">
+                      <p className="text-xs text-base-content/50 font-medium">
                         Bugungi Kirim
                       </p>
-                      <p className="text-xl font-bold text-emerald-600">
+                      <p className="text-xl font-bold text-success">
                         +{paymentStats.todayIncome.toLocaleString()}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Bugungi chiqim */}
-                <div className="bg-white p-5 border border-red-100 rounded-xl shadow-sm">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-3 rounded-xl bg-red-50">
-                      <ArrowDownCircle className="w-6 h-6 text-red-600" />
+                <div className="card bg-base-100 border border-error/20 shadow-sm">
+                  <div className="card-body p-5 flex-row items-center gap-3">
+                    <div className="p-3 rounded-xl bg-error/10">
+                      <ArrowDownCircle className="w-6 h-6 text-error" />
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 font-medium">
+                      <p className="text-xs text-base-content/50 font-medium">
                         Bugungi Chiqim
                       </p>
-                      <p className="text-xl font-bold text-red-600">
+                      <p className="text-xl font-bold text-error">
                         -{paymentStats.todayExpense.toLocaleString()}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Oylik kirim */}
-                <div className="bg-white p-5 border border-blue-100 rounded-xl shadow-sm">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-3 rounded-xl bg-blue-50">
-                      <Calendar className="w-6 h-6 text-blue-600" />
+                <div className="card bg-base-100 border border-info/20 shadow-sm">
+                  <div className="card-body p-5 flex-row items-center gap-3">
+                    <div className="p-3 rounded-xl bg-info/10">
+                      <Calendar className="w-6 h-6 text-info" />
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 font-medium">
+                      <p className="text-xs text-base-content/50 font-medium">
                         Oylik Kirim
                       </p>
-                      <p className="text-xl font-bold text-blue-600">
+                      <p className="text-xl font-bold text-info">
                         +{paymentStats.monthIncome.toLocaleString()}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Oylik chiqim */}
-                <div className="bg-white p-5 border border-purple-100 rounded-xl shadow-sm">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-3 rounded-xl bg-purple-50">
-                      <TrendingUp className="w-6 h-6 text-purple-600" />
+                <div className="card bg-base-100 border border-secondary/20 shadow-sm">
+                  <div className="card-body p-5 flex-row items-center gap-3">
+                    <div className="p-3 rounded-xl bg-secondary/10">
+                      <TrendingUp className="w-6 h-6 text-secondary" />
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 font-medium">
+                      <p className="text-xs text-base-content/50 font-medium">
                         Oylik Chiqim
                       </p>
-                      <p className="text-xl font-bold text-purple-600">
+                      <p className="text-xl font-bold text-secondary">
                         -{paymentStats.monthExpense.toLocaleString()}
                       </p>
                     </div>
@@ -1262,101 +1260,90 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Balance Card */}
+              {/* Balance card */}
               <div
-                className={`bg-white p-6 border rounded-2xl shadow-sm ${paymentStats.netBalance >= 0 ? "border-emerald-200" : "border-red-200"}`}
+                className={`card bg-base-100 shadow-sm ${paymentStats.netBalance >= 0 ? "border border-success/30" : "border border-error/30"}`}
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-500 font-medium">
-                      Sof Balans
-                    </p>
-                    <p
-                      className={`text-3xl font-bold ${paymentStats.netBalance >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                <div className="card-body p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-base-content/50 font-medium">
+                        Sof Balans
+                      </p>
+                      <p
+                        className={`text-3xl font-bold ${paymentStats.netBalance >= 0 ? "text-success" : "text-error"}`}
+                      >
+                        {paymentStats.netBalance >= 0 ? "+" : ""}
+                        {paymentStats.netBalance.toLocaleString()} UZS
+                      </p>
+                    </div>
+                    <div
+                      className={`w-16 h-16 rounded-2xl flex items-center justify-center ${paymentStats.netBalance >= 0 ? "bg-success" : "bg-error"}`}
                     >
-                      {paymentStats.netBalance >= 0 ? "+" : ""}
-                      {paymentStats.netBalance.toLocaleString()} UZS
-                    </p>
+                      <Wallet className="w-8 h-8 text-white" />
+                    </div>
                   </div>
-                  <div
-                    className={`w-16 h-16 rounded-2xl flex items-center justify-center ${paymentStats.netBalance >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
-                  >
-                    <Wallet className="w-8 h-8 text-white" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div className="text-center">
-                    <p className="text-xs text-slate-500">Jami Kirim</p>
-                    <p className="text-lg font-bold text-emerald-600">
-                      +{paymentStats.totalIncome.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-slate-500">Jami Chiqim</p>
-                    <p className="text-lg font-bold text-red-600">
-                      -{paymentStats.totalExpense.toLocaleString()}
-                    </p>
+                  <div className="divider my-2" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center">
+                      <p className="text-xs text-base-content/50">
+                        Jami Kirim
+                      </p>
+                      <p className="text-lg font-bold text-success">
+                        +{paymentStats.totalIncome.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-base-content/50">
+                        Jami Chiqim
+                      </p>
+                      <p className="text-lg font-bold text-error">
+                        -{paymentStats.totalExpense.toLocaleString()}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Recent Payments Table */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              {/* Payments table */}
+              <div className="card bg-base-100 border border-base-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
+                  <table className="table table-zebra w-full">
                     <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                          Sana
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                          Turi
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                          Kim uchun
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                          Oy
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">
-                          Summa
-                        </th>
+                      <tr className="bg-base-200">
+                        <th>Sana</th>
+                        <th>Turi</th>
+                        <th>Kim uchun</th>
+                        <th>Oy</th>
+                        <th className="text-right">Summa</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paymentsData.length === 0 ? (
                         <tr>
-                          <td
-                            colSpan={5}
-                            className="px-4 py-12 text-center text-gray-400"
-                          >
-                            <div className="flex flex-col items-center">
-                              <Wallet className="w-16 h-16 text-gray-200 mx-auto mb-3" />
-                              <p className="text-sm font-medium">
-                                To'lovlar yo'q
-                              </p>
+                          <td colSpan={5} className="text-center py-12">
+                            <div className="flex flex-col items-center gap-2 text-base-content/40">
+                              <Wallet className="w-16 h-16" />
+                              <p className="text-sm">To'lovlar yo'q</p>
                             </div>
                           </td>
                         </tr>
                       ) : (
                         paymentsData.slice(0, 20).map((payment) => (
-                          <tr
-                            key={payment._id || payment.id}
-                            className="border-b border-gray-100 hover:bg-slate-50 transition-colors"
-                          >
-                            <td className="px-4 py-3 text-sm text-slate-600">
+                          <tr key={payment._id || payment.id}>
+                            <td className="text-sm">
                               {payment.date
                                 ? new Date(payment.date).toLocaleDateString(
                                     "uz-UZ",
                                   )
                                 : "—"}
                             </td>
-                            <td className="px-4 py-3">
+                            <td>
                               <span
-                                className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 ${
+                                className={`badge badge-sm gap-1 font-medium ${
                                   payment.type?.dk === "credit"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-red-100 text-red-700"
+                                    ? "badge-success"
+                                    : "badge-error"
                                 }`}
                               >
                                 {payment.type?.dk === "credit" ? (
@@ -1369,19 +1356,17 @@ export default function Dashboard() {
                                   "—"}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-700">
+                            <td className="text-sm">
                               {typeof payment.toWho === "object"
                                 ? payment.toWho?.name || "—"
                                 : payment.toWho || "—"}
                             </td>
-                            <td className="px-4 py-3 text-sm text-slate-600">
-                              {payment.month || "—"}
-                            </td>
+                            <td className="text-sm">{payment.month || "—"}</td>
                             <td
-                              className={`px-4 py-3 text-sm font-semibold text-right ${
+                              className={`text-sm font-semibold text-right ${
                                 payment.type?.dk === "credit"
-                                  ? "text-emerald-600"
-                                  : "text-red-600"
+                                  ? "text-success"
+                                  : "text-error"
                               }`}
                             >
                               {payment.type?.dk === "credit" ? "+" : "-"}
@@ -1394,7 +1379,7 @@ export default function Dashboard() {
                   </table>
                 </div>
                 {paymentsData.length > 20 && (
-                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 text-center text-sm text-slate-500">
+                  <div className="px-6 py-4 bg-base-200 border-t border-base-300 text-center text-sm text-base-content/50">
                     Oxirgi 20 ta to'lov ko'rsatilgan. Barchasi uchun To'lovlar
                     sahifasiga o'ting.
                   </div>
