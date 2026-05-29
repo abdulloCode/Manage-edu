@@ -1,29 +1,32 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useInfiniteScroll } from "../../hooks/useInfiniteScroll";
 import { useAuth } from "../../context/AuthContext";
+import { useLang } from "../../context/LangContext";
+import { formatPhone } from "../../utils/permissions";
 import {
   getStudents, createStudent, updateStudent,
   deleteStudent, assignStudentGroup,
 } from "../../api/students";
 import { getAllGroups } from "../../api/groups";
 import { getAllCourses } from "../../api/courses";
-import { useDebounce } from "../../hooks/useDebounce";
 import PhoneInput from "../../components/PhoneInput";
 import {
-  Plus, Search, Eye, Edit3, Trash2, Users, X,
-  AlertCircle, UserPlus, BookOpen, Phone,
+  Plus, Search, Edit3, Trash2, Users, X,
+  AlertCircle, UserPlus, UserX, Eye,
 } from "lucide-react";
 
 const getId = (item) => item?._id || item?.id || null;
 const fmt   = (n)    => Number(n ?? 0).toLocaleString("ru-RU");
 
 const STATUS_LABEL = {
-  active:    { label: "Faol",      cls: "bg-emerald-100 text-emerald-700" },
-  inactive:  { label: "Nofaol",    cls: "bg-yellow-100 text-yellow-700"   },
-  suspended: { label: "To'xtatilgan", cls: "bg-red-100 text-red-700"      },
-  graduated: { label: "Bitirgan",  cls: "bg-blue-100 text-blue-700"       },
-  deleted:   { label: "O'chirilgan", cls: "bg-gray-100 text-gray-500"     },
+  active:    { label: "Faol",                          cls: "bg-emerald-100 text-emerald-700" },
+  waiting:   { label: "Darsi boshlanishi kutilmoqda",  cls: "bg-orange-100 text-orange-600"  },
+  inactive:  { label: "Nofaol",                        cls: "bg-yellow-100 text-yellow-700"   },
+  suspended: { label: "To'xtatilgan",                  cls: "bg-red-100 text-red-700"         },
+  graduated: { label: "Bitirgan",                      cls: "bg-blue-100 text-blue-700"       },
+  deleted:   { label: "O'chirilgan",                   cls: "bg-gray-100 text-gray-500"       },
 };
-const STATUS_OPTIONS = ["active", "inactive", "suspended", "graduated"];
+const STATUS_OPTIONS = ["active", "waiting", "inactive", "suspended", "graduated"];
 
 // ── helpers ───────────────────────────────────────────────────
 const inputCls = (err) =>
@@ -148,33 +151,46 @@ function CreateModal({ onClose, onCreated }) {
       (g.course && (g.course._id === cid || g.course.id === cid))
     );
     setFilteredGroups(fg);
-    patch("groupId")(fg.length > 0 ? getId(fg[0]) : "");
+    patch("groupId")("");
   }, [form.courseId, groups]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim())        return setError("Ism kiritilishi shart");
-    if (!form.phone.trim())       return setError("Telefon kiritilishi shart");
-    if (!form.password.trim())    return setError("Parol kiritilishi shart");
-    if (!form.courseId)           return setError("Kurs tanlanishi shart");
-    if (!form.parentPhone.trim()) return setError("Ota-ona telefoni kiritilishi shart");
+    if (!form.name.trim())                         return setError("Ism kiritilishi shart");
+    if (!form.phone.trim())                        return setError("Telefon kiritilishi shart");
+    if (form.phone.replace(/\D/g,"").length < 9)   return setError("Telefon raqamni to'liq kiriting (9 ta raqam)");
+    if (!form.password.trim())                     return setError("Parol kiritilishi shart");
+    if (form.password.length < 8)                  return setError("Parol kamida 8 ta belgi bo'lishi kerak");
+    if (!form.courseId)                            return setError("Kurs tanlanishi shart");
+    if (!form.parentPhone.trim())                  return setError("Ota-ona telefoni kiritilishi shart");
+    if (form.parentPhone.replace(/\D/g,"").length < 9) return setError("Ota-ona telefoni to'liq kiritilishi shart");
 
     setLoading(true); setError("");
     try {
+      const stripP = (v) => (v ?? "").replace(/\D/g, "").replace(/^998/, "").slice(0, 9);
       const payload = {
         name:        form.name.trim(),
-        phone:       form.phone.length === 9 ? "+998" + form.phone : form.phone,
+        phone:       stripP(form.phone),
         password:    form.password,
-        parentPhone: form.parentPhone.length === 9 ? "+998" + form.parentPhone : form.parentPhone,
+        parentPhone: stripP(form.parentPhone),
         courseId:    form.courseId,
+        status:      "waiting",
       };
       const { data } = await createStudent(payload);
-      const studentId = getId(data?.student || data);
+      // backend turli xil javob formatlarini qo'llab-quvvatlash
+      const created = data?.student || data?.data || data;
+      const studentId = getId(created);
+      const returnedCourseId = created?.courseId;
+
+      // backend courseId saqlamagan bo'lsa — alohida PUT bilan set qilamiz
+      if (form.courseId && !returnedCourseId && studentId) {
+        await updateStudent(studentId, { courseId: form.courseId }).catch(() => {});
+      }
 
       if (form.groupId && studentId) {
-        await assignStudentGroup(studentId, form.groupId);
+        await assignStudentGroup(studentId, form.groupId).catch(() => {});
       }
-      onCreated();
+      onCreated(studentId, form.courseId);
       onClose();
     } catch (err) {
       setError(err.response?.data?.message || err.response?.data?.error || "Xatolik yuz berdi");
@@ -224,6 +240,8 @@ function CreateModal({ onClose, onCreated }) {
             value={form.password}
             onChange={(e) => patch("password")(e.target.value)}
             placeholder="••••••••"
+            minLength={8}
+            title="Parol kamida 8 ta belgi bo'lishi kerak"
           />
         </Field>
 
@@ -235,18 +253,20 @@ function CreateModal({ onClose, onCreated }) {
           />
         </Field>
 
-        <Field label="Kurs *">
+        <Field label="Kurs *" error={!fetching && !form.courseId && courses.length > 0 ? undefined : undefined}>
           {fetching ? (
             <div className="flex items-center gap-2 py-2">
               <Spinner /><span className="text-sm text-gray-400">Yuklanmoqda...</span>
             </div>
           ) : (
             <select
-              className={inputCls(false)}
+              required
+              className={inputCls(!form.courseId && courses.length > 0 ? false : false)}
               value={form.courseId}
               onChange={(e) => patch("courseId")(e.target.value)}
+              style={!form.courseId ? { borderColor: "#f97316", background: "#fff7ed" } : {}}
             >
-              <option value="">Kurs tanlang...</option>
+              <option value="">— Kurs tanlang (majburiy) —</option>
               {courses.map((c) => (
                 <option key={getId(c)} value={getId(c)}>
                   {c.name || c.title}
@@ -278,15 +298,16 @@ function CreateModal({ onClose, onCreated }) {
         )}
 
         {form.courseId && !fetching && filteredGroups.length === 0 && (
-          <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
-            Bu kurs uchun mavjud guruh yo'q
+          <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 flex items-center gap-2">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            Bu kurs uchun guruh yo'q — o'quvchi guruhsiz qo'shiladi, kurs keyinroq ko'rinadi
           </div>
         )}
       </form>
 
       <ModalFoot>
         <Btn variant="ghost" onClick={onClose} disabled={loading}>Bekor qilish</Btn>
-        <Btn variant="primary" onClick={handleSubmit} disabled={loading || fetching} type="submit">
+        <Btn variant="primary" onClick={handleSubmit} disabled={loading || fetching || !form.courseId} type="submit">
           {loading ? <><Spinner color="border-white" />Saqlanmoqda...</> : "Qo'shish"}
         </Btn>
       </ModalFoot>
@@ -297,27 +318,45 @@ function CreateModal({ onClose, onCreated }) {
 // ── EditModal ─────────────────────────────────────────────────
 function EditModal({ student, onClose, onUpdated }) {
   const [form, setForm] = useState({
-    name:   student.name   ?? "",
-    phone:  (student.phone ?? "").replace(/^\+?998/, ""),
-    status: student.status ?? "active",
+    name:        student.name   ?? "",
+    phone:       (student.phone ?? "").replace(/^\+?998/, ""),
+    parentPhone: (student.parentPhone ?? "").replace(/^\+?998/, ""),
+    status:      student.status ?? "active",
+    courseId:    student.courseId || getId(student.course) || getId(student.group?.course) || "",
   });
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
+  const [courses,  setCourses]  = useState([]);
+  const [fetching, setFetching] = useState(true);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState("");
 
   const patch = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    getAllCourses()
+      .then((res) => setCourses(res.data?.data || res.data || []))
+      .catch(() => {})
+      .finally(() => setFetching(false));
+  }, []);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!form.name.trim()) return setError("Ism kiritilishi shart");
     setLoading(true); setError("");
     try {
+      const stripP = (v) => (v ?? "").replace(/\D/g, "").replace(/^998/, "").slice(0, 9);
       const payload = {
-        name:   form.name.trim(),
-        phone:  form.phone.length === 9 ? "+998" + form.phone : form.phone,
-        status: form.status,
+        name:        form.name.trim(),
+        phone:       stripP(form.phone),
+        status:      form.status,
+        courseId:    form.courseId || undefined,
       };
+      if (form.parentPhone) {
+        payload.parentPhone = stripP(form.parentPhone);
+      }
       const { data } = await updateStudent(getId(student), payload);
-      onUpdated(data?.student || data);
+      const result = data?.student || data || {};
+      // backend courseId qaytarmasa, formdan olamiz
+      onUpdated({ ...result, courseId: form.courseId || result.courseId || null });
       onClose();
     } catch (err) {
       setError(err.response?.data?.message || "Xatolik yuz berdi");
@@ -361,6 +400,33 @@ function EditModal({ student, onClose, onUpdated }) {
           />
         </Field>
 
+        <Field label="Ota-ona telefoni">
+          <PhoneInput
+            value={form.parentPhone}
+            onChange={(e) => patch("parentPhone")(e.target.value)}
+            className="border-gray-200 focus:border-indigo-400"
+          />
+        </Field>
+
+        <Field label="Kurs">
+          {fetching ? (
+            <div className="flex items-center gap-2 py-2">
+              <Spinner /><span className="text-sm text-gray-400">Yuklanmoqda...</span>
+            </div>
+          ) : (
+            <select
+              className={inputCls(false)}
+              value={form.courseId}
+              onChange={(e) => patch("courseId")(e.target.value)}
+            >
+              <option value="">— Kurs tanlanmagan —</option>
+              {courses.map((c) => (
+                <option key={getId(c)} value={getId(c)}>{c.name || c.title}</option>
+              ))}
+            </select>
+          )}
+        </Field>
+
         <Field label="Holat">
           <select
             className={inputCls(false)}
@@ -374,13 +440,12 @@ function EditModal({ student, onClose, onUpdated }) {
         </Field>
 
         {/* Guruh ma'lumotlari */}
-        {student.group && (
+        {(student.groupName || student.groupId || student.group) && (
           <div className="pt-3 border-t border-gray-100">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Hozirgi guruh</p>
             <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-700 space-y-1">
-              <p><span className="text-gray-400 text-xs">Guruh:</span> {student.group?.name || "—"}</p>
-              {student.group?.course && <p><span className="text-gray-400 text-xs">Kurs:</span> {student.group.course?.title || student.group.course?.name}</p>}
-              {student.group?.teacher && <p><span className="text-gray-400 text-xs">Ustoz:</span> {student.group.teacher?.name}</p>}
+              <p><span className="text-gray-400 text-xs">Guruh:</span> {student.group?.name || student.groupName || "—"}</p>
+              <p><span className="text-gray-400 text-xs">Kurs:</span> {student.group?.course?.title || student.group?.course?.name || student.courseName || "—"}</p>
             </div>
           </div>
         )}
@@ -388,7 +453,7 @@ function EditModal({ student, onClose, onUpdated }) {
 
       <ModalFoot>
         <Btn variant="ghost" onClick={onClose} disabled={loading}>Bekor qilish</Btn>
-        <Btn variant="primary" onClick={handleSubmit} disabled={loading}>
+        <Btn variant="primary" onClick={handleSubmit} disabled={loading || fetching}>
           {loading ? <><Spinner color="border-white" />Saqlanmoqda...</> : "Saqlash"}
         </Btn>
       </ModalFoot>
@@ -561,7 +626,7 @@ function DetailModal({ student, courses, onClose }) {
           </div>
           <div>
             <p className="font-bold text-gray-900 text-base">{student.name}</p>
-            <p className="text-gray-500 text-xs font-mono">{student.phone}</p>
+            <p className="text-gray-500 text-xs font-mono">{formatPhone(student.phone)}</p>
             <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_LABEL[student.status]?.cls || "bg-gray-100 text-gray-600"}`}>
               {STATUS_LABEL[student.status]?.label || student.status}
             </span>
@@ -584,15 +649,14 @@ function DetailModal({ student, courses, onClose }) {
         </div>
 
         {/* Guruh */}
-        {student.group && (
+        {(student.groupName || student.groupId || student.group) && (
           <div>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Guruh</p>
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-1.5 text-xs">
               {[
-                ["Guruh", student.group.name],
-                ["Kurs",  student.group.course?.title || student.group.course?.name || "—"],
-                ["Ustoz", student.group.teacher?.name || "—"],
-                ["O'quvchilar", `${student.group.currentStudents || 0}/${student.group.maxStudents}`],
+                ["Guruh",  student.group?.name  || student.groupName  || "—"],
+                ["Kurs",   student.group?.course?.title || student.group?.course?.name || student.courseName || "—"],
+                ["Ustoz",  student.group?.teacher?.name || "—"],
               ].map(([l, v]) => (
                 <div key={l} className="flex items-center justify-between">
                   <span className="text-gray-500">{l}:</span>
@@ -669,45 +733,19 @@ function DeleteModal({ student, onClose, onDeleted }) {
   );
 }
 
-// ── Pagination ─────────────────────────────────────────────────
-function Pagination({ page, totalPages, onChange }) {
-  if (totalPages <= 1) return null;
-  return (
-    <div className="flex items-center gap-1">
-      <button
-        onClick={() => onChange(page - 1)} disabled={page === 1}
-        className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-      >←</button>
-      {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map((p) => (
-        <button
-          key={p} onClick={() => onChange(p)}
-          className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${p === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 hover:bg-gray-50"}`}
-        >{p}</button>
-      ))}
-      <button
-        onClick={() => onChange(page + 1)} disabled={page === totalPages}
-        className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-      >→</button>
-    </div>
-  );
-}
-
 // ── MAIN PAGE ─────────────────────────────────────────────────
 export default function StudentsPage() {
   const { user } = useAuth();
+  const { t } = useLang();
   const canEdit = user?.role === "admin" || user?.role === "manager";
 
-  const [students,   setStudents]   = useState([]);
-  const [courses,    setCourses]    = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
-  const [page,       setPage]       = useState(1);
-  const [search,     setSearch]     = useState("");
-  const [hasGroup,   setHasGroup]   = useState("all");
+  const [allStudents,  setAllStudents]  = useState([]);
+  const [courses,      setCourses]      = useState([]);
+  const [search,       setSearch]       = useState("");
   const [courseFilter, setCourseFilter] = useState("all");
-  const [loading,    setLoading]    = useState(false);
-  const [modal,      setModal]      = useState(null);
-
-  const debouncedSearch = useDebounce(search, 400);
+  const [noGroupOnly,  setNoGroupOnly]  = useState(false);
+  const [loading,      setLoading]      = useState(false);
+  const [modal,        setModal]        = useState(null);
 
   useEffect(() => {
     getAllCourses()
@@ -718,31 +756,45 @@ export default function StudentsPage() {
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { page, limit: 50 };
-      if (debouncedSearch) params.search    = debouncedSearch;
-      if (hasGroup !== "all") params.hasGroup = hasGroup === "true";
-      if (courseFilter !== "all") params.courseId = courseFilter;
-
-      const { data } = await getStudents(params);
-      const list = data?.data || data?.students || data || [];
-      setStudents(list);
-      setPagination(data?.pagination || { page: 1, totalPages: 1, total: list.length });
+      const { data } = await getStudents({ limit: 2000 });
+      const list = Array.isArray(data?.data)      ? data.data
+                 : Array.isArray(data?.students)  ? data.students
+                 : Array.isArray(data)             ? data
+                 : [];
+      setAllStudents(list);
     } catch {
-      setStudents([]);
+      setAllStudents([]);
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, hasGroup, courseFilter]);
+  }, []);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
+
+  // ── Client-side filter ──────────────────────────────────────
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allStudents.filter((s) => {
+      if (q && !(
+        s.name?.toLowerCase().includes(q) ||
+        s.phone?.includes(q) ||
+        s.parentPhone?.includes(q)
+      )) return false;
+      if (courseFilter !== "all" && s.courseId !== courseFilter && getId(s.course) !== courseFilter) return false;
+      if (noGroupOnly && (s.group || s.groupId || s.groupName)) return false;
+      return true;
+    });
+  }, [allStudents, search, courseFilter, noGroupOnly]);
+
+  const { visible: students, sentinelRef, hasMore, shown, total: filteredTotal } = useInfiniteScroll(filtered, 20);
 
   const open  = (type, student = null) => setModal({ type, student });
   const close = () => setModal(null);
 
-  const handleDeleted = (id) => setStudents((prev) => prev.filter((s) => getId(s) !== id));
+  const handleDeleted = (id) => setAllStudents((prev) => prev.filter((s) => getId(s) !== id));
   const handleUpdated = (updated) => {
     const uid = getId(updated);
-    setStudents((prev) => prev.map((s) => getId(s) === uid ? { ...s, ...updated } : s));
+    setAllStudents((prev) => prev.map((s) => getId(s) === uid ? { ...s, ...updated } : s));
   };
 
   return (
@@ -752,8 +804,12 @@ export default function StudentsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">O'quvchilar</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{pagination.total} ta o'quvchi</p>
+            <h1 className="text-xl font-bold text-gray-900">{t('nav_students')}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {filtered.length !== allStudents.length
+                ? `${filtered.length} / ${allStudents.length} ta`
+                : `${allStudents.length} ta`} o'quvchi
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* Search */}
@@ -761,28 +817,31 @@ export default function StudentsPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Qidirish..."
+                placeholder={t('search')}
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all shadow-sm w-52"
               />
             </div>
 
-            {/* Guruh filter */}
-            <select
-              value={hasGroup}
-              onChange={(e) => { setHasGroup(e.target.value); setPage(1); }}
-              className="py-2.5 px-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400 shadow-sm"
+            {/* Guruhsiz filter */}
+            <button
+              onClick={() => { setNoGroupOnly((v) => !v); }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all shadow-sm ${
+                noGroupOnly
+                  ? "bg-orange-500 text-white border-orange-500 hover:bg-orange-600"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-orange-300 hover:text-orange-500"
+              }`}
             >
-              <option value="all">Barcha</option>
-              <option value="true">Guruhda</option>
-              <option value="false">Guruhsiz</option>
-            </select>
+              <UserX className="w-4 h-4" />
+              Guruhsiz
+              {noGroupOnly && <span className="w-1.5 h-1.5 rounded-full bg-white/80 ml-0.5" />}
+            </button>
 
             {/* Kurs filter */}
             <select
               value={courseFilter}
-              onChange={(e) => { setCourseFilter(e.target.value); setPage(1); }}
+              onChange={(e) => { setCourseFilter(e.target.value); }}
               className="py-2.5 px-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-400 shadow-sm"
             >
               <option value="all">Barcha kurslar</option>
@@ -796,7 +855,7 @@ export default function StudentsPage() {
                 onClick={() => open("create")}
                 className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
               >
-                <Plus className="w-4 h-4" />O'quvchi qo'shish
+                <Plus className="w-4 h-4" />{t('stu_add')}
               </button>
             )}
           </div>
@@ -806,19 +865,19 @@ export default function StudentsPage() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
-              <Spinner /><p className="text-sm text-gray-400">Yuklanmoqda...</p>
+              <Spinner /><p className="text-sm text-gray-400">{t('loading')}</p>
             </div>
           ) : students.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
               <Users className="w-14 h-14 text-gray-200" />
-              <p className="text-sm text-gray-400">O'quvchilar topilmadi</p>
+              <p className="text-sm text-gray-400">{t('dash_no_students')}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    {["#", "O'quvchi", "Telefon", "Balans", "Kurs", "Guruh", "Holat", "Amallar"].map((h, i) => (
+                    {["#", t('nav_students'), t('phone'), t('balance'), t('stu_course'), t('group'), t('status'), t('actions')].map((h, i) => (
                       <th
                         key={h}
                         className={`px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide ${i === 7 ? "text-right" : "text-left"}`}
@@ -836,9 +895,9 @@ export default function StudentsPage() {
                     const courseColor = course?.color || "#6366f1";
 
                     return (
-                      <tr key={getId(s)} className="hover:bg-gray-50/70 transition-colors">
+                      <tr key={getId(s)} className="hover:bg-gray-50/70 transition-colors cursor-pointer" onClick={() => open("detail", s)}>
                         <td className="px-4 py-3.5 text-xs text-gray-400 font-mono">
-                          {(page - 1) * 50 + idx + 1}
+                          {idx + 1}
                         </td>
 
                         {/* O'quvchi */}
@@ -853,7 +912,7 @@ export default function StudentsPage() {
 
                         {/* Telefon */}
                         <td className="px-4 py-3.5">
-                          <span className="text-xs text-gray-500 font-mono">{s.phone || "—"}</span>
+                          <span className="text-xs text-gray-500 font-mono">{formatPhone(s.phone)}</span>
                         </td>
 
                         {/* Balans */}
@@ -886,7 +945,9 @@ export default function StudentsPage() {
                               {s.group?.name || s.groupName}
                             </span>
                           ) : (
-                            <span className="text-xs text-gray-300">Guruhsiz</span>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-orange-50 text-orange-400 border border-orange-100">
+                              <UserX className="w-3 h-3" />Guruhsiz
+                            </span>
                           )}
                         </td>
 
@@ -898,11 +959,8 @@ export default function StudentsPage() {
                         </td>
 
                         {/* Amallar */}
-                        <td className="px-4 py-3.5">
+                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            <ActionBtn title="Ko'rish" color="blue" onClick={() => open("detail", s)}>
-                              <Eye className="w-3.5 h-3.5" />
-                            </ActionBtn>
                             {canEdit && (
                               <>
                                 <ActionBtn title="Tahrirlash" color="amber" onClick={() => open("edit", s)}>
@@ -926,21 +984,37 @@ export default function StudentsPage() {
             </div>
           )}
 
-          {/* Pagination */}
-          {!loading && students.length > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+          {/* Infinite scroll sentinel */}
+          {!loading && (
+            <div className="border-t border-gray-100 px-4 py-2.5 flex items-center justify-between">
               <span className="text-xs text-gray-400">
-                {pagination.total} ta dan {students.length} ta ko'rsatilmoqda
+                {shown} / {filteredTotal} ta ko'rsatilmoqda
               </span>
-              <Pagination page={page} totalPages={pagination.totalPages} onChange={setPage} />
+              {hasMore && (
+                <span className="text-xs text-indigo-400 animate-pulse">Yuklanmoqda…</span>
+              )}
             </div>
           )}
+          <div ref={sentinelRef} className="h-1" />
         </div>
       </div>
 
       {/* Modals */}
       {modal?.type === "create" && (
-        <CreateModal onClose={close} onCreated={() => { fetchStudents(); close(); }} />
+        <CreateModal
+          onClose={close}
+          onCreated={async (newId, courseId) => {
+            await fetchStudents();
+            if (newId && courseId) {
+              setAllStudents((prev) =>
+                prev.map((s) =>
+                  (s._id || s.id) === newId && !s.courseId ? { ...s, courseId } : s
+                )
+              );
+            }
+            close();
+          }}
+        />
       )}
       {modal?.type === "detail" && (
         <DetailModal student={modal.student} courses={courses} onClose={close} />

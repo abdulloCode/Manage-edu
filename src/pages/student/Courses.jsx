@@ -1,90 +1,144 @@
 import { useFetch } from '../../hooks/useFetch'
 import { getAllCourses } from '../../api/courses'
-import { PageShell, LoadingState, ErrorState, EmptyState } from '../../components/PageShell'
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
+import { BookOpen, Clock, Tag, XCircle } from 'lucide-react'
 
-const STATUS_STYLE = {
-  active:   'text-success',
-  inactive: 'text-warning',
-  archived: 'text-base-content/30',
+const fmt = (n) => Number(n ?? 0).toLocaleString('uz-UZ')
+
+const STATUS_CFG = {
+  active:   { label: 'Faol',       bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  inactive: { label: 'Nofaol',     bg: 'bg-gray-100',    text: 'text-gray-500'    },
+  archived: { label: 'Arxivlandi', bg: 'bg-gray-100',    text: 'text-gray-400'    },
 }
 
-function CourseRow({ course, index }) {
-  return (
-    <div className="flex items-center gap-4 px-4 py-3.5 hover:bg-base-200/50 transition-colors group">
-      {/* Index */}
-      <span className="text-sm font-mono text-base-content/20 w-6 shrink-0 text-right">
-        {String(index + 1).padStart(2, '0')}
-      </span>
-
-      {/* Icon */}
-      <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-        </svg>
-      </div>
-
-      {/* Title + description */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-base-content truncate">{course.title ?? course.name}</p>
-        {course.description && (
-          <p className="text-xs text-base-content/40 truncate mt-0.5">{course.description}</p>
-        )}
-      </div>
-
-      {/* Meta chips — hidden on very small screens */}
-      <div className="hidden sm:flex items-center gap-3 shrink-0">
-        {course.duration && (
-          <span className="text-xs text-base-content/40">
-            {course.duration} mo
-          </span>
-        )}
-        {course.status && (
-          <span className={`text-xs font-medium capitalize ${STATUS_STYLE[course.status] ?? 'text-base-content/40'}`}>
-            {course.status}
-          </span>
-        )}
-      </div>
-
-      {/* Price */}
-      <div className="shrink-0 text-right">
-        <span className={`text-sm font-semibold tabular-nums ${course.price === 0 ? 'text-success' : 'text-base-content'}`}>
-          {course.price === 0 ? 'Free' : `${Number(course.price).toLocaleString('ru-RU')} UZS`}
-        </span>
-      </div>
-    </div>
-  )
-}
+const COLORS = [
+  'bg-violet-100 text-violet-600',
+  'bg-sky-100 text-sky-600',
+  'bg-emerald-100 text-emerald-600',
+  'bg-amber-100 text-amber-600',
+  'bg-rose-100 text-rose-600',
+  'bg-indigo-100 text-indigo-600',
+]
 
 export default function Courses() {
   const { data, loading, error } = useFetch(getAllCourses)
-  const courses = Array.isArray(data) ? data : []
+  const courses = Array.isArray(data) ? data : (data?.data ?? [])
+
+  const { visible, sentinelRef, hasMore, shown } = useInfiniteScroll(courses, 20)
 
   return (
-    <PageShell title="Courses" subtitle={loading ? '' : `${courses.length} available`}>
-      {loading && <LoadingState />}
-      {error && <ErrorState message={error} />}
-      {!loading && !error && courses.length === 0 && <EmptyState message="No courses available" />}
+    <div className="min-h-screen bg-[#F2F2F7] pb-10">
+      <div className="max-w-lg mx-auto px-4 pt-5 space-y-4">
 
-      {!loading && !error && courses.length > 0 && (
-        <div className="rounded-2xl bg-base-100 border border-base-200 shadow-sm overflow-hidden">
-          {/* Table header */}
-          <div className="flex items-center gap-4 px-4 py-2.5 border-b border-base-200 bg-base-200/40">
-            <span className="w-6 shrink-0" />
-            <span className="w-9 shrink-0" />
-            <span className="flex-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider">Course</span>
-            <span className="hidden sm:block text-xs font-semibold text-base-content/40 uppercase tracking-wider">Duration</span>
-            <span className="hidden sm:block text-xs font-semibold text-base-content/40 uppercase tracking-wider w-16">Status</span>
-            <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider shrink-0">Price</span>
-          </div>
-
-          {/* Rows */}
-          <div className="divide-y divide-base-200">
-            {courses.map((c, i) => (
-              <CourseRow key={c.id ?? c._id} course={c} index={i} />
-            ))}
-          </div>
+        <div className="flex items-center justify-between px-1">
+          <h1 className="text-2xl font-bold text-gray-900">Kurslar</h1>
+          {!loading && (
+            <span className="text-[13px] text-gray-400">{courses.length} ta kurs</span>
+          )}
         </div>
-      )}
-    </PageShell>
+
+        {loading && (
+          <div className="bg-white rounded-3xl p-10 text-center">
+            <div className="w-8 h-8 border-[3px] border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-sm text-gray-400">Yuklanmoqda…</p>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="bg-white rounded-3xl p-8 text-center">
+            <XCircle className="w-8 h-8 text-rose-300 mx-auto mb-2" />
+            <p className="text-rose-500 font-medium text-sm">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && courses.length === 0 && (
+          <div className="bg-white rounded-3xl p-10 text-center">
+            <BookOpen className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 font-medium text-sm">Kurslar mavjud emas</p>
+          </div>
+        )}
+
+        {!loading && !error && courses.length > 0 && (
+          <div className="space-y-3">
+            {visible.map((c, i) => {
+              const status = STATUS_CFG[c.status] ?? STATUS_CFG.active
+              const color  = COLORS[i % COLORS.length]
+              const price  = Number(c.price ?? c.monthlyFee ?? 0)
+
+              return (
+                <div key={c.id ?? c._id}
+                  className="bg-white rounded-2xl p-4 shadow-sm flex items-start gap-3">
+
+                  {/* icon */}
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${color.split(' ')[0]}`}>
+                    <BookOpen className={`w-6 h-6 ${color.split(' ')[1]}`} />
+                  </div>
+
+                  {/* info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-[15px] font-semibold text-gray-800 leading-snug">{c.title ?? c.name}</p>
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${status.bg} ${status.text}`}>
+                        {status.label}
+                      </span>
+                    </div>
+
+                    {c.description && (
+                      <p className="text-[12px] text-gray-400 line-clamp-2 mb-2">{c.description}</p>
+                    )}
+
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {c.duration && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="text-[12px] text-gray-500 font-medium">{c.duration} oy</span>
+                        </div>
+                      )}
+                      {c.category && (
+                        <div className="flex items-center gap-1">
+                          <Tag className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="text-[12px] text-gray-500 font-medium">{c.category}</span>
+                        </div>
+                      )}
+                      <div className="ml-auto">
+                        {price === 0 ? (
+                          <span className="text-[13px] font-bold text-emerald-600">Bepul</span>
+                        ) : (
+                          <span className="text-[13px] font-bold text-gray-700 tabular-nums">
+                            {fmt(price)} <span className="text-[11px] text-gray-400 font-normal">UZS/oy</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* syllabus preview */}
+                    {c.syllabus && c.syllabus.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {c.syllabus.slice(0, 4).map((s, si) => (
+                          <span key={si}
+                            className="text-[11px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                            {s}
+                          </span>
+                        ))}
+                        {c.syllabus.length > 4 && (
+                          <span className="text-[11px] text-gray-400 px-1">+{c.syllabus.length - 4}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+
+            <div className="flex items-center justify-between px-2 py-2">
+              <span className="text-[12px] text-gray-400">{shown} / {courses.length} ta kurs</span>
+              {hasMore && <span className="text-[12px] text-violet-500 animate-pulse">Yuklanmoqda…</span>}
+            </div>
+            <div ref={sentinelRef} className="h-1" />
+          </div>
+        )}
+
+      </div>
+    </div>
   )
 }

@@ -12,6 +12,11 @@ import {
 } from '../../../api/payments'
 import {
   getAllStaff,
+  createStaff,
+  updateStaff,
+  deleteStaff,
+  setStaffSalary,
+  getStaffSalaryHistory,
 } from '../../../api/staff'
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -19,18 +24,10 @@ const getId = (item) => item?._id || item?.id || null
 
 const handleError = (message, err, showToast = null) => {
   const status = err?.response?.status
-  if (status === 404) {
-    console.error(message, err)
-    return
-  }
+  if (status === 404) return
   const serverMsg = err?.response?.data?.message
   const fullMsg = serverMsg || message
-  console.error(fullMsg, err)
-  if (showToast) {
-    showToast(fullMsg, "error", 5000);
-  } else {
-    alert(fullMsg);
-  }
+  if (showToast) showToast(fullMsg, "error", 5000)
 }
 
 export function usePayments() {
@@ -237,13 +234,15 @@ export async function savePaymentType(editingType, typeFormData) {
     const id = getId(editingType)
     if (id) {
       await updatePaymentType(id, typeFormData)
+      return { success: true, newType: null }
     } else {
-      await createPaymentType(typeFormData)
+      const res = await createPaymentType(typeFormData)
+      const newType = res.data?.data || res.data || null
+      return { success: true, newType }
     }
-    return true
   } catch (err) {
     handleError("To'lov turini saqlashda xatolik", err)
-    return false
+    return { success: false, newType: null }
   }
 }
 

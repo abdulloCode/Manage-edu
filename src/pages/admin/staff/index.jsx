@@ -10,7 +10,8 @@ import {
 } from "../../../api/staff";
 import PhoneInput from "../../../components/PhoneInput";
 import { useToast } from "../../../components/Toast";
-import { useIsAdmin } from "../../../utils/permissions";
+import { useIsAdmin, formatPhone } from "../../../utils/permissions";
+import { useLang } from "../../../context/LangContext";
 
 const getId = (item) => item?._id || item?.id || null;
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -70,6 +71,7 @@ const getInitials = (name = "") =>
 export default function StaffPage() {
   const { showToast } = useToast();
   const isAdmin = useIsAdmin();
+  const { t } = useLang();
 
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -157,7 +159,9 @@ export default function StaffPage() {
     const e = {};
     if (!staffForm.name.trim())  e.name  = "Ism kiritilishi shart";
     if (!staffForm.phone.trim()) e.phone = "Telefon raqami kiritilishi shart";
+    if (staffForm.phone.replace(/\D/g, "").length < 9) e.phone = "Telefon raqamni to'liq kiriting";
     if (!selectedStaff && !staffForm.password) e.password = "Parol kiritilishi shart";
+    if (staffForm.password && staffForm.password.length < 8) e.password = "Parol kamida 8 ta belgi bo'lishi kerak";
     return e;
   };
 
@@ -312,7 +316,7 @@ export default function StaffPage() {
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Xodimlar</h1>
+            <h1 className="text-xl font-bold text-gray-900">{t('nav_staff')}</h1>
             <p className="text-sm text-gray-500 mt-0.5">{staff.length} ta xodim</p>
           </div>
           <div className="flex items-center gap-2">
@@ -321,7 +325,7 @@ export default function StaffPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Qidirish..."
+                placeholder={t('search')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all shadow-sm"
@@ -333,7 +337,7 @@ export default function StaffPage() {
                 className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" />
-                Xodim qo'shish
+                {t('staff_add')}
               </button>
             )}
           </div>
@@ -344,19 +348,19 @@ export default function StaffPage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
               <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-gray-500 font-medium">Yuklanmoqda...</p>
+              <p className="text-sm text-gray-500 font-medium">{t('loading')}</p>
             </div>
           ) : filteredStaff.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
               <Users className="w-14 h-14 text-gray-200" />
-              <p className="text-sm text-gray-400 font-medium">Xodimlar topilmadi</p>
+              <p className="text-sm text-gray-400 font-medium">{t('not_found')}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    {["Xodim", "Role", "Telefon", "Ruxsatlar", "Maosh", "Holat", "Amallar"].map((h, i) => (
+                    {[t('nav_staff'), t('staff_role'), t('phone'), "Ruxsatlar", t('staff_salary'), t('status'), t('actions')].map((h, i) => (
                       <th
                         key={h}
                         className={`px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide ${i === 6 ? "text-right" : "text-left"}`}
@@ -391,7 +395,7 @@ export default function StaffPage() {
 
                         {/* Telefon */}
                         <td className="px-4 py-3.5 text-sm text-gray-600 font-mono">
-                          {s.phone || "—"}
+                          {formatPhone(s.phone)}
                         </td>
 
                         {/* Ruxsatlar */}
@@ -482,7 +486,7 @@ export default function StaffPage() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-gray-900">
-                    {selectedStaff ? "Xodimni tahrirlash" : "Yangi xodim"}
+                    {selectedStaff ? t('edit') : t('staff_add')}
                   </h2>
                   <p className="text-xs text-gray-400">
                     {selectedStaff ? "Ma'lumotlarni yangilang" : "Xodim ma'lumotlarini kiriting"}
@@ -665,7 +669,7 @@ export default function StaffPage() {
                 disabled={isSubmittingStaff}
                 className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-colors"
               >
-                Bekor qilish
+                {t('cancel')}
               </button>
               <button
                 onClick={handleSaveStaff}
@@ -673,8 +677,8 @@ export default function StaffPage() {
                 className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
               >
                 {isSubmittingStaff
-                  ? <><Spinner /> Saqlanmoqda...</>
-                  : selectedStaff ? "Yangilash" : "Qo'shish"}
+                  ? <><Spinner /> {t('saving')}</>
+                  : selectedStaff ? t('update') : t('add')}
               </button>
             </div>
           </Modal>
@@ -745,14 +749,14 @@ export default function StaffPage() {
                 disabled={isSubmittingSalary}
                 className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 disabled:opacity-50 transition-colors"
               >
-                Bekor qilish
+                {t('cancel')}
               </button>
               <button
                 onClick={handleSaveSalary}
                 disabled={isSubmittingSalary}
                 className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
               >
-                {isSubmittingSalary ? <><Spinner /> Saqlanmoqda...</> : "Saqlash"}
+                {isSubmittingSalary ? <><Spinner /> {t('saving')}</> : t('save')}
               </button>
             </div>
           </Modal>
@@ -821,7 +825,7 @@ export default function StaffPage() {
                 onClick={() => setShowHistoryModal(false)}
                 className="w-full px-4 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"
               >
-                Yopish
+                {t('close')}
               </button>
             </div>
           </Modal>

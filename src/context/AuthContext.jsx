@@ -111,9 +111,7 @@ export function AuthProvider({ children }) {
             setInitialized(true);
           }
           return;
-        } catch (err) {
-          const msg = parseError(err, "me");
-          if (msg && !cancelled) console.warn("Session restore /me:", msg);
+        } catch {
           // token eskirgan — refresh urinamiz
         }
       }
@@ -136,16 +134,11 @@ export function AuthProvider({ children }) {
               setUser(me);
               localStorage.setItem("user", JSON.stringify(me));
             }
-          } catch (err) {
-            const msg = parseError(err, "me");
-            if (msg) console.warn("Session restore /me after refresh:", msg);
+          } catch {
             if (!cancelled) setUser(null);
           }
         }
-      } catch (err) {
-        // Cookie yo'q yoki muddati o'tgan — normal holat, foydalanuvchi login qilishi kerak
-        const msg = parseError(err, "refresh");
-        if (msg) console.warn("Session restore refresh:", msg);
+      } catch {
         if (!cancelled) {
           setAccessToken(null);
           setUser(null);
@@ -193,9 +186,8 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try {
       await api.post("/auth/logout");
-    } catch (err) {
+    } catch {
       // logout xatosi jimgina o'tadi
-      console.warn("Logout error:", parseError(err, "logout"));
     } finally {
       setAccessToken(null);
       setUser(null);

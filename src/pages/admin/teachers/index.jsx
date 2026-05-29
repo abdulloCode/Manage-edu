@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useInfiniteScroll } from "../../../hooks/useInfiniteScroll";
 import { useAuth } from "../../../context/AuthContext";
+import { useLang } from "../../../context/LangContext";
+import { formatPhone } from "../../../utils/permissions";
 import {
   useTeachers,
   useTeacherForm,
@@ -9,9 +12,173 @@ import {
   getAvatarColor,
 } from "./hooks";
 import PhoneInput from "../../../components/PhoneInput";
+import { X, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { getUserPayments } from "../../../api/payments";
+
+/* ── Teacher detail modal ── */
+function TeacherDetailModal({ teacher, onClose }) {
+  const fmt = (n) => Number(n ?? 0).toLocaleString("uz-UZ");
+  const balance = Number(teacher.paid ?? 0) - Number(teacher.salary ?? 0);
+  const [payments, setPayments] = useState([]);
+  const [loadingPay, setLoadingPay] = useState(false);
+
+  useEffect(() => {
+    const tid = teacher._id || teacher.id;
+    if (!tid) return;
+    setLoadingPay(true);
+    getUserPayments(tid)
+      .then((res) => {
+        const list = res.data?.payments || res.data?.data || res.data || [];
+        setPayments(Array.isArray(list) ? list : []);
+      })
+      .catch(() => setPayments([]))
+      .finally(() => setLoadingPay(false));
+  }, [teacher._id, teacher.id]);
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={onClose} />
+      <div className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-md pointer-events-auto flex flex-col max-h-[90vh]"
+          style={{ animation: "modalIn 0.18s cubic-bezier(0.22,1,0.36,1)" }}
+        >
+          <style>{`@keyframes modalIn{from{opacity:0;transform:scale(0.96) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 ${getAvatarColor(teacher.name)}`}>
+                {getInitials(teacher.name)}
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">{teacher.name}</h2>
+                <p className="text-xs text-gray-400">{teacher.qualification || "Mutaxassislik kiritilmagan"}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="p-6 space-y-4 overflow-y-auto flex-1 text-sm">
+
+            {/* Asosiy ma'lumotlar */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ["Telefon",        formatPhone(teacher.phone) || "—"],
+                ["Maosh foizi",    teacher.salaryPercentage ? `${teacher.salaryPercentage}%` : "—"],
+                ["Qo'shilgan",     teacher.createdAt ? new Date(teacher.createdAt).toLocaleDateString("uz-UZ") : "—"],
+                ["Holat",          teacher.isActive === false ? "Nofaol" : "Faol"],
+              ].map(([l, v]) => (
+                <div key={l} className="bg-gray-50 rounded-xl px-3 py-2.5">
+                  <p className="text-xs text-gray-400 mb-0.5">{l}</p>
+                  <p className="text-sm font-semibold text-gray-800">{v}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Moliyaviy ma'lumotlar */}
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Moliyaviy holat</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  ["Kutilgan maosh",  fmt(teacher.salary ?? 0) + " UZS", "text-gray-800"],
+                  ["To'langan",       fmt(teacher.paid   ?? 0) + " UZS", "text-emerald-600"],
+                  ["Ushlab qolindi",  fmt(teacher.debt   ?? 0) + " UZS", "text-rose-500"],
+                  ["Balans",
+                    (balance >= 0 ? "+" : "−") + fmt(Math.abs(balance)) + " UZS",
+                    balance >= 0 ? "text-emerald-600" : "text-rose-500"],
+                ].map(([l, v, color]) => (
+                  <div key={l} className="bg-gray-50 rounded-xl px-3 py-2.5">
+                    <p className="text-xs text-gray-400 mb-0.5">{l}</p>
+                    <p className={`text-sm font-bold tabular-nums ${color}`}>{v}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Guruhlar */}
+            {Array.isArray(teacher.groups) && teacher.groups.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                  Guruhlar ({teacher.groups.length} ta)
+                </p>
+                <div className="space-y-1.5">
+                  {teacher.groups.map((g, i) => (
+                    <div key={g._id || g.id || i} className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2">
+                      <span className="text-sm font-semibold text-indigo-700">{g.name || "—"}</span>
+                      <span className="text-xs text-indigo-400">{g.currentStudents ?? g.students?.length ?? 0} ta o'q.</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* To'lovlar tarixi */}
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                To'lovlar tarixi {payments.length > 0 ? `(${payments.length} ta)` : ""}
+              </p>
+              {loadingPay ? (
+                <div className="flex justify-center py-4">
+                  <span className="loading loading-spinner loading-sm text-primary" />
+                </div>
+              ) : payments.length === 0 ? (
+                <div className="bg-gray-50 rounded-xl px-3 py-4 text-center text-xs text-gray-400 font-medium">
+                  To'lovlar topilmadi
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+                  {payments.slice(0, 20).map((p, i) => {
+                    const isCredit = (p.dk || p.type?.dk) === "credit";
+                    return (
+                      <div key={p._id || p.id || i} className="flex items-center gap-2.5 bg-gray-50 rounded-xl px-3 py-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isCredit ? "bg-emerald-100" : "bg-rose-100"}`}>
+                          {isCredit
+                            ? <ArrowUpCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            : <ArrowDownCircle className="w-3.5 h-3.5 text-rose-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-700 truncate">
+                            {p.type?.name || p.type?.code || "—"}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            {p.date ? new Date(p.date).toLocaleDateString("uz-UZ") : "—"}
+                            {p.month ? ` · ${p.month}` : ""}
+                          </p>
+                        </div>
+                        <span className={`text-xs font-bold tabular-nums shrink-0 ${isCredit ? "text-emerald-600" : "text-rose-500"}`}>
+                          {isCredit ? "+" : "−"}{fmt(p.amount)} UZS
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex-shrink-0 rounded-b-2xl">
+            <button
+              onClick={onClose}
+              className="w-full px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-100 transition-colors"
+            >
+              Yopish
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
 export default function TeachersPage() {
   const { user } = useAuth();
+  const { t } = useLang();
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager";
   const canCreate = isAdmin || isManager;
@@ -21,12 +188,10 @@ export default function TeachersPage() {
     loading,
     search,
     setSearch,
-    page,
-    setPage,
-    totalPages,
-    paginatedTeachers,
     loadTeachers,
   } = useTeachers();
+
+  const { visible: paginatedTeachers, sentinelRef, hasMore, shown } = useInfiniteScroll(teachers, 20);
 
   const {
     showModal,
@@ -41,6 +206,7 @@ export default function TeachersPage() {
     closeModals,
   } = useTeacherForm();
 
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
   const [phoneDisplay, setPhoneDisplay] = useState("");
 
   useEffect(() => {
@@ -78,7 +244,7 @@ export default function TeachersPage() {
   };
 
   const handleSaveTeacher = async () => {
-    const success = await saveTeacher(editingTeacher, formData, loadTeachers);
+    const success = await saveTeacher(editingTeacher, formData);
     if (success) {
       closeModals();
       loadTeachers();
@@ -87,7 +253,7 @@ export default function TeachersPage() {
 
   const confirmDelete = async () => {
     if (!teacherToDelete) return;
-    const success = await removeTeacher(teacherToDelete, loadTeachers);
+    const success = await removeTeacher(teacherToDelete);
     if (success) {
       closeModals();
       loadTeachers();
@@ -100,14 +266,14 @@ export default function TeachersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            O'qituvchilar
+            {t('nav_teachers')}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Jami{" "}
+            {t('dash_total')}{" "}
             <span className="font-semibold text-gray-900">
               {teachers.length}
             </span>{" "}
-            ta o'qituvchi
+            {t('teach_count')}
           </p>
         </div>
         {canCreate && (
@@ -129,7 +295,7 @@ export default function TeachersPage() {
                 d="M12 4v16m8-8H4"
               />
             </svg>
-            Qo'shish
+            {t('teach_add')}
           </button>
         )}
       </div>
@@ -152,7 +318,7 @@ export default function TeachersPage() {
         </svg>
         <input
           type="text"
-          placeholder="Ism yoki telefon bo'yicha qidirash…"
+          placeholder={t('search')}
           className="flex-1 bg-transparent outline-none text-sm text-gray-700 placeholder:text-gray-400"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -182,54 +348,52 @@ export default function TeachersPage() {
 
       {/* ── Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="w-12 px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 #
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                O'qituvchi
+                {t('nav_teachers')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Telefon
+                {t('phone')}
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Malaka
+                {t('teach_qual')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Maosh
+                {t('teach_salary')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Set oldim
+                {t('teach_credit')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Berdim
+                {t('teach_paid')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Balance
+                {t('balance')}
               </th>
               <th className="w-32 px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Amallar
+                {t('actions')}
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan="10" className="px-6 py-16 text-center">
+                <td colSpan="9" className="px-6 py-16 text-center">
                   <div className="flex flex-col items-center gap-3 text-gray-400">
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm">Yuklanmoqda…</span>
+                    <span className="text-sm">{t('loading')}</span>
                   </div>
                 </td>
               </tr>
             ) : teachers.length === 0 ? (
               <tr>
-                <td colSpan="10" className="px-6 py-16 text-center">
+                <td colSpan="9" className="px-6 py-16 text-center">
                   <div className="flex flex-col items-center gap-2 text-gray-400">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -246,10 +410,10 @@ export default function TeachersPage() {
                       />
                     </svg>
                     <p className="text-sm font-medium text-gray-500">
-                      O'qituvchilar yo'q
+                      {t('teach_empty')}
                     </p>
                     {search && (
-                      <p className="text-xs">"{search}" bo'yicha natija yo'q</p>
+                      <p className="text-xs">"{search}" {t('not_found')}</p>
                     )}
                   </div>
                 </td>
@@ -258,10 +422,11 @@ export default function TeachersPage() {
               paginatedTeachers.map((teacher, idx) => (
                 <tr
                   key={teacher.id}
-                  className="hover:bg-gray-50 transition-colors"
+                  className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => setSelectedTeacher(teacher)}
                 >
                   <td className="px-4 py-3 text-sm text-gray-400 font-mono">
-                    {(page - 1) * 10 + idx + 1}
+                    {idx + 1}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -276,10 +441,7 @@ export default function TeachersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 font-mono">
-                    {teacher.phone}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    {teacher.email || "—"}
+                    {formatPhone(teacher.phone)}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {teacher.qualification || "—"}
@@ -308,7 +470,7 @@ export default function TeachersPage() {
                       <span className="text-green-600">0</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => openEditModal(teacher)}
@@ -357,63 +519,16 @@ export default function TeachersPage() {
             )}
           </tbody>
         </table>
+        </div>
 
-        {/* ── Pagination ── */}
-        {!loading && teachers.length > 0 && totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <span className="text-xs text-gray-500">
-              {(page - 1) * 10 + 1}–{Math.min(page * 10, teachers.length)} /{" "}
-              {teachers.length} ta
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-2 py-1 text-sm border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                ‹
-              </button>
-              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                const pageNum = i + 1;
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    className={`px-3 py-1 text-sm border rounded transition-colors ${
-                      page === pageNum
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "border-gray-200 hover:bg-gray-100"
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-              {totalPages > 5 && (
-                <>
-                  <span className="px-2 text-gray-400">…</span>
-                  <button
-                    onClick={() => setPage(totalPages)}
-                    className={`px-3 py-1 text-sm border rounded transition-colors ${
-                      page === totalPages
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "border-gray-200 hover:bg-gray-100"
-                    }`}
-                  >
-                    {totalPages}
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-2 py-1 text-sm border border-gray-200 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                ›
-              </button>
-            </div>
+        {/* Infinite scroll sentinel */}
+        {!loading && teachers.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+            <span className="text-xs text-gray-400">{shown} / {teachers.length} ta</span>
+            {hasMore && <span className="text-xs text-blue-400 animate-pulse">Yuklanmoqda…</span>}
           </div>
         )}
+        <div ref={sentinelRef} className="h-1" />
       </div>
 
       {/* ── Add/Edit Modal ── */}
@@ -424,8 +539,8 @@ export default function TeachersPage() {
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
               <h2 className="text-lg font-semibold text-gray-900">
                 {editingTeacher
-                  ? "O'qituvchini Tahrirlash"
-                  : "Yangi O'qituvchi"}
+                  ? t('teach_edit')
+                  : t('teach_add')}
               </h2>
             </div>
 
@@ -433,7 +548,7 @@ export default function TeachersPage() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  To'liq ism <span className="text-red-500">*</span>
+                  {t('teach_full_name')} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -449,7 +564,7 @@ export default function TeachersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Telefon <span className="text-red-500">*</span>
+                  {t('phone')} <span className="text-red-500">*</span>
                 </label>
                 <PhoneInput
                   value={phoneDisplay}
@@ -461,7 +576,7 @@ export default function TeachersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Parol{" "}
+                  {t('teach_password')}{" "}
                   {editingTeacher && (
                     <span className="text-gray-400">(ixtiyoriy)</span>
                   )}
@@ -479,14 +594,15 @@ export default function TeachersPage() {
                       ? "O'zgartirmoqchi bo'lsangiz kiriting"
                       : "••••••••"
                   }
-                  minLength={6}
+                  minLength={8}
+                  title="Parol kamida 8 ta belgi bo'lishi kerak"
                   required={!editingTeacher}
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Malaka
+                  {t('teach_qual')}
                 </label>
                 <input
                   type="text"
@@ -501,7 +617,7 @@ export default function TeachersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Maosh foizi (%)
+                  {t('teach_salary_pct')}
                 </label>
                 <input
                   type="number"
@@ -526,17 +642,25 @@ export default function TeachersPage() {
                 onClick={handleSaveTeacher}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
-                Saqlash
+                {t('save')}
               </button>
               <button
                 onClick={closeModals}
                 className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               >
-                Bekor qilish
+                {t('cancel')}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Teacher Detail Modal ── */}
+      {selectedTeacher && (
+        <TeacherDetailModal
+          teacher={selectedTeacher}
+          onClose={() => setSelectedTeacher(null)}
+        />
       )}
 
       {/* ── Delete Confirmation Modal ── */}
@@ -561,7 +685,7 @@ export default function TeachersPage() {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-center text-gray-900 mb-2">
-                O'qituvchini o'chirish
+                {t('teach_delete_title')}
               </h3>
               <p className="text-sm text-gray-600 text-center mb-6">
                 <strong>{teacherToDelete.name}</strong> o'chirilsinmi? Bu amal
@@ -572,13 +696,13 @@ export default function TeachersPage() {
                   onClick={closeModals}
                   className="flex-1 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                 >
-                  Bekor qilish
+                  {t('cancel')}
                 </button>
                 <button
                   onClick={confirmDelete}
                   className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                 >
-                  O'chirish
+                  {t('delete')}
                 </button>
               </div>
             </div>

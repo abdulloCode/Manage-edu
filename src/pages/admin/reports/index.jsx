@@ -1,15 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useInfiniteScroll } from "../../../hooks/useInfiniteScroll";
 import { useToast } from "../../../components/Toast";
+import { formatPhone } from "../../../utils/permissions";
 import {
   Calendar,
-  FileText,
-  ArrowUpCircle,
-  ArrowDownCircle,
   BarChart3,
   Search,
   Users,
-  ChevronLeft,
-  ChevronRight,
   Wallet,
   TrendingUp,
   TrendingDown,
@@ -102,12 +99,8 @@ function BalanceSummary({ summary }) {
 
 /* ── Balance Table ───────────────────────────────────────── */
 
-function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
-  const totalPages = Math.max(1, Math.ceil((items?.length || 0) / itemsPerPage));
-  const paginated = useMemo(() => {
-    const start = (page - 1) * itemsPerPage;
-    return (items || []).slice(start, start + itemsPerPage);
-  }, [items, page, itemsPerPage]);
+function BalanceTable({ items, role }) {
+  const { visible: paginated, sentinelRef, hasMore, shown } = useInfiniteScroll(items || [], 20);
 
   const headers = [
     { key: "index", label: "#" },
@@ -157,7 +150,7 @@ function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
                   className="border-b border-base-200 last:border-0 hover:bg-base-200/50 transition-colors"
                 >
                   <td className="px-3 py-2.5 text-xs font-bold text-base-content/50">
-                    {(page - 1) * itemsPerPage + i + 1}
+                    {i + 1}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
@@ -175,7 +168,7 @@ function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-xs text-base-content/60 font-mono whitespace-nowrap">
-                    {item.phone || "—"}
+                    {formatPhone(item.phone)}
                   </td>
                   <td className="px-3 py-2.5 text-xs font-bold text-base-content/80 whitespace-nowrap">
                     {formatSum(item.startingBalance)}
@@ -219,46 +212,13 @@ function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-3 py-2 bg-base-100 border border-base-300 rounded-xl">
-          <span className="text-[10px] font-bold text-base-content/40">
-            {(page - 1) * itemsPerPage + 1}–
-            {Math.min(page * itemsPerPage, items?.length || 0)} /{" "}
-            {items?.length || 0}
-          </span>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-1.5 border border-base-300 rounded-lg hover:bg-base-200 disabled:opacity-40"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(
-              (n) => (
-                <button
-                  key={n}
-                  onClick={() => setPage(n)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
-                    page === n
-                      ? "bg-primary text-primary-content border-primary"
-                      : "border-base-300 hover:bg-base-200"
-                  }`}
-                >
-                  {n}
-                </button>
-              ),
-            )}
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="p-1.5 border border-base-300 rounded-lg hover:bg-base-200 disabled:opacity-40"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+      {(items?.length || 0) > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 border-t border-base-200">
+          <span className="text-[10px] font-bold text-base-content/40">{shown} / {items?.length || 0}</span>
+          {hasMore && <span className="text-[10px] text-primary animate-pulse">Yuklanmoqda…</span>}
         </div>
       )}
+      <div ref={sentinelRef} className="h-1" />
     </div>
   );
 }
@@ -272,7 +232,6 @@ export default function ReportsPage() {
   /* balance reports */
   const [balanceData, setBalanceData] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
-  const [balancePage, setBalancePage] = useState(1);
   const [search, setSearch] = useState("");
   const [startDate, setStartDate] = useState(monthStart());
   const [endDate, setEndDate] = useState(today());
@@ -281,7 +240,6 @@ export default function ReportsPage() {
   const loadBalanceReport = async (type) => {
     setBalanceLoading(true);
     setBalanceData(null);
-    setBalancePage(1);
     try {
       const params = {};
       if (startDate) params.startDate = startDate;
@@ -296,7 +254,6 @@ export default function ReportsPage() {
       setBalanceData(res.data);
     } catch (err) {
       const msg = err?.response?.data?.message || err?.response?.data?.error || "Balans hisoboti yuklanmadi";
-      console.error(msg, err);
       if (err?.response?.status !== 404) {
         showToast(msg, "error", 5000);
       }
@@ -383,8 +340,7 @@ export default function ReportsPage() {
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
-                setBalancePage(1);
-              }}
+                          }}
               className="w-full pl-8 pr-3 py-2 bg-base-100 border border-base-300 rounded-xl text-xs font-bold outline-none focus:border-primary"
             />
           </div>
@@ -410,9 +366,6 @@ export default function ReportsPage() {
             <BalanceTable
               items={balanceData.items}
               role={reportType}
-              page={balancePage}
-              setPage={setBalancePage}
-              itemsPerPage={10}
             />
           </div>
         )}

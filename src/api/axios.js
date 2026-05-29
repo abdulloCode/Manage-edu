@@ -52,34 +52,26 @@ api.interceptors.response.use(
     const newToken = res.headers["x-access-token"];
     if (newToken) setToken(newToken);
 
-    // Log successful API responses for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`✅ API Success [${res.config.method?.toUpperCase()} ${res.config.url}]:`, res.data);
-    }
-
     return res;
   },
 
   async (error) => {
     const original = error.config;
 
-    // Log all API errors for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.error(`❌ API Error [${original?.method?.toUpperCase()} ${original?.url}]:`, {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message
-      });
-    }
-
     // Never loop on refresh/login endpoints
     if (original?._isRefresh || original?._isLogin) {
       return Promise.reject(error);
     }
 
+    const status = error.response?.status;
+
+    // 403 = ruxsat yo'q (permissions), token yangilash yordam bermaydi → to'g'ridan-to'g'ri reject
+    if (status === 403) {
+      return Promise.reject(error);
+    }
+
     // Not a 401, or already retried — just fail
-    if (error.response?.status !== 401 || original._retry) {
+    if (status !== 401 || original._retry) {
       return Promise.reject(error);
     }
 

@@ -6,6 +6,8 @@ import { getMyTeacherData } from '../../api/teachers'
 import { LoadingState, ErrorState } from '../../components/PageShell'
 
 import { useAuth } from '../../context/AuthContext'
+import { useLang } from '../../context/LangContext'
+import { formatPhone } from '../../utils/permissions'
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('ru-RU')
 
@@ -16,6 +18,7 @@ const STATUS_STYLE = {
 }
 
 function EditModal({ user, onClose, onSaved }) {
+  const { t } = useLang()
   const [form, setForm] = useState({
     name: user.name ?? '',
     phone: user.phone ?? '',
@@ -28,6 +31,12 @@ function EditModal({ user, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
   e.preventDefault()
+  if (form.phone && form.phone.replace(/\D/g, '').length < 9) {
+    setError("Telefon raqamni to'liq kiriting"); return
+  }
+  if (form.password && form.password.length < 8) {
+    setError("Parol kamida 8 ta belgi bo'lishi kerak"); return
+  }
   setLoading(true)
   setError(null)
   try {
@@ -59,9 +68,9 @@ function EditModal({ user, onClose, onSaved }) {
         {error && <div className="alert alert-error py-2 text-sm mb-4"><span>{error}</span></div>}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {[
-            { label: 'Full name',    key: 'name',     type: 'text',     placeholder: 'Sardor Karimov' },
-            { label: 'Phone',        key: 'phone',    type: 'tel',      placeholder: '+998901234567' },
-            { label: 'New password', key: 'password', type: 'password', placeholder: 'Leave blank to keep current' },
+            { label: t('prof_full_name'),    key: 'name',     type: 'text',     placeholder: 'Sardor Karimov' },
+            { label: t('phone'),             key: 'phone',    type: 'tel',      placeholder: '+998901234567' },
+            { label: t('prof_new_password'), key: 'password', type: 'password', placeholder: t('prof_blank_pass') },
           ].map(({ label, key, type, placeholder }) => (
             <div key={key}>
               <p className="text-xs text-base-content/70 font-medium uppercase tracking-wider mb-1.5">{label}</p>
@@ -87,10 +96,12 @@ function EditModal({ user, onClose, onSaved }) {
 
 export default function TeacherProfile() {
   const { data: profile, loading: pLoading, error: pError } = useFetch(getMe)
-  const { data: teacherData, loading: tLoading } = useFetch(getMyTeacherData)
+  const { data: rawTeacherData, loading: tLoading } = useFetch(getMyTeacherData)
+  const teacherData = rawTeacherData?.data || rawTeacherData
 
   const { logout } = useAuth()
   const navigate = useNavigate()
+  const { t } = useLang()
   const [editOpen, setEditOpen] = useState(false)
   const [localUser, setLocalUser] = useState(null)
 
@@ -148,21 +159,21 @@ export default function TeacherProfile() {
               <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
-              Edit
+              {t('prof_edit')}
             </button>
             <button onClick={handleLogout} className="btn btn-ghost btn-sm gap-2 text-error hover:bg-error/10">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              Sign out
+              {t('prof_sign_out')}
             </button>
           </div>
         </div>
 
         {/* Info strip */}
         <div className="border-t border-base-200 px-8 py-3 flex flex-wrap gap-x-8 gap-y-1">
-          <InfoChip label="Phone" value={user?.phone} />
-          {user?.centerId && <InfoChip label="Center ID" value={user.centerId} mono />}
+          <InfoChip label={t('phone')} value={formatPhone(user?.phone)} />
+          {user?.centerId && <InfoChip label={t('prof_center_id')} value={user.centerId} mono />}
         </div>
       </div>
 
@@ -171,7 +182,7 @@ export default function TeacherProfile() {
 
         {/* Salary balance card */}
         <div className="lg:col-span-2 rounded-2xl bg-base-100 border border-base-200 shadow-sm p-6 flex flex-col gap-5">
-          <p className="text-xs font-semibold text-base-content/40 uppercase tracking-widest">Salary Balance</p>
+          <p className="text-xs font-semibold text-base-content/40 uppercase tracking-widest">{t('prof_salary_balance')}</p>
 
           {/* Big number */}
           <div className="flex items-baseline gap-1.5">
@@ -184,9 +195,9 @@ export default function TeacherProfile() {
           {/* 3-stat grid */}
           <div className="grid grid-cols-3 gap-4 pt-4 border-t border-base-200">
             {[
-              { label: 'Monthly Salary', value: salary, color: 'text-base-content' },
-              { label: 'Paid (Credit)',  value: credit, color: 'text-success' },
-              { label: 'Debit',          value: debit,  color: 'text-error' },
+              { label: t('prof_monthly_salary'), value: salary, color: 'text-base-content' },
+              { label: t('prof_paid_credit'),   value: credit, color: 'text-success' },
+              { label: t('prof_debit'),          value: debit,  color: 'text-error' },
             ].map(({ label, value, color }) => (
               <div key={label} className="flex flex-col gap-0.5">
                 <p className="text-xs text-base-content/40">{label}</p>

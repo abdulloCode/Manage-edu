@@ -24,79 +24,87 @@ import {
   deleteAdminCourse,
 } from "./hooks";
 
-const COLORS = [
-  { bg: "bg-primary", light: "bg-primary/10", text: "text-primary" },
-  { bg: "bg-secondary", light: "bg-secondary/10", text: "text-secondary" },
-  { bg: "bg-accent", light: "bg-accent/10", text: "text-accent" },
-  { bg: "bg-info", light: "bg-info/10", text: "text-info" },
-  { bg: "bg-success", light: "bg-success/10", text: "text-success" },
-  { bg: "bg-warning", light: "bg-warning/10", text: "text-warning" },
+const PALETTES = [
+  { grad: "from-violet-500 to-indigo-600",  soft: "bg-violet-50",  text: "text-violet-600",  ring: "ring-violet-200",  icon: "bg-violet-100"  },
+  { grad: "from-sky-500 to-blue-600",       soft: "bg-sky-50",     text: "text-sky-600",     ring: "ring-sky-200",     icon: "bg-sky-100"     },
+  { grad: "from-emerald-500 to-teal-600",   soft: "bg-emerald-50", text: "text-emerald-600", ring: "ring-emerald-200", icon: "bg-emerald-100" },
+  { grad: "from-orange-500 to-rose-500",    soft: "bg-orange-50",  text: "text-orange-600",  ring: "ring-orange-200",  icon: "bg-orange-100"  },
+  { grad: "from-pink-500 to-fuchsia-600",   soft: "bg-pink-50",    text: "text-pink-600",    ring: "ring-pink-200",    icon: "bg-pink-100"    },
+  { grad: "from-amber-400 to-orange-500",   soft: "bg-amber-50",   text: "text-amber-600",   ring: "ring-amber-200",   icon: "bg-amber-100"   },
 ];
 
 function CourseCard({ course, index, onEdit, onDelete }) {
-  const col = COLORS[index % COLORS.length];
+  const pal = PALETTES[index % PALETTES.length];
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92 }}
-      transition={{
-        delay: index * 0.03,
-        type: "spring",
-        stiffness: 300,
-        damping: 24,
-      }}
-      className="group relative bg-base-100 rounded-xl overflow-hidden border border-base-300 hover:shadow-lg transition-all duration-200"
+      transition={{ delay: index * 0.04, type: "spring", stiffness: 280, damping: 22 }}
+      className="card bg-base-100 shadow border border-base-200 hover:shadow-lg transition-all duration-200 overflow-hidden"
     >
-      {/* Header */}
-      <div className={`relative ${col.bg} p-3 overflow-hidden`}>
-        <div className="relative flex justify-between items-start">
-          <div className="p-1.5 bg-primary-content/20 rounded-lg">
-            <BookOpen className="w-4 h-4 text-primary-content" />
+      {/* Gradient header */}
+      <div className={`bg-gradient-to-br ${pal.grad} p-5 relative overflow-hidden`}>
+        {/* Decorative blobs */}
+        <div className="absolute -top-5 -right-5 w-24 h-24 rounded-full bg-white/10" />
+        <div className="absolute bottom-0 left-1/2 w-32 h-16 rounded-full bg-black/10" />
+
+        <div className="relative flex items-start justify-between gap-2">
+          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-sm">
+            <BookOpen className="w-5 h-5 text-white" />
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+          <div className="flex gap-1">
             <button
               onClick={() => onEdit(course)}
-              className="p-1.5 bg-primary-content/20 hover:bg-primary-content/30 rounded-lg text-primary-content transition-colors font-bold"
+              className="btn btn-xs bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm"
             >
-              <Edit3 className="w-3 h-3" />
+              <Edit3 className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => onDelete(course)}
-              className="p-1.5 bg-error text-error-content hover:bg-red-50 rounded-lg text-error-content transition-colors font-bold"
+              className="btn btn-xs bg-white/20 hover:bg-error hover:text-white text-white border-0 backdrop-blur-sm"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
-        <div className="mt-2">
-          <h3 className="font-bold text-primary-content text-sm leading-tight line-clamp-1 uppercase tracking-tight">
+
+        <div className="relative mt-3">
+          <h3 className="text-white font-extrabold text-base leading-snug line-clamp-2 drop-shadow-sm">
             {course.name || course.title}
           </h3>
         </div>
       </div>
 
       {/* Body */}
-      <div className="p-3">
-        <p className="text-base-content/60 text-xs font-medium leading-relaxed line-clamp-2 mb-2 min-h-[2rem]">
-          {course.description || "Tavsif yo'q"}
+      <div className="p-4 space-y-3">
+        {/* Description */}
+        <p className="text-xs text-base-content/55 leading-relaxed line-clamp-2 min-h-[2.5rem]">
+          {course.description || "Kurs haqida tavsif yo'q"}
         </p>
 
-        <div className="flex items-center justify-between">
-          <div className={`flex items-center gap-1.5 px-2 py-1 ${col.light} rounded-lg`}>
-            <Clock className={`w-3 h-3 ${col.text}`} />
-            <span className="text-[10px] font-bold text-base-content">
-              {course.duration || "—"}
-            </span>
-          </div>
-          <div className="text-right">
-            <div className="text-[10px] font-bold text-base-content/50">Narxi</div>
-            <div className="text-sm font-bold text-base-content">
-              {Number(course.price || 0).toLocaleString()}
-              <span className="text-[10px] font-bold text-base-content/50 ml-1">UZS</span>
+        <div className="divider my-0" />
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className={`rounded-xl p-3 ${pal.soft} ring-1 ${pal.ring}`}>
+            <div className={`flex items-center gap-1 mb-1 ${pal.text}`}>
+              <Clock className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-bold uppercase tracking-wide">Muddat</span>
             </div>
+            <p className={`text-sm font-extrabold ${pal.text}`}>{course.duration || "—"}</p>
+          </div>
+          <div className="rounded-xl p-3 bg-base-200">
+            <div className="flex items-center gap-1 mb-1 text-base-content/50">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-bold uppercase tracking-wide">Narxi</span>
+            </div>
+            <p className="text-sm font-extrabold text-base-content">
+              {Number(course.price || 0).toLocaleString()}
+              <span className="text-[10px] text-base-content/40 font-semibold ml-1">UZS</span>
+            </p>
           </div>
         </div>
       </div>
@@ -429,13 +437,11 @@ export default function CoursesPage() {
             <div className="p-2 bg-primary rounded-xl">
               <GraduationCap className="w-5 h-5 text-primary-content" />
             </div>
-            <h1 className="text-2xl font-black text-base-content tracking-tight">
+            <h1 className="text-2xl font-black ">
               Kurslar Boshqaruvi
             </h1>
           </div>
-          <p className="text-base-content/60 text-sm font-bold ml-1">
-            Coding Club IT markazi
-          </p>
+      
         </div>
 
         <div className="flex items-center gap-3">

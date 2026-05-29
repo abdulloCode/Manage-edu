@@ -51,8 +51,7 @@ const loadGroups = async () => {
     });
 
     setGroups(groupsWithCourse);
-  } catch (err) {
-    console.error("Guruhlar yuklanmadi:", err);
+  } catch {
   } finally {
     setLoading(false);
   }
@@ -62,27 +61,21 @@ const loadGroups = async () => {
     try {
       const res = await getAllRooms();
       setRooms(res.data.data || res.data || []);
-    } catch (err) {
-      console.error("Xonalar yuklanmadi:", err);
-    }
+    } catch {}
   };
 
   const loadTeachers = async () => {
     try {
       const res = await getAllTeachers();
       setTeachers(res.data.data || res.data || []);
-    } catch (err) {
-      console.error("O'qituvchilar yuklanmadi:", err);
-    }
+    } catch {}
   };
 
   const loadCourses = async () => {
     try {
       const res = await getAllCourses();
       setCourses(res.data.data || res.data || []);
-    } catch (err) {
-      console.error("Kurslar yuklanmadi:", err);
-    }
+    } catch {}
   };
 
   useEffect(() => {
@@ -193,15 +186,6 @@ export function useGroupForm(teachers, courses, rooms) {
 
   const openEditGroupModal = (group) => {
   setEditingGroup(group);
-  // openEditGroupModal ichida, setFormData dan oldin
-console.log("group:", group);
-console.log("courses:", courses);
-console.log("resolved courseId:", 
-  (typeof group.courseId === 'object' 
-    ? group.courseId?._id || group.courseId?.id 
-    : group.courseId) 
-  || group.course?._id || group.course?.id
-);
   setFormData({
     name: group.name || "",
     // courseId yo'q bo'lsa, course obyektidan olish
@@ -287,6 +271,33 @@ console.log("resolved courseId:",
     setLoadingStudents,
   };
 }
+function parseGroupError(err) {
+  const raw = err?.response?.data?.error || err?.response?.data?.message || err?.message || "";
+
+  // Room schedule conflict: another group "ielts" already uses this room on Se, Pa from 09:30 to 11:30
+  const roomMatch = raw.match(/another group\s+"([^"]+)"\s+already uses this room on\s+([^f]+?)\s+from\s+([\d:]+)\s+to\s+([\d:]+)/i);
+  if (roomMatch) {
+    const groupName = roomMatch[1];
+    const days = roomMatch[2].trim();
+    const from = roomMatch[3];
+    const to = roomMatch[4];
+    return `❌ Xona band!\n"${groupName}" guruhi bu xonadan ${days} kunlari soat ${from}–${to} da foydalanmoqda.\nIltimos, boshqa xona yoki boshqa vaqt tanlang.`;
+  }
+
+  // Teacher schedule conflict (similar pattern)
+  const teacherMatch = raw.match(/teacher.*?"([^"]+)".*?on\s+([^f]+?)\s+from\s+([\d:]+)\s+to\s+([\d:]+)/i);
+  if (teacherMatch) {
+    const groupName = teacherMatch[1];
+    const days = teacherMatch[2].trim();
+    const from = teacherMatch[3];
+    const to = teacherMatch[4];
+    return `❌ O'qituvchi band!\n"${groupName}" guruhida bu o'qituvchi ${days} kunlari soat ${from}–${to} da dars bermoqda.\nIltimos, boshqa o'qituvchi yoki boshqa vaqt tanlang.`;
+  }
+
+  if (raw) return raw;
+  return "Guruhni saqlashda xatolik yuz berdi. Qayta urinib ko'ring.";
+}
+
 export async function saveGroup(group, formData, showToast = null) {
   try {
     const dataToSend = {
@@ -312,18 +323,19 @@ export async function saveGroup(group, formData, showToast = null) {
 
     if (group) {
       await updateGroup(group.id, dataToSend);
+      return { success: true, newGroup: null };
     } else {
-      await createGroup(dataToSend);
+      const res = await createGroup(dataToSend);
+      const newGroup = res.data?.data || res.data || null;
+      if (newGroup && !newGroup.courseId) newGroup.courseId = formData.courseId;
+      return { success: true, newGroup };
     }
-
-    return true;
   } catch (err) {
-    console.error("Saqlash xatolik:", err);
     if (err?.response?.status !== 404) {
-      const message = "Xatolik yuz berdi: " + (err.response?.data?.error ?? err.message ?? "Noma'lum xatolik");
-      showToast(message, "error", 5000);
+      const message = parseGroupError(err);
+      if (showToast) showToast(message, "error", 7000);
     }
-    return false;
+    return { success: false, newGroup: null };
   }
 }
 
@@ -344,12 +356,9 @@ export async function saveRoom(room, roomFormData, showToast = null) {
 
     return true;
   } catch (err) {
-    console.error("Saqlash xatolik:", err);
     if (err?.response?.status !== 404) {
       if (showToast) {
         showToast("Xatolik yuz berdi", "error", 5000);
-      } else {
-        alert("Xatolik yuz berdi");
       }
     }
     return false;
@@ -364,8 +373,7 @@ export async function removeItem(item, type) {
       await deleteRoom(item.id);
     }
     return true;
-  } catch (err) {
-    console.error("O'chirish xatolik:", err);
+  } catch {
     return false;
   }
 }
@@ -375,7 +383,6 @@ export async function addStudentToGroupApi(groupId, studentId, showToast = null)
     await addStudentToGroup(groupId, studentId);
     return true;
   } catch (err) {
-    console.error("Student qo'shish xatolik:", err);
     if (err?.response?.status !== 404) {
       const message = "Xatolik yuz berdi: " + (err.response?.data?.error ?? err.message ?? "Noma'lum xatolik");
       showToast(message, "error", 5000);
@@ -389,8 +396,7 @@ export async function fetchAllStudents(excludeIds = []) {
     const all = data.data || data || []
     if (excludeIds.length === 0) return all
     return all.filter(s => !excludeIds.includes(s.id || s._id))
-  } catch (err) {
-    console.error('Studentlarni yuklash xatolik:', err)
+  } catch {
     return []
   }
 }
@@ -399,12 +405,11 @@ export async function fetchStudentsForCourse(courseId) {
   try {
     const { data } = await getStudents({
       courseId,
-      hasGroup: 'false',
-      limit: 100
+      hasGroup: false,
+      limit: 200,
     })
     return data.data || data || []
-  } catch (err) {
-    console.error('Kurs uchun studentlarni yuklash xatolik:', err)
+  } catch {
     return []
   }
 }
@@ -434,8 +439,7 @@ export async function loadGroupStudents(group, setGroupStudents, setLoadingStude
     }
 
     setGroupStudents(students)
-  } catch (err) {
-    console.error('Xatolik:', err)
+  } catch {
     setGroupStudents([])
   } finally {
     setLoadingStudents(false)

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "../../../components/Toast";
 import {
   Users,
   Building2,
@@ -21,6 +22,8 @@ import {
   Users2,
   CheckCircle,
   XCircle,
+  BarChart2,
+  TrendingUp,
 } from "lucide-react";
 import {
   useGroups,
@@ -32,10 +35,12 @@ import {
   fetchAllStudents,
   fetchStudentsForCourse,
 } from "./hooks";
-import { getGroupById, getFreeRooms } from "../../../api/groups";
+import { getGroupById, getFreeRooms, removeStudentFromGroup } from "../../../api/groups";
 import { getAvailableTeachers } from "../../../api/teachers";
 import { getAllPayments } from "../../../api/payments";
-import { getStudentById } from "../../../api/students";
+import { getStudentById, updateStudent, deleteStudent } from "../../../api/students";
+import { getGroupAttendanceCalendar } from "../../../api/attendance";
+import { formatPhone } from "../../../utils/permissions";
 
 // ── 24h Time Picker ───────────────────────────────────────────
 function TimePicker24({ value, onChange, label }) {
@@ -80,156 +85,186 @@ function TimePicker24({ value, onChange, label }) {
   );
 }
 
-// ── Group Card ────────────────────────────────────────────────
-const COLORS = [
-  { bg: "bg-primary/10", text: "text-primary", bar: "bg-primary" },
-  { bg: "bg-secondary/10", text: "text-secondary", bar: "bg-secondary" },
-  { bg: "bg-accent/10", text: "text-accent", bar: "bg-accent" },
-  { bg: "bg-info/10", text: "text-info", bar: "bg-info" },
-  { bg: "bg-success/10", text: "text-success", bar: "bg-success" },
-  { bg: "bg-warning/10", text: "text-warning", bar: "bg-warning" },
+// ── Card color palette ────────────────────────────────────────
+const PALETTES = [
+  { header: "from-violet-500 to-indigo-600",  soft: "bg-violet-50",  text: "text-violet-600",  ring: "ring-violet-200",  progress: "progress-primary",  pill: "bg-violet-100 text-violet-700"  },
+  { header: "from-sky-500 to-blue-600",       soft: "bg-sky-50",     text: "text-sky-600",     ring: "ring-sky-200",     progress: "progress-info",     pill: "bg-sky-100 text-sky-700"        },
+  { header: "from-emerald-500 to-teal-600",   soft: "bg-emerald-50", text: "text-emerald-600", ring: "ring-emerald-200", progress: "progress-success",  pill: "bg-emerald-100 text-emerald-700"},
+  { header: "from-orange-500 to-rose-500",    soft: "bg-orange-50",  text: "text-orange-600",  ring: "ring-orange-200",  progress: "progress-warning",  pill: "bg-orange-100 text-orange-700"  },
+  { header: "from-pink-500 to-fuchsia-600",   soft: "bg-pink-50",    text: "text-pink-600",    ring: "ring-pink-200",    progress: "progress-secondary",pill: "bg-pink-100 text-pink-700"      },
+  { header: "from-amber-400 to-orange-500",   soft: "bg-amber-50",   text: "text-amber-600",   ring: "ring-amber-200",   progress: "progress-warning",  pill: "bg-amber-100 text-amber-700"    },
 ];
 
-function GroupCard({
-  group,
-  idx,
-  teachers,
-  courses,
-  rooms,
-  openEditGroupModal,
-  openDeleteModal,
-  onAddStudent,
-  onViewStudents,
-  page,
-  itemsPerPage,
-}) {
-  const col = COLORS[idx % COLORS.length];
-  const course = courses.find((c) => c.id === group.courseId);
-  const teacher = teachers.find((t) => t.id === group.teacherId);
-  const room = rooms.find((r) => r.id === group.roomId);
-  const students = group.students || [];
-  const filled = group.currentStudents || students.length || 0;
-  const max = group.maxStudents || 1;
-  const pct = Math.min(100, Math.round((filled / max) * 100));
+const findById = (list, id) =>
+  list.find((item) => {
+    const itemId = item._id || item.id;
+    const targetId = typeof id === "object" ? id?._id || id?.id : id;
+    return itemId === targetId;
+  });
+
+// ── Donut Chart ───────────────────────────────────────────────
+function DonutChart({ segments, size = 120 }) {
+  const total = segments.reduce((s, seg) => s + seg.value, 0) || 1;
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius;
+  let cumulative = 0;
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" className="shrink-0">
+      <circle cx="50" cy="50" r={radius} fill="none" strokeWidth="16" stroke="var(--fallback-b2,oklch(var(--b2)))" />
+      {segments.map((seg, i) => {
+        const pct   = seg.value / total;
+        const dash  = pct * circumference;
+        const gap   = circumference - dash;
+        const offset = circumference * cumulative;
+        cumulative += pct;
+        return (
+          <circle
+            key={i}
+            cx="50" cy="50" r={radius}
+            fill="none"
+            strokeWidth="16"
+            stroke={seg.color}
+            strokeDasharray={`${dash} ${gap}`}
+            strokeDashoffset={-offset + circumference * 0.25}
+            style={{ transform: "rotate(-90deg)", transformOrigin: "50% 50%" }}
+          />
+        );
+      })}
+      <text x="50" y="46" textAnchor="middle" fontSize="13" fontWeight="bold" fill="currentColor">{total}</text>
+      <text x="50" y="60" textAnchor="middle" fontSize="7" fill="currentColor" opacity="0.5">guruh</text>
+    </svg>
+  );
+}
+
+// ── Group Card ────────────────────────────────────────────────
+function GroupCard({ group, idx, teachers, courses, rooms, openEditGroupModal, openDeleteModal, onAddStudent, onViewStudents }) {
+  const pal     = PALETTES[idx % PALETTES.length];
+  const course  = findById(courses,  group.courseId)  || group.course;
+  const teacher = findById(teachers, group.teacherId) || group.teacher;
+  const room    = findById(rooms,    group.roomId)    || group.room;
+  const filled  = group.currentStudents || group.students?.length || 0;
+  const max     = group.maxStudents || 1;
+  const pct     = Math.min(100, Math.round((filled / max) * 100));
+  const isFull  = filled >= max;
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{
-        delay: idx * 0.03,
-        type: "spring",
-        stiffness: 300,
-        damping: 24,
-      }}
-      className="bg-base-100 rounded-xl border border-base-300 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer"
+      exit={{ opacity: 0, scale: 0.94 }}
+      transition={{ delay: idx * 0.04, type: "spring", stiffness: 280, damping: 22 }}
+      className="card bg-base-100 shadow border border-base-200 hover:shadow-lg transition-all duration-200 cursor-pointer overflow-hidden group"
       onClick={() => onViewStudents(group)}
     >
-      <div className="p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              className={`w-8 h-8 rounded-lg ${col.bg} flex items-center justify-center shrink-0`}
-            >
-              <Users className={`w-4 h-4 ${col.text}`} />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-bold text-base-content text-sm truncate">
-                {group.name}
-              </h3>
-              <span className="text-[10px] font-medium text-base-content/40 font-mono">
-                #{(page - 1) * itemsPerPage + idx + 1}
-              </span>
-            </div>
+      {/* Gradient header */}
+      <div className={`bg-gradient-to-r ${pal.header} p-4 relative overflow-hidden`}>
+        {/* Decorative circles */}
+        <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-white/10" />
+        <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full bg-white/10" />
+
+        <div className="relative flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-white font-extrabold text-base leading-tight truncate drop-shadow-sm">
+              {group.name}
+            </h2>
+            {course && (
+              <p className="text-white/75 text-xs font-medium truncate mt-0.5">
+                {course.name || course.title}
+              </p>
+            )}
           </div>
-          <span
-            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${group.status === "active" ? "bg-success/10 text-success" : "bg-base-200 text-base-content/40"}`}
-          >
-            {group.status === "active" ? "● Faol" : "○ Nofaol"}
-          </span>
+          <div className="shrink-0">
+            {group.status === "active"
+              ? <span className="badge badge-sm bg-white/20 text-white border-white/30 backdrop-blur-sm">● Faol</span>
+              : <span className="badge badge-sm bg-black/20 text-white/70 border-white/20">○ Nofaol</span>
+            }
+          </div>
         </div>
 
-        <div className="space-y-0.5 mb-2 text-xs text-base-content/70">
-          {course && (
-            <div className="flex items-center gap-1.5 truncate">
-              <BookOpen className="w-3 h-3 shrink-0" />
-              <span className="truncate font-medium">{course.title || course.name}</span>
+        {/* Schedule pill */}
+        {group.schedule?.days?.length > 0 && (
+          <div className="relative mt-2 inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-sm rounded-full px-2.5 py-1 text-white text-[11px] font-semibold">
+            <Clock className="w-3 h-3" />
+            {group.schedule.days.join(", ")}
+            {group.schedule.fromHour && ` · ${group.schedule.fromHour}–${group.schedule.toHour}`}
+          </div>
+        )}
+      </div>
 
-
-            </div>
-          )}
+      {/* Body */}
+      <div className="p-4 space-y-3">
+        {/* Teacher & room row */}
+        <div className="flex flex-col gap-1.5">
           {teacher && (
-            <div className="flex items-center gap-1.5 truncate">
-              <GraduationCap className="w-3 h-3 shrink-0" />
-              <span className="truncate font-medium">{teacher.name}</span>
+            <div className="flex items-center gap-2 text-xs text-base-content/60">
+              <div className="w-5 h-5 rounded-full bg-base-200 flex items-center justify-center shrink-0">
+                <GraduationCap className="w-3 h-3" />
+              </div>
+              <span className="truncate font-semibold text-base-content/80">{teacher.name}</span>
             </div>
           )}
           {room && (
-            <div className="flex items-center gap-1.5 truncate">
-              <DoorOpen className="w-3 h-3 shrink-0" />
-              <span className="truncate font-medium">{room.name}</span>
-            </div>
-          )}
-          {group.schedule?.days?.length > 0 && (
-            <div className="flex items-center gap-1.5 truncate">
-              <Clock className="w-3 h-3 shrink-0" />
-              <span className="font-medium">
-                {group.schedule.days.slice(0, 3).join(", ")} ·{" "}
-                {group.schedule.fromHour}–{group.schedule.toHour}
-              </span>
+            <div className="flex items-center gap-2 text-xs text-base-content/60">
+              <div className="w-5 h-5 rounded-full bg-base-200 flex items-center justify-center shrink-0">
+                <DoorOpen className="w-3 h-3" />
+              </div>
+              <span className="truncate font-semibold text-base-content/80">{room.name}</span>
             </div>
           )}
         </div>
 
-        <div className="mb-2">
-          <div className="flex justify-between items-center mb-0.5">
-            <span className="text-[10px] font-bold text-base-content/50 flex items-center gap-1">
-              <Users2 className="w-3 h-3" /> Talabalar
+        {/* Divider */}
+        <div className="divider my-0" />
+
+        {/* Student progress */}
+        <div>
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="text-[11px] font-bold text-base-content/50 flex items-center gap-1">
+              <Users2 className="w-3.5 h-3.5" /> O'quvchilar
             </span>
-            <span className="text-[10px] font-black text-base-content">
-              {filled}/{max}
+            <span className={`badge badge-sm font-bold ${isFull ? "badge-error" : "badge-ghost"}`}>
+              {filled} / {max}
             </span>
           </div>
-          <div className="h-1.5 bg-base-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full ${col.bar} transition-all`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+          <progress
+            className={`progress w-full h-2 ${isFull ? "progress-error" : pal.progress}`}
+            value={pct}
+            max={100}
+          />
         </div>
 
-        <div
-          className={`${col.bg} rounded-lg px-2.5 py-1.5 mb-2 flex items-center justify-between`}
-        >
-          <span className="text-[10px] font-bold text-base-content/50 uppercase tracking-wider flex items-center gap-1">
-            <Wallet className="w-3 h-3" /> To'lov
+        {/* Fee */}
+        <div className={`flex items-center justify-between rounded-xl px-3 py-2.5 ${pal.soft} ring-1 ${pal.ring}`}>
+          <span className={`text-xs font-bold flex items-center gap-1.5 ${pal.text}`}>
+            <Wallet className="w-3.5 h-3.5" /> Oylik to'lov
           </span>
-          <span className={`text-xs font-bold ${col.text}`}>
-            {Number(group.monthlyFeePerStudent).toLocaleString()}{" "}
-            <span className="text-[10px] text-base-content/50">so'm</span>
+          <span className={`text-sm font-extrabold ${pal.text}`}>
+            {Number(group.monthlyFeePerStudent || 0).toLocaleString()}
+            <span className="text-[10px] font-semibold opacity-60 ml-1">so'm</span>
           </span>
         </div>
 
-        <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-0.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => openDeleteModal(group, "group")}
+            className="btn btn-xs btn-ghost text-error hover:bg-error/10 px-2"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+          <div className="flex-1" />
           <button
             onClick={() => openEditGroupModal(group)}
-            className="flex-1 py-1.5 text-[10px] font-bold text-base-content/70 bg-base-200 hover:bg-base-300 rounded-lg transition-colors flex items-center justify-center gap-1"
+            className="btn btn-xs btn-ghost gap-1"
           >
-            <Edit3 className="w-3 h-3" /> Tahrirlash
+            <Edit3 className="w-3.5 h-3.5" /> Tahrirlash
           </button>
           <button
             onClick={() => onAddStudent(group)}
-            className="flex-1 py-1.5 text-[10px] font-bold text-base-content/70 bg-base-200 hover:bg-base-300 rounded-lg transition-colors flex items-center justify-center gap-1"
+            className="btn btn-xs btn-primary gap-1 shadow-sm"
           >
-            <UserPlus className="w-3 h-3" /> Qo'shish
-          </button>
-          <button
-            onClick={() => openDeleteModal(group, "group")}
-            className="px-2.5 py-1.5 text-base-content/40 bg-base-200 hover:bg-error/10 hover:text-error rounded-lg transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
+            <UserPlus className="w-3.5 h-3.5" /> Qo'shish
           </button>
         </div>
       </div>
@@ -243,56 +278,71 @@ function RoomCard({ room, idx, openEditRoomModal, openDeleteModal }) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: idx * 0.04 }}
-      className="bg-base-100 rounded-2xl border border-base-300 p-5 hover:shadow-lg transition-all"
+      transition={{ delay: idx * 0.04, type: "spring", stiffness: 280, damping: 22 }}
+      className="card bg-base-100 shadow border border-base-200 hover:shadow-lg transition-all duration-200 overflow-hidden"
     >
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center">
-          <Building2 className="w-6 h-6 text-secondary" />
-        </div>
-        <div>
-          <h3 className="font-bold text-base-content">{room.name}</h3>
-          <span className="text-xs font-bold text-base-content/50 font-mono flex items-center gap-1">
-            <MapPin className="w-3 h-3" /> #{room.number}
-          </span>
+      {/* Gradient header */}
+      <div className="bg-gradient-to-r from-slate-600 to-slate-800 p-4 relative overflow-hidden">
+        <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-white/10" />
+        <div className="absolute -bottom-6 right-6 w-16 h-16 rounded-full bg-white/10" />
+        <div className="relative flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center shrink-0">
+            <Building2 className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-white font-extrabold text-base truncate">{room.name}</h2>
+            <span className="text-white/60 text-xs font-medium flex items-center gap-1">
+              <MapPin className="w-3 h-3" /> Xona #{room.number}
+            </span>
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-secondary/10 rounded-xl">
-        <Users className="w-4 h-4 text-secondary" />
-        <span className="text-sm font-bold text-secondary">
-          {room.capacity} kishi
-        </span>
-      </div>
-      {room.equipment?.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {room.equipment.slice(0, 4).map((eq, i) => (
-            <span
-              key={i}
-              className="text-[11px] bg-base-200 text-base-content/70 px-2 py-0.5 rounded-lg font-bold"
-            >
-              {eq}
-            </span>
-          ))}
-          {room.equipment.length > 4 && (
-            <span className="text-[11px] bg-base-200 text-base-content/50 px-2 py-0.5 rounded-lg font-bold">
-              +{room.equipment.length - 4}
-            </span>
-          )}
+
+      <div className="p-4 space-y-3">
+        {/* Capacity */}
+        <div className="flex items-center justify-between bg-base-200 rounded-xl px-4 py-3">
+          <div>
+            <p className="text-[10px] font-bold text-base-content/40 uppercase tracking-wider mb-0.5">Sig'imi</p>
+            <p className="text-2xl font-extrabold text-base-content">
+              {room.capacity}
+              <span className="text-sm font-semibold text-base-content/50 ml-1">kishi</span>
+            </p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-base-300 flex items-center justify-center">
+            <Users className="w-6 h-6 text-base-content/40" />
+          </div>
         </div>
-      )}
-      <div className="flex gap-2">
-        <button
-          onClick={() => openEditRoomModal(room)}
-          className="flex-1 py-2 text-xs font-bold text-base-content/70 bg-base-200 hover:bg-base-300 rounded-xl transition-colors flex items-center justify-center gap-1"
-        >
-          <Edit3 className="w-3 h-3" /> Tahrirlash
-        </button>
-        <button
-          onClick={() => openDeleteModal(room, "room")}
-          className="px-3 py-2 text-xs font-bold text-base-content/40 bg-base-200 hover:bg-error/10 hover:text-error rounded-xl transition-colors"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+
+        {/* Equipment */}
+        {room.equipment?.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {room.equipment.slice(0, 5).map((eq, i) => (
+              <span key={i} className="badge badge-ghost badge-sm font-semibold">{eq}</span>
+            ))}
+            {room.equipment.length > 5 && (
+              <span className="badge badge-ghost badge-sm">+{room.equipment.length - 5}</span>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-base-content/30 italic">Jihozlar ko'rsatilmagan</p>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            onClick={() => openDeleteModal(room, "room")}
+            className="btn btn-xs btn-ghost text-error hover:bg-error/10 px-2"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+          <div className="flex-1" />
+          <button
+            onClick={() => openEditRoomModal(room)}
+            className="btn btn-xs btn-ghost gap-1"
+          >
+            <Edit3 className="w-3.5 h-3.5" /> Tahrirlash
+          </button>
+        </div>
       </div>
     </motion.div>
   );
@@ -368,7 +418,6 @@ function GroupModal({
   }
 }
         } catch (err) {
-          console.error("Availability check failed:", err);
           // On error, show all options
           setAvailableRooms(rooms);
           setAvailableTeachers(teachers);
@@ -709,7 +758,7 @@ function GroupModal({
             ) : editingGroup ? (
               "✓ Saqlash"
             ) : (
-              "+ Yaratish"
+              "Davom etish →"
             )}
           </button>
         </div>
@@ -912,33 +961,23 @@ function AddStudentModal({ group, onClose, onAdded, existingStudents = [] }) {
   useEffect(() => {
     fetchAllStudents()
       .then((all) => {
-        console.log("Barcha o'quvchilar:", all);
-
-        // Guruh ID ni aniqlash
         const groupId = group._id || group.id;
-
-        // Allaqachon bu guruhga qo'shilgan o'quvchilarni exclude qilish
         const filtered = all.filter((student) => {
           const studentId = student._id || student.id;
-
-          console.log("Studentni tekshirish:", student.name, studentId);
-
-          // 1. existingStudents orqali tekshirish (agar berilgan bo'lsa)
+          // 1. existingStudents orqali tekshirish
           const existsInGroup = existingStudents.some(
             (s) => (s._id || s.id) === studentId,
           );
           if (existsInGroup) return false;
 
-          // 2. student.group orqali tekshirish
+          // 2. student.group orqali tekshirish (agar berilgan bo'lsa)
           if (student.group) {
             const studentGroupId = student.group._id || student.group.id;
             if (studentGroupId === groupId) return false;
           }
 
-          // 3. student.groupId orqali tekshirish
           if (student.groupId === groupId) return false;
 
-          // 4. student.groups orqali tekshirish (agar o'quvchi bir nechta guruhda bo'lishi mumkin bo'lsa)
           if (student.groups && Array.isArray(student.groups)) {
             const inGroup = student.groups.some(
               (g) => (g._id || g.id) === groupId,
@@ -948,17 +987,10 @@ function AddStudentModal({ group, onClose, onAdded, existingStudents = [] }) {
 
           return true;
         });
-
-        console.log(
-          "Guruhga qo'shish mumkin bo'lgan o'quvchilar:",
-          filtered.length,
-        );
-        console.log("Filter qilingan o'quvchilar:", filtered);
         setStudents(filtered);
         setFetching(false);
       })
-      .catch((err) => {
-        console.error("O'quvchilarni yuklash xatolik:", err);
+      .catch(() => {
         setErrors({ submit: "Yuklanmadi" });
         setFetching(false);
       });
@@ -1073,7 +1105,7 @@ function AddStudentModal({ group, onClose, onAdded, existingStudents = [] }) {
                   {students.map((s) => (
                     <option key={s._id || s.id} value={s._id || s.id}>
                       {s.name || "Ism yo'q"}{" "}
-                      {s.phone ? `— ${s.phone}` : "(Telefon yo'q)"}
+                      {s.phone ? `— ${formatPhone(s.phone)}` : "(Telefon yo'q)"}
                     </option>
                   ))}
                 </select>
@@ -1094,7 +1126,7 @@ function AddStudentModal({ group, onClose, onAdded, existingStudents = [] }) {
                   <div className="flex justify-between text-sm">
                     <span className="text-base-content/40">Telefon</span>
                     <span className="font-bold text-base-content">
-                      {sel.phone || "Telefon yo'q"}
+                      {sel.phone ? formatPhone(sel.phone) : "Telefon yo'q"}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -1150,12 +1182,10 @@ function AddStudentsToNewGroupModal({ group, onClose, onAdded }) {
       setFetching(true);
       fetchStudentsForCourse(group.courseId)
         .then((courseStudents) => {
-          console.log("Kursga yozilgan o'quvchilar:", courseStudents);
           setStudents(courseStudents);
           setFetching(false);
         })
-        .catch((err) => {
-          console.error("Kurs uchun studentlarni yuklash xatolik:", err);
+        .catch(() => {
           setErrors({ fetch: "O'quvchilarni yuklashda xatolik" });
           setFetching(false);
         });
@@ -1195,8 +1225,7 @@ function AddStudentsToNewGroupModal({ group, onClose, onAdded }) {
         setErrors({ submit: "Ba'zi o'quvchilarni qo'shishda xatolik yuz berdi" });
         setLoading(false);
       }
-    } catch (err) {
-      console.error("O'quvchilarni qo'shish xatolik:", err);
+    } catch {
       setErrors({ submit: "Xatolik yuz berdi" });
       setLoading(false);
     }
@@ -1310,7 +1339,7 @@ function AddStudentsToNewGroupModal({ group, onClose, onAdded }) {
                             {student.name || "Ism yo'q"}
                           </div>
                           <div className="text-xs text-base-content/60 font-medium">
-                            {student.phone || "Telefon yo'q"}
+                            {student.phone ? formatPhone(student.phone) : "Telefon yo'q"}
                           </div>
                         </div>
                         <div className="text-right shrink-0">
@@ -1375,6 +1404,7 @@ function AddStudentsToNewGroupModal({ group, onClose, onAdded }) {
 
 // ── Main GroupsPage ───────────────────────────────────────────
 export default function GroupsPage() {
+  const { showToast } = useToast();
   const {
     groups,
     rooms,
@@ -1421,40 +1451,66 @@ export default function GroupsPage() {
   const [groupStudents, setGroupStudents] = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentPayments, setStudentPayments] = useState({});
+  const [studentAbsences, setStudentAbsences] = useState({});
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editStudentForm, setEditStudentForm] = useState({ name: "", phone: "", parentPhone: "" });
+  const [savingStudent, setSavingStudent] = useState(false);
+  const [deletingStudent, setDeletingStudent] = useState(null);
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [newlyCreatedGroup, setNewlyCreatedGroup] = useState(null);
   const [showNewGroupStudentModal, setShowNewGroupStudentModal] = useState(false);
 
+  // ── Pagination state ──
+  const [localPage, setLocalPage] = useState(1);
+  const LOCAL_PER_PAGE = 9;
+
+  // ── Computed ──
+  const filteredGroups = useMemo(() => [...groups], [groups]);
+
+  const groupStats = useMemo(() => ({
+    total:         groups.length,
+    active:        groups.filter(g => g.status === "active").length,
+    totalStudents: groups.reduce((s, g) => s + (g.currentStudents || g.students?.length || 0), 0),
+    totalRevenue:  groups.reduce((s, g) => s + ((g.currentStudents || g.students?.length || 0) * (Number(g.monthlyFeePerStudent) || 0)), 0),
+  }), [groups]);
+
+  const donutSegments = useMemo(() => {
+    const active   = groups.filter(g => g.status === "active").length;
+    const inactive = groups.filter(g => g.status === "inactive").length;
+    const other    = groups.length - active - inactive;
+    return [
+      { label: "Faol",        value: active,   color: "#10b981" },
+      { label: "Nofaol",      value: inactive, color: "#f59e0b" },
+      { label: "Boshqa",      value: other,    color: "#94a3b8" },
+    ].filter(s => s.value > 0);
+  }, [groups]);
+
+  const topGroups    = useMemo(() => [...groups].sort((a, b) => (b.currentStudents || b.students?.length || 0) - (a.currentStudents || a.students?.length || 0)).slice(0, 5), [groups]);
+  const recentGroups = useMemo(() => [...groups].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5), [groups]);
+
+  const totalLocalPages  = Math.ceil(filteredGroups.length / LOCAL_PER_PAGE);
+  const paginatedFiltered = filteredGroups.slice((localPage - 1) * LOCAL_PER_PAGE, localPage * LOCAL_PER_PAGE);
+
   const handleSaveGroup = async () => {
     setIsSubmittingGroup(true);
     try {
-      const ok = await saveGroup(editingGroup, formData);
-      if (ok) {
+      const result = await saveGroup(editingGroup, formData, showToast);
+      if (result.success) {
         const message = editingGroup
           ? "Guruh muvaffaqiyatli yangilandi!"
           : "Guruh muvaffaqiyatli yaratildi!";
         setSuccessMessage(message);
-
-        // Success message ni 3 sekund ko'rsatish
-        setTimeout(() => {
-          setSuccessMessage("");
-        }, 3000);
+        setTimeout(() => setSuccessMessage(""), 3000);
 
         closeModals();
         loadGroups();
 
-        // If creating a new group, open modal to add students
-        if (!editingGroup && formData.courseId) {
-          // Find the newly created group
-          setTimeout(async () => {
-            const updatedGroups = await loadGroups();
-            const newGroup = groups.find(g => g.courseId === formData.courseId && g.name === formData.name);
-            if (newGroup) {
-              setNewlyCreatedGroup(newGroup);
-              setShowNewGroupStudentModal(true);
-            }
-          }, 500);
+        // Yangi guruh yaratilganda — o'quvchi qo'shish modalini oching
+        if (!editingGroup) {
+          const createdGroup = result.newGroup || { courseId: formData.courseId, name: formData.name };
+          setNewlyCreatedGroup(createdGroup);
+          setShowNewGroupStudentModal(true);
         }
       }
     } finally {
@@ -1488,16 +1544,10 @@ export default function GroupsPage() {
       setSelectedGroup(group);
       setLoadingStudents(true);
       try {
-        console.log("Guruh ID:", group.id || group._id);
-        console.log("Guruhdan o'quvchilarni yuklash...");
-
         const res = await getGroupById(group.id || group._id, {
           includeStudents: true,
         });
-        console.log("Backend response:", res.data);
-
         const groupData = res.data.data || res.data;
-        console.log("Group data:", groupData);
 
         let students = [];
 
@@ -1547,22 +1597,17 @@ export default function GroupsPage() {
             : [group.students];
         }
 
-        console.log("Yuklangan o'quvchilar:", students);
         setGroupStudents(students);
 
-        // O'quvchilarning to'lov ma'lumotlarini yuklash
+        // O'quvchilarning to'lov va davomati ma'lumotlarini yuklash
         if (students.length > 0) {
-          await loadStudentPayments(students);
+          await Promise.all([
+            loadStudentPayments(students),
+            loadStudentAbsences(group.id || group._id),
+          ]);
         }
 
-        if (students.length === 0) {
-          console.warn("O'quvchilar topilmadi. Group data:", groupData);
-        }
-      } catch (err) {
-        console.error("O'quvchilarni yuklashda xatolik:", err);
-        console.error("Error response:", err.response?.data);
-
-        // Xatolik bo'lsa, local data'dan olishga urinish
+      } catch {
         if (group.students) {
           const students = Array.isArray(group.students)
             ? group.students
@@ -1621,9 +1666,57 @@ export default function GroupsPage() {
       });
 
       setStudentPayments(paymentsByStudent);
-    } catch (err) {
-      console.error("To'lovlarni yuklashda xatolik:", err);
+    } catch {
       setStudentPayments({});
+    }
+  };
+
+  // Joriy oy davomida qoldirgan darslarni hisoblash
+  const loadStudentAbsences = async (groupId) => {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const res = await getGroupAttendanceCalendar(groupId, { year, month });
+      const raw = res.data;
+      const counts = {};
+
+      // Format C: { days, students: [{id, attendance: {"6": true/false}}] }
+      if (Array.isArray(raw?.students)) {
+        raw.students.forEach((s) => {
+          let absent = 0;
+          Object.values(s.attendance || {}).forEach((v) => {
+            if (v === false || v === 'absent') absent++;
+          });
+          counts[s.id] = absent;
+        });
+      }
+      // Format A: { days: [{date, records:[{studentId, status}]}] }
+      else if (Array.isArray(raw?.days) && raw.days[0]?.records) {
+        raw.days.forEach((day) => {
+          day.records?.forEach((r) => {
+            if (r.status === 'absent') {
+              counts[r.studentId] = (counts[r.studentId] || 0) + 1;
+            }
+          });
+        });
+      }
+      // Format B: { calendar: { "date": { studentId: status } } }
+      else {
+        const calendar = raw?.calendar || raw?.data?.calendar;
+        if (calendar) {
+          Object.values(calendar).forEach((dayMap) => {
+            Object.entries(dayMap).forEach(([sid, status]) => {
+              if (status === 'absent' || status === false) {
+                counts[sid] = (counts[sid] || 0) + 1;
+              }
+            });
+          });
+        }
+      }
+      setStudentAbsences(counts);
+    } catch {
+      setStudentAbsences({});
     }
   };
 
@@ -1631,6 +1724,7 @@ export default function GroupsPage() {
     setSelectedGroup(null);
     setGroupStudents([]);
     setStudentPayments({});
+    setStudentAbsences({});
   };
 
   const handleAddStudentSuccess = () => {
@@ -1640,62 +1734,78 @@ export default function GroupsPage() {
     if (selectedGroup) handleGroupClick(selectedGroup);
   };
 
+  const stripPhone = (raw) => (raw ?? "").replace(/\D/g, "").replace(/^998/, "").slice(0, 9);
+
+  const openEditStudent = (s) => {
+    setEditingStudent(s);
+    setEditStudentForm({
+      name:        s.name || "",
+      phone:       stripPhone(s.phone),
+      parentPhone: stripPhone(s.parentPhone || s.parent?.phone || s.parentContact),
+    });
+  };
+
+  const handleSaveStudent = async () => {
+    if (!editingStudent) return;
+    setSavingStudent(true);
+    try {
+      const payload = {
+        ...editStudentForm,
+        phone:       stripPhone(editStudentForm.phone),
+        parentPhone: stripPhone(editStudentForm.parentPhone),
+      };
+      await updateStudent(editingStudent._id || editingStudent.id, payload);
+      setGroupStudents((prev) =>
+        prev.map((s) =>
+          (s._id || s.id) === (editingStudent._id || editingStudent.id)
+            ? { ...s, ...editStudentForm }
+            : s
+        )
+      );
+      showToast("✅ O'quvchi ma'lumotlari yangilandi", "success", 3000);
+      setEditingStudent(null);
+    } catch (err) {
+      showToast("❌ Xatolik yuz berdi", "error", 4000);
+    } finally {
+      setSavingStudent(false);
+    }
+  };
+
+  const handleRemoveStudent = async () => {
+    if (!deletingStudent) return;
+    const sid = deletingStudent._id || deletingStudent.id;
+    try {
+      await deleteStudent(sid);
+      setGroupStudents((prev) => prev.filter((s) => (s._id || s.id) !== sid));
+      showToast("✅ O'quvchi o'chirildi", "success", 3000);
+      setDeletingStudent(null);
+    } catch {
+      showToast("❌ Xatolik yuz berdi", "error", 4000);
+    }
+  };
+
   const openAddStudentModal = (group) => {
     setSelectedGroupForStudent(group);
     setShowAddStudentModal(true);
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      {/* Tablar va Qidiruv */}
+    <div className="p-4 md:p-6 space-y-5">
+
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex bg-base-200 p-1 rounded-2xl">
-          {[
-            ["groups", "Guruhlar", Users],
-            ["rooms", "Xonalar", Building2],
-          ].map(([tab, label, Icon]) => (
-            <button
-              key={tab}
-              onClick={() => {
-                setActiveTab(tab);
-                setPage(1);
-                setSelectedGroup(null);
-                setStudentPayments({});
-              }}
-              className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
-                activeTab === tab
-                  ? "bg-primary text-primary-content shadow-sm"
-                  : "text-base-content/60 hover:text-base-content"
-              }`}
-            >
-              <Icon className="w-4 h-4" /> {label}
-            </button>
-          ))}
+        <div>
+          <h1 className="text-2xl font-black text-base-content">Guruhlar</h1>
+          <p className="text-sm text-base-content/50 mt-0.5">O'quv guruhlarini boshqarish</p>
         </div>
-
         {!selectedGroup && (
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="w-4 h-4 text-base-content/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Qidirish..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2.5 bg-base-100 border border-base-300 rounded-2xl text-sm font-bold outline-none focus:border-primary w-56"
-              />
-            </div>
-            <button
-              onClick={
-                activeTab === "groups" ? openAddGroupModal : openAddRoomModal
-              }
-              className="px-4 py-2.5 text-sm font-bold text-primary-content bg-primary rounded-2xl shadow-sm flex items-center gap-2 hover:opacity-90"
-            >
-              + {activeTab === "groups" ? "Guruh" : "Xona"}
-            </button>
-          </div>
+          <button
+            onClick={activeTab === "groups" ? openAddGroupModal : openAddRoomModal}
+            className="px-5 py-2.5 text-sm font-bold text-primary-content bg-primary rounded-2xl shadow-sm flex items-center gap-2 hover:opacity-90 whitespace-nowrap"
+          >
+            + {activeTab === "groups" ? "Yangi guruh" : "Yangi xona"}
+          </button>
         )}
-
         {selectedGroup && (
           <button
             onClick={handleBack}
@@ -1706,313 +1816,197 @@ export default function GroupsPage() {
         )}
       </div>
 
-      {/* ASOSIY KONTENT */}
+      {/* ── Stats Row ── */}
+      {activeTab === "groups" && !selectedGroup && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: "Jami guruhlar",    value: groupStats.total,                                    Icon: Users,         color: "bg-violet-100 text-violet-600"  },
+            { label: "Faol guruhlar",    value: groupStats.active,                                   Icon: CheckCircle,   color: "bg-emerald-100 text-emerald-600" },
+            { label: "Jami o'quvchilar",value: groupStats.totalStudents,                             Icon: GraduationCap, color: "bg-sky-100 text-sky-600"         },
+            { label: "Oylik daromad",    value: groupStats.totalRevenue.toLocaleString() + " so'm",  Icon: Wallet,        color: "bg-amber-100 text-amber-600", small: true },
+          ].map(({ label, value, Icon, color, small }) => (
+            <div key={label} className="bg-base-100 rounded-2xl p-4 shadow-sm border border-base-200 flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-base-content/50 font-semibold">{label}</p>
+                <p className={`font-black text-base-content truncate ${small ? "text-sm" : "text-xl"}`}>{value}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Tabs + Filters ── */}
+      {!selectedGroup && (
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between flex-wrap">
+          <div className="flex bg-base-200 p-1 rounded-2xl">
+            {[
+              ["groups", "Guruhlar", Users],
+              ["rooms",  "Xonalar",  Building2],
+            ].map(([tab, label, Icon]) => (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(tab); setPage(1); setLocalPage(1); setSelectedGroup(null); setStudentPayments({}); }}
+                className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
+                  activeTab === tab
+                    ? "bg-primary text-primary-content shadow-sm"
+                    : "text-base-content/60 hover:text-base-content"
+                }`}
+              >
+                <Icon className="w-4 h-4" /> {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="w-4 h-4 text-base-content/40 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Qidirish..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setLocalPage(1); }}
+                className="w-44 pl-10 pr-4 py-2.5 bg-base-100 border border-base-300 rounded-2xl text-sm font-bold outline-none focus:border-primary"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Main Content ── */}
       {loading ? (
         <div className="flex justify-center py-24">
           <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : activeTab === "groups" ? (
         <>
-          {!selectedGroup ? (
-            <>
-              {paginatedGroups.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-24">
-                  <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                    <Users className="w-8 h-8 text-primary/40" />
-                  </div>
-                  <p className="text-base-content/60 font-bold mt-3">
-                    Guruhlar yo'q
-                  </p>
-                  <button
-                    onClick={openAddGroupModal}
-                    className="text-primary text-sm font-bold hover:underline mt-2"
-                  >
-                    + Birinchi guruhni yarating
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <AnimatePresence mode="popLayout">
-                    {paginatedGroups.map((group, i) => (
-                      <GroupCard
-                        key={group.id || group._id}
-                        group={group}
-                        idx={i}
-                        teachers={teachers}
-                        courses={courses}
-                        rooms={rooms}
-                        openEditGroupModal={openEditGroupModal}
-                        openDeleteModal={openDeleteModal}
-                        onAddStudent={openAddStudentModal}
-                        onViewStudents={handleGroupClick}
-                        page={page}
-                        itemsPerPage={itemsPerPage}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 bg-base-100 border border-base-300 rounded-2xl shadow-sm">
-                  <span className="text-xs text-base-content/40">
-                    {(page - 1) * itemsPerPage + 1}–
-                    {Math.min(page * itemsPerPage, groups.length)} /{" "}
-                    {groups.length}
-                  </span>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="p-2 border border-base-300 rounded-xl hover:bg-base-200 disabled:opacity-40"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
+          {!selectedGroup && (
+            <div className="flex gap-5 items-start">
+              {/* Cards */}
+              <div className="flex-1 min-w-0">
+                {filteredGroups.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-24">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                      <Users className="w-8 h-8 text-primary/40" />
+                    </div>
+                    <p className="text-base-content/60 font-bold mt-3">Guruhlar yo'q</p>
+                    <button onClick={openAddGroupModal} className="text-primary text-sm font-bold hover:underline mt-2">
+                      + Birinchi guruhni yarating
                     </button>
-                    {Array.from(
-                      { length: Math.min(totalPages, 5) },
-                      (_, i) => i + 1,
-                    ).map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setPage(n)}
-                        className={`px-3 py-1.5 rounded-xl border ${page === n ? "bg-primary text-primary-content border-primary" : "border-base-300 hover:bg-base-200"}`}
-                      >
-                        {n}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <AnimatePresence mode="popLayout">
+                      {paginatedFiltered.map((group, i) => (
+                        <GroupCard
+                          key={group.id || group._id}
+                          group={group}
+                          idx={i}
+                          teachers={teachers}
+                          courses={courses}
+                          rooms={rooms}
+                          openEditGroupModal={openEditGroupModal}
+                          openDeleteModal={openDeleteModal}
+                          onAddStudent={openAddStudentModal}
+                          onViewStudents={handleGroupClick}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {totalLocalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 bg-base-100 border border-base-300 rounded-2xl shadow-sm mt-4">
+                    <span className="text-xs text-base-content/40">
+                      {(localPage - 1) * LOCAL_PER_PAGE + 1}–{Math.min(localPage * LOCAL_PER_PAGE, filteredGroups.length)} / {filteredGroups.length}
+                    </span>
+                    <div className="flex gap-1">
+                      <button onClick={() => setLocalPage(p => Math.max(1, p - 1))} disabled={localPage === 1} className="p-2 border border-base-300 rounded-xl hover:bg-base-200 disabled:opacity-40">
+                        <ChevronLeft className="w-4 h-4" />
                       </button>
-                    ))}
-                    <button
-                      onClick={() =>
-                        setPage((p) => Math.min(totalPages, p + 1))
-                      }
-                      disabled={page === totalPages}
-                      className="p-2 border border-base-300 rounded-xl hover:bg-base-200 disabled:opacity-40"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+                      {Array.from({ length: Math.min(totalLocalPages, 5) }, (_, i) => i + 1).map(n => (
+                        <button key={n} onClick={() => setLocalPage(n)} className={`px-3 py-1.5 rounded-xl border ${localPage === n ? "bg-primary text-primary-content border-primary" : "border-base-300 hover:bg-base-200"}`}>{n}</button>
+                      ))}
+                      <button onClick={() => setLocalPage(p => Math.min(totalLocalPages, p + 1))} disabled={localPage === totalLocalPages} className="p-2 border border-base-300 rounded-xl hover:bg-base-200 disabled:opacity-40">
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Sidebar ── */}
+              <div className="w-72 shrink-0 hidden xl:flex flex-col gap-4">
+                {/* Donut */}
+                <div className="bg-base-100 rounded-2xl border border-base-200 p-4 shadow-sm">
+                  <h3 className="font-black text-sm text-base-content mb-3 flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-primary" /> Holat bo'yicha
+                  </h3>
+                  <div className="flex items-center gap-4">
+                    <DonutChart segments={donutSegments} size={100} />
+                    <div className="space-y-2 text-xs font-bold flex-1">
+                      {donutSegments.map(s => (
+                        <div key={s.label} className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+                          <span className="text-base-content/70 flex-1">{s.label}</span>
+                          <span className="text-base-content font-black">{s.value}</span>
+                        </div>
+                      ))}
+                      {donutSegments.length === 0 && <p className="text-base-content/30 italic">Ma'lumot yo'q</p>}
+                    </div>
                   </div>
                 </div>
-              )}
-            </>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-base-100 rounded-2xl border border-base-300 overflow-hidden shadow-lg"
-            >
-              <div className="bg-primary px-6 py-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 bg-primary-content/20 rounded-xl">
-                      <Users className="w-6 h-6 text-primary-content" />
-                    </div>
-                    <div>
-                      <h3 className="font-black text-primary-content text-xl">
-                        {selectedGroup.name}
-                      </h3>
-                      <p className="text-sm text-primary-content/70 font-bold">
-                        {groupStudents.length} ta o'quvchi
-                      </p>
-                    </div>
+
+                {/* Top groups */}
+                <div className="bg-base-100 rounded-2xl border border-base-200 p-4 shadow-sm">
+                  <h3 className="font-black text-sm text-base-content mb-3 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-primary" /> Top guruhlar
+                  </h3>
+                  <div className="space-y-2.5">
+                    {topGroups.map((g, i) => {
+                      const filled = g.currentStudents || g.students?.length || 0;
+                      const max    = g.maxStudents || 1;
+                      const pct    = Math.min(100, Math.round((filled / max) * 100));
+                      return (
+                        <div key={g._id || g.id}>
+                          <div className="flex items-center gap-2 text-xs mb-1">
+                            <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-black flex items-center justify-center text-[10px] shrink-0">{i + 1}</span>
+                            <span className="flex-1 font-bold text-base-content truncate">{g.name}</span>
+                            <span className="text-base-content/50 font-semibold shrink-0">{filled}/{max}</span>
+                          </div>
+                          <div className="w-full h-1 bg-base-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {topGroups.length === 0 && <p className="text-xs text-base-content/30 italic">Guruhlar yo'q</p>}
                   </div>
-                  <button
-                    onClick={() => openAddStudentModal(selectedGroup)}
-                    className="px-4 py-2 bg-primary-content/20 hover:bg-primary-content/30 rounded-xl text-primary-content text-sm font-bold flex items-center gap-2"
-                  >
-                    <UserPlus className="w-4 h-4" /> O'quvchi qo'shish
-                  </button>
+                </div>
+
+                {/* Recently added */}
+                <div className="bg-base-100 rounded-2xl border border-base-200 p-4 shadow-sm">
+                  <h3 className="font-black text-sm text-base-content mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-primary" /> Yangi qo'shilgan
+                  </h3>
+                  <div className="space-y-2">
+                    {recentGroups.map(g => (
+                      <div key={g._id || g.id} className="flex items-center gap-2.5 text-xs">
+                        <div className="w-8 h-8 rounded-xl bg-base-200 flex items-center justify-center shrink-0">
+                          <Users className="w-4 h-4 text-base-content/40" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-base-content truncate">{g.name}</p>
+                          <p className="text-base-content/40 text-[10px]">{g.createdAt ? new Date(g.createdAt).toLocaleDateString("uz-UZ") : "—"}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {recentGroups.length === 0 && <p className="text-xs text-base-content/30 italic">Guruhlar yo'q</p>}
+                  </div>
                 </div>
               </div>
-              {loadingStudents ? (
-                <div className="flex justify-center py-20">
-                  <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : groupStudents.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
-                  <Users className="w-16 h-16 text-base-content/20" />
-                  <p className="font-bold mt-3">
-                    Bu guruhda hali o'quvchilar yo'q
-                  </p>
-                  <button
-                    onClick={() => openAddStudentModal(selectedGroup)}
-                    className="mt-3 px-5 py-2.5 bg-primary hover:opacity-90 text-primary-content rounded-xl text-sm font-bold flex items-center gap-2"
-                  >
-                    <UserPlus className="w-4 h-4" /> Birinchi o'quvchini
-                    qo'shing
-                  </button>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-base-200 border-b border-base-300">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/70">
-                          #
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/70">
-                          O'quvchi
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/70">
-                          Telefon
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/70">
-                          Qo'shilgan sana
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/70">
-                          Oxirgi to'lov sanasi
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/70">
-                          Oxirgi to'lov summasi
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/70">
-                          To'lov holati
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groupStudents.map((s, i) => {
-                        const studentId = s._id || s.id;
-                        const paymentData = studentPayments[studentId];
-                        const lastPayment = paymentData?.lastPayment;
-                        const totalPaid = paymentData?.totalPaid || 0;
-                        const paymentCount = paymentData?.paymentCount || 0;
-
-                        return (
-                          <tr
-                            key={studentId || i}
-                            className="border-b border-base-200 hover:bg-primary/5"
-                          >
-                            <td className="px-4 py-3.5 text-base-content/50 text-xs font-bold">
-                              {i + 1}
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
-                                  {s.name
-                                    ?.split(" ")
-                                    .map((n) => n[0])
-                                    .join("")
-                                    .toUpperCase()
-                                    .slice(0, 2) || "??"}
-                                </div>
-                                <div>
-                                  <div className="font-bold text-base-content">
-                                    {s.name}
-                                  </div>
-                                  <div className="text-xs font-bold text-base-content/50">
-                                    {s.role || "student"}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3.5 text-base-content/70 text-xs font-bold">
-                              {s.phone || "—"}
-                            </td>
-                            <td className="px-4 py-3.5 text-base-content/50 text-xs font-bold">
-                              {s.createdAt
-                                ? new Date(s.createdAt).toLocaleDateString(
-                                    "uz-UZ",
-                                  )
-                                : "—"}
-                            </td>
-                            <td className="px-4 py-3.5 text-base-content/70 text-xs font-bold">
-                              {lastPayment ? (
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="w-3.5 h-3.5 text-base-content/40" />
-                                  <span className="font-bold">
-                                    {new Date(
-                                      lastPayment.date,
-                                    ).toLocaleDateString("uz-UZ")}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-base-content/30 font-bold">
-                                  —
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3.5">
-                              {lastPayment ? (
-                                <div className="flex items-center gap-2">
-                                  <Wallet className="w-3.5 h-3.5 text-success" />
-                                  <span className="font-bold text-success">
-                                    {Number(lastPayment.amount).toLocaleString(
-                                      "uz-UZ",
-                                    )}{" "}
-                                    <span className="text-xs font-bold text-base-content/50">
-                                      so'm
-                                    </span>
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-base-content/30 font-bold">
-                                  —
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3.5">
-                              {paymentCount > 0 ? (
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle className="w-4 h-4 text-success" />
-                                  <span className="text-xs font-bold text-success">
-                                    {paymentCount} ta to'lov
-                                  </span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <XCircle className="w-4 h-4 text-error" />
-                                  <span className="text-xs font-bold text-error">
-                                    To'lov yo'q
-                                  </span>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  <div className="px-6 py-4 bg-base-200 border-t border-base-300">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div className="flex flex-wrap gap-4">
-                        <span className="text-xs font-bold text-base-content/60">
-                          Jami:{" "}
-                          <span className="text-base-content font-black">
-                            {groupStudents.length}
-                          </span>{" "}
-                          ta o'quvchi
-                        </span>
-                        <span className="text-xs font-bold text-success">
-                          ✓{" "}
-                          {
-                            Object.values(studentPayments).filter(
-                              (p) => p.paymentCount > 0,
-                            ).length
-                          }{" "}
-                          ta to'lov qilgan
-                        </span>
-                        <span className="text-xs font-bold text-error">
-                          ✗{" "}
-                          {
-                            Object.values(studentPayments).filter(
-                              (p) => p.paymentCount === 0,
-                            ).length
-                          }{" "}
-                          ta to'lov qilmagan
-                        </span>
-                      </div>
-                      <div className="text-xs font-bold text-base-content/60">
-                        Jami to'lov:{" "}
-                        <span className="font-black text-success">
-                          {Object.values(studentPayments)
-                            .reduce((sum, p) => sum + p.totalPaid, 0)
-                            .toLocaleString("uz-UZ")}{" "}
-                          so'm
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </motion.div>
+            </div>
           )}
         </>
       ) : (
@@ -2028,6 +2022,264 @@ export default function GroupsPage() {
           ))}
         </div>
       )}
+
+      {/* ── FULL-SCREEN STUDENT LIST OVERLAY ── */}
+      <AnimatePresence>
+        {selectedGroup && activeTab === "groups" && (
+          <motion.div
+            key="student-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-base-200/98 backdrop-blur-sm flex flex-col"
+          >
+            {/* Header */}
+            <div className="bg-primary px-6 py-4 flex items-center justify-between shadow-lg shrink-0">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleBack}
+                  className="p-2 bg-primary-content/20 hover:bg-primary-content/30 rounded-xl text-primary-content transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div className="p-2 bg-primary-content/20 rounded-xl">
+                  <Users className="w-5 h-5 text-primary-content" />
+                </div>
+                <div>
+                  <h2 className="font-black text-primary-content text-lg leading-tight">{selectedGroup.name}</h2>
+                  <p className="text-xs text-primary-content/70 font-bold">{groupStudents.length} ta o'quvchi</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openAddStudentModal(selectedGroup)}
+                  className="px-4 py-2 bg-primary-content/20 hover:bg-primary-content/30 rounded-xl text-primary-content text-sm font-bold flex items-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" /> O'quvchi qo'shish
+                </button>
+                <button onClick={handleBack} className="p-2 bg-primary-content/20 hover:bg-primary-content/30 rounded-xl text-primary-content">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Stats bar */}
+            <div className="px-6 py-2.5 bg-base-100 border-b border-base-200 flex flex-wrap gap-5 text-xs font-bold shrink-0">
+              <span className="text-base-content/60">Jami: <span className="text-base-content font-black">{groupStudents.length}</span> ta</span>
+              <span className="text-success">✓ {Object.values(studentPayments).filter(p => p.paymentCount > 0).length} ta to'lov qilgan</span>
+              <span className="text-error">✗ {Object.values(studentPayments).filter(p => p.paymentCount === 0).length} ta to'lov qilmagan</span>
+              <span className="text-base-content/60 ml-auto">Jami to'lov: <span className="text-success font-black">{Object.values(studentPayments).reduce((s, p) => s + p.totalPaid, 0).toLocaleString("uz-UZ")} so'm</span></span>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+              {loadingStudents ? (
+                <div className="flex justify-center py-32">
+                  <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : groupStudents.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-32 text-base-content/40">
+                  <Users className="w-20 h-20 text-base-content/20" />
+                  <p className="font-bold mt-4 text-lg">Bu guruhda hali o'quvchilar yo'q</p>
+                  <button
+                    onClick={() => openAddStudentModal(selectedGroup)}
+                    className="mt-4 px-6 py-3 bg-primary hover:opacity-90 text-primary-content rounded-2xl text-sm font-bold flex items-center gap-2"
+                  >
+                    <UserPlus className="w-4 h-4" /> Birinchi o'quvchini qo'shing
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-base-100 rounded-2xl border border-base-200 overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-base-200 border-b border-base-300">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/60">#</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/60">O'quvchi</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/60">Telefon</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/60">Ota-onasi</th>
+                          <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-base-content/60">Balans</th>
+                          <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-base-content/60">Dars qoldirgan</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/60">Oxirgi to'lov</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/60">Summa</th>
+                          <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-base-content/60">Holat</th>
+                          <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-base-content/60">Amallar</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupStudents.map((s, i) => {
+                          const studentId = s._id || s.id;
+                          const paymentData = studentPayments[studentId];
+                          const lastPayment = paymentData?.lastPayment;
+                          const paymentCount = paymentData?.paymentCount || 0;
+                          const absent = studentAbsences[studentId] || 0;
+                          return (
+                            <tr key={studentId || i} className="border-b border-base-200 hover:bg-primary/5">
+                              <td className="px-4 py-3.5 text-base-content/50 text-xs font-bold">{i + 1}</td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs shrink-0">
+                                    {s.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "??"}
+                                  </div>
+                                  <div className="font-bold text-base-content">{s.name}</div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 text-xs font-bold text-base-content/70">{formatPhone(s.phone)}</td>
+                              <td className="px-4 py-3.5 text-xs font-bold text-base-content/70">{formatPhone(s.parentPhone || s.parent?.phone || s.parentContact)}</td>
+                              <td className="px-4 py-3.5 text-right text-xs font-bold">
+                                <span className={Number(s.balance || 0) < 0 ? "text-error" : Number(s.balance || 0) > 0 ? "text-success" : "text-base-content/40"}>
+                                  {Number(s.balance || 0).toLocaleString()} UZS
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                {absent > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-error/10 text-error text-xs font-bold">
+                                    <XCircle className="w-3 h-3" />{absent} ta
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success/10 text-success text-xs font-bold">
+                                    <CheckCircle className="w-3 h-3" />0
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 text-xs font-bold text-base-content/70">
+                                {lastPayment ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <Calendar className="w-3.5 h-3.5 text-base-content/40" />
+                                    {new Date(lastPayment.date).toLocaleDateString("uz-UZ")}
+                                  </div>
+                                ) : <span className="text-base-content/30">—</span>}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                {lastPayment ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <Wallet className="w-3.5 h-3.5 text-success" />
+                                    <span className="font-bold text-success text-xs">{Number(lastPayment.amount).toLocaleString("uz-UZ")} <span className="text-base-content/50">so'm</span></span>
+                                  </div>
+                                ) : <span className="text-base-content/30 text-xs">—</span>}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                {paymentCount > 0 ? (
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold text-success"><CheckCircle className="w-3.5 h-3.5" />{paymentCount} ta</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold text-error"><XCircle className="w-3.5 h-3.5" />Yo'q</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => openEditStudent(s)}
+                                    className="p-1.5 rounded-lg bg-info/10 hover:bg-info/20 text-info transition-colors"
+                                    title="Tahrirlash"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeletingStudent(s)}
+                                    className="p-1.5 rounded-lg bg-error/10 hover:bg-error/20 text-error transition-colors"
+                                    title="O'quvchini o'chirish"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── EDIT STUDENT MODAL ── */}
+      <AnimatePresence>
+        {editingStudent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setEditingStudent(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-base-100 rounded-2xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-5"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-lg text-base-content">O'quvchini tahrirlash</h3>
+                <button onClick={() => setEditingStudent(null)} className="btn btn-ghost btn-sm btn-square"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="flex flex-col gap-3">
+                {[
+                  { label: "Ism", key: "name", placeholder: "To'liq ism" },
+                  { label: "Telefon", key: "phone", placeholder: "+998 90 123 45 67" },
+                  { label: "Ota-ona telefoni", key: "parentPhone", placeholder: "+998 90 123 45 67" },
+                ].map(({ label, key, placeholder }) => (
+                  <div key={key}>
+                    <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wider mb-1.5">{label}</label>
+                    <input
+                      type="text"
+                      value={editStudentForm[key]}
+                      onChange={e => setEditStudentForm(f => ({ ...f, [key]: e.target.value }))}
+                      placeholder={placeholder}
+                      className="w-full px-4 py-2.5 bg-base-200 border-2 border-transparent rounded-xl text-sm font-bold outline-none focus:border-primary focus:bg-base-100 transition-all"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEditingStudent(null)} className="flex-1 btn btn-ghost rounded-xl border border-base-200">Bekor qilish</button>
+                <button onClick={handleSaveStudent} disabled={savingStudent} className="flex-1 btn btn-primary rounded-xl">
+                  {savingStudent ? <span className="loading loading-spinner loading-xs" /> : "Saqlash"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── DELETE STUDENT CONFIRM MODAL ── */}
+      <AnimatePresence>
+        {deletingStudent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setDeletingStudent(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-base-100 rounded-2xl shadow-2xl w-full max-w-sm p-7 flex flex-col items-center gap-5"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-16 h-16 rounded-full bg-error/10 flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-error" />
+              </div>
+              <div className="text-center">
+                <h3 className="font-black text-lg text-base-content mb-1">O'chirishni tasdiqlang</h3>
+                <p className="text-sm text-base-content/60"><span className="font-bold text-base-content">{deletingStudent.name}</span> ni butunlay o'chirasizmi?</p>
+                <p className="text-xs text-error/70 mt-1">Bu amal qaytarilmaydi.</p>
+              </div>
+              <div className="flex gap-3 w-full">
+                <button onClick={() => setDeletingStudent(null)} className="flex-1 btn btn-ghost rounded-xl border border-base-200">Bekor qilish</button>
+                <button onClick={handleRemoveStudent} className="flex-1 btn btn-error rounded-xl text-white">O'chirish</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
 
       <AnimatePresence>
         {showModal && (

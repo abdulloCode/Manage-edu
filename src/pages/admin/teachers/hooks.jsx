@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useToast } from '../../../components/Toast'
 import {
   getAllTeachers,
   createTeacher,
@@ -11,16 +10,13 @@ export function useTeachers() {
   const [teachers, setTeachers] = useState([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const itemsPerPage = 10
 
   const loadTeachers = async () => {
     setLoading(true)
     try {
       const res = await getAllTeachers({ search })
       setTeachers(res.data.data || res.data || [])
-    } catch (err) {
-      console.error('O\'qituvchilar yuklanmadi:', err)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -30,23 +26,12 @@ export function useTeachers() {
     loadTeachers()
   }, [search])
 
-  const totalPages = Math.ceil(teachers.length / itemsPerPage)
-  const paginatedTeachers = teachers.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage
-  )
-
   return {
     teachers,
     loading,
     search,
     setSearch,
-    page,
-    setPage,
-    itemsPerPage,
-    totalPages,
-    paginatedTeachers,
-    loadTeachers
+    loadTeachers,
   }
 }
 
@@ -114,7 +99,7 @@ export function useTeacherForm() {
   }
 }
 
-export async function saveTeacher(teacher, formData, loadTeachers, showToast = null) {
+export async function saveTeacher(teacher, formData, showToast = null) {
   try {
     const dataToSave = {
       name: formData.name,
@@ -135,7 +120,6 @@ export async function saveTeacher(teacher, formData, loadTeachers, showToast = n
 
     return true
   } catch (err) {
-    console.error('Saqlash xatolik:', err)
     if (err?.response?.status !== 404) {
       const message = 'Xatolik yuz berdi';
       showToast(message, "error", 5000);
@@ -144,12 +128,11 @@ export async function saveTeacher(teacher, formData, loadTeachers, showToast = n
   }
 }
 
-export async function removeTeacher(teacher, loadTeachers) {
+export async function removeTeacher(teacher) {
   try {
     await deleteTeacher(teacher.id)
     return true
-  } catch (err) {
-    console.error('O\'chirish xatolik:', err)
+  } catch {
     return false
   }
 }

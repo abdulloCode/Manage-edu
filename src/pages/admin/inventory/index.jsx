@@ -366,9 +366,7 @@ export default function InventoryPage() {
       setTotal(d.total || 0);
       setPage(d.page || p);
     } catch (err) {
-      if (err?.response?.status === 404) {
-        console.error("Inventarni yuklashda xatolik", err);
-      } else {
+      if (err?.response?.status !== 404) {
         const msg = err?.response?.data?.message || err?.response?.data?.error || "Inventarni yuklashda xatolik";
         showToast(msg, "error", 5000);
       }
@@ -455,9 +453,7 @@ export default function InventoryPage() {
       loadItems(page);
       loadCategories();
     } catch (err) {
-      if (err?.response?.status === 404) {
-        console.error("Saqlashda xatolik", err);
-      } else {
+      if (err?.response?.status !== 404) {
         const msg = err?.response?.data?.message || err?.response?.data?.error || "Saqlashda xatolik";
         showToast(msg, "error", 5000);
       }
@@ -480,9 +476,7 @@ export default function InventoryPage() {
       setItemToDelete(null);
       loadItems(page);
     } catch (err) {
-      if (err?.response?.status === 404) {
-        console.error("O'chirishda xatolik", err);
-      } else {
+      if (err?.response?.status !== 404) {
         const msg = err?.response?.data?.message || err?.response?.data?.error || "O'chirishda xatolik";
         showToast(msg, "error", 5000);
       }

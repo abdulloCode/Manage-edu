@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useToast } from "../../../components/Toast";
+import { formatPhone } from "../../../utils/permissions";
 import {
   Calendar,
   Search,
@@ -57,9 +58,11 @@ function PaymentTypeTab() {
       const res = await getPaymentTypeReport(params);
       setData(res.data);
     } catch (err) {
-      if (err?.response?.status === 404) {
-        console.error("Hisobot yuklanmadi", err);
-      } else {
+      const status = err?.response?.status;
+      if (status === 403) {
+        // bu endpoint faqat admin uchun — boshqa rollar uchun jim o'tamiz
+        setData(null);
+      } else if (status !== 404) {
         const msg =
           err?.response?.data?.message ||
           err?.response?.data?.error ||
@@ -82,7 +85,7 @@ function PaymentTypeTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const items = data?.items || [];
+  const items = (data?.items || []).filter((item) => Number(item.totalAmount) > 0);
   const summary = data?.summary;
   const itemsPerPage = 10;
   const totalPages = Math.max(1, Math.ceil(items.length / itemsPerPage));
@@ -194,6 +197,35 @@ function PaymentTypeTab() {
                   <p className={`text-sm font-black ${c.tone}`}>{c.value}</p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Visual breakdown */}
+          {items.length > 0 && (
+            <div className="bg-base-100 rounded-xl border border-base-300 p-4 space-y-2.5">
+              <p className="text-[10px] font-bold text-base-content/50 uppercase tracking-wider mb-3">Taqsimot</p>
+              {items.slice(0, 8).map((item) => {
+                const total = items.reduce((s, i) => s + Number(i.totalAmount || 0), 0) || 1;
+                const pct = Math.round((Number(item.totalAmount || 0) / total) * 100);
+                return (
+                  <div key={item.id || item.code} className="flex items-center gap-3">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${item.dk === "credit" ? "bg-success/15 text-success" : "bg-error/15 text-error"}`}>
+                      {item.dk === "credit" ? "K" : "D"}
+                    </span>
+                    <span className="text-xs font-bold text-base-content/80 w-28 shrink-0 truncate">{item.name}</span>
+                    <div className="flex-1 bg-base-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all ${item.dk === "credit" ? "bg-success" : "bg-error"}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-black text-base-content/60 w-8 text-right shrink-0">{pct}%</span>
+                    <span className={`text-xs font-black w-32 text-right shrink-0 ${item.dk === "credit" ? "text-success" : "text-error"}`}>
+                      {Number(item.totalAmount || 0).toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -442,17 +474,19 @@ function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
                 </td>
               </tr>
             ) : (
-              paginated.map((item, i) => (
+              paginated.map((item, i) => {
+                const isNegative = (item.lastBalance || 0) < 0;
+                return (
                 <tr
                   key={item.id || i}
-                  className="border-b border-base-200 last:border-0 hover:bg-base-200/50 transition-colors"
+                  className={`border-b border-base-200 last:border-0 transition-colors ${isNegative && role === "students" ? "bg-error/5 hover:bg-error/10" : "hover:bg-base-200/50"}`}
                 >
                   <td className="px-3 py-2.5 text-xs font-bold text-base-content/50">
                     {(page - 1) * itemsPerPage + i + 1}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[10px] font-bold shrink-0">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${isNegative && role === "students" ? "bg-error/15 text-error" : "bg-primary/10 text-primary"}`}>
                         {item.name
                           ?.split(" ")
                           .map((n) => n[0])
@@ -460,13 +494,18 @@ function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
                           .toUpperCase()
                           .slice(0, 2) || "??"}
                       </div>
-                      <span className="font-bold text-base-content text-xs truncate max-w-[140px]">
-                        {item.name}
-                      </span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-bold text-base-content text-xs truncate max-w-[120px]">
+                          {item.name}
+                        </span>
+                        {isNegative && role === "students" && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-error/15 text-error shrink-0">qarzdor</span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-xs text-base-content/60 font-mono whitespace-nowrap">
-                    {item.phone || "—"}
+                    {formatPhone(item.phone)}
                   </td>
                   <td className="px-3 py-2.5 text-xs font-bold text-base-content/80 whitespace-nowrap">
                     {formatSum(item.startingBalance)}
@@ -506,7 +545,7 @@ function BalanceTable({ items, role, page, setPage, itemsPerPage = 10 }) {
                     </td>
                   )}
                 </tr>
-              ))
+              );})
             )}
           </tbody>
         </table>
@@ -584,9 +623,10 @@ function BalanceTab() {
 
       setData(res.data);
     } catch (err) {
-      if (err?.response?.status === 404) {
-        console.error("Balans hisoboti yuklanmadi", err);
-      } else {
+      const status = err?.response?.status;
+      if (status === 403) {
+        setData(null);
+      } else if (status !== 404) {
         const msg =
           err?.response?.data?.message ||
           err?.response?.data?.error ||
@@ -689,6 +729,37 @@ function BalanceTab() {
             </p>
           )}
           <BalanceSummary summary={data.summary} />
+
+          {/* Qarzdorlar analitikasi — faqat students uchun */}
+          {subTab === "students" && Array.isArray(data.items) && data.items.length > 0 && (() => {
+            const items = data.items;
+            const debtors = items.filter(s => (s.lastBalance || 0) < 0);
+            const totalDebt = debtors.reduce((s, d) => s + Math.abs(d.lastBalance || 0), 0);
+            const paid = items.filter(s => (s.lastBalance || 0) >= 0).length;
+            const biggestDebtor = [...debtors].sort((a, b) => (a.lastBalance || 0) - (b.lastBalance || 0))[0];
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-success/10 rounded-xl p-3 border border-base-300">
+                  <p className="text-[10px] font-bold text-base-content/60 uppercase tracking-wider mb-1">To'lagan</p>
+                  <p className="text-lg font-black text-success">{paid} ta</p>
+                </div>
+                <div className="bg-error/10 rounded-xl p-3 border border-base-300">
+                  <p className="text-[10px] font-bold text-base-content/60 uppercase tracking-wider mb-1">Qarzdorlar</p>
+                  <p className="text-lg font-black text-error">{debtors.length} ta</p>
+                </div>
+                <div className="bg-warning/10 rounded-xl p-3 border border-base-300">
+                  <p className="text-[10px] font-bold text-base-content/60 uppercase tracking-wider mb-1">Jami qarz</p>
+                  <p className="text-sm font-black text-warning">{Number(totalDebt).toLocaleString()} UZS</p>
+                </div>
+                <div className="bg-base-200 rounded-xl p-3 border border-base-300">
+                  <p className="text-[10px] font-bold text-base-content/60 uppercase tracking-wider mb-1">Eng ko'p qarzli</p>
+                  <p className="text-xs font-black text-error truncate">{biggestDebtor ? biggestDebtor.name : "—"}</p>
+                  {biggestDebtor && <p className="text-[10px] text-error/70 font-bold">{Number(Math.abs(biggestDebtor.lastBalance)).toLocaleString()} UZS</p>}
+                </div>
+              </div>
+            );
+          })()}
+
           <BalanceTable
             items={data.items}
             role={subTab}

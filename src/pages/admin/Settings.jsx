@@ -197,7 +197,6 @@ function ProfileTab({ onMessage }) {
       .catch((err) => {
         if (cancelled) return
         onMessage('error', 'Failed to load profile.')
-        console.error(err)
       })
       .finally(() => {
         if (!cancelled) setFetchLoading(false)

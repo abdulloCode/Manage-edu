@@ -18,8 +18,7 @@ export function useAdminCourses() {
     try {
       const res = await getAllCourses({ search });
       setCourses(res.data.data || res.data || []);
-    } catch (err) {
-      console.error("Kurslar yuklanmadi:", err);
+    } catch {
     } finally {
       setLoading(false);
     }

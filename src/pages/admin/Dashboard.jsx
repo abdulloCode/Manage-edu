@@ -6,8 +6,6 @@ import {
   UserCheck,
   UserMinus,
   LayoutGrid,
-  List,
-  Maximize2,
   Calendar,
   AlertCircle,
   Trophy,
@@ -16,29 +14,42 @@ import {
   Wallet,
   ArrowUpCircle,
   ArrowDownCircle,
-  Trash2,
-  Edit3,
-  Plus,
 } from "lucide-react";
 
 import { getAllGroups, getAllRooms } from "../../api/groups";
 import { getAllTeachers } from "../../api/teacher";
 import { getStudents, getStudentById } from "../../api/students";
-import { getAllAttendances } from "../../api/attendance";
-import { getAllRatings } from "../../api/ratings";
+import { getGroupAttendanceCalendar } from "../../api/attendance";
+import { getGroupRatingCalendar } from "../../api/ratings";
 import { getAllPayments, getMyPayments } from "../../api/payments";
 import { createPayment, deletePayment, updatePayment } from "../../api/payments";
 
 // ─── CONSTANTS ────────────────────────────────────────────────
+// Bugungi kun → guruh schedule.days da ishlatiladigan alias lar
+const TODAY_DAY_ALIASES = {
+  0: ["Ya", "Yak"],
+  1: ["Du", "Dush"],
+  2: ["Se", "Sesh"],
+  3: ["Chor"],
+  4: ["Pa", "Pay"],
+  5: ["Ju", "Jum"],
+  6: ["Sh", "Sha", "Shan"],
+};
+
 const DAYS = [
-  { key: "Yak", label: "Yak" },
-  { key: "Du", label: "Du" },
-  { key: "Se", label: "Se" },
-  { key: "Chor", label: "Chor" },
-  { key: "Pa", label: "Pa" },
-  { key: "Ju", label: "Ju" },
+  { key: "Du",  label: "Du"  },
+  { key: "Se",  label: "Se"  },
+  { key: "Chor",label: "Chor"},
+  { key: "Pa",  label: "Pa"  },
+  { key: "Ju",  label: "Ju"  },
   { key: "Sha", label: "Sha" },
+  { key: "Yak", label: "Yak" },
 ];
+
+const getTodayKey = () => {
+  const aliases = TODAY_DAY_ALIASES[new Date().getDay()] ?? [];
+  return DAYS.find((d) => aliases.includes(d.key))?.key ?? "Du";
+};
 
 const TIME_SLOTS = [];
 for (let h = 6; h < 20; h++) {
@@ -59,56 +70,30 @@ const timeToMinutes = (t) => {
 const slotStartMinutes = (slot) => timeToMinutes(slot.split(" - ")[0]);
 
 const getDk = (payment) => {
-  if (typeof payment.type === "object" && payment.type?.dk)
-    return payment.type.dk;
+  if (payment?.dk) return payment.dk;
+  if (typeof payment?.type === "object" && payment.type?.dk) return payment.type.dk;
   return "credit";
 };
 
-// ─── DaisyUI GROUP COLORS ─────────────────────────────────────
-const GROUP_COLORS = {
-  EKY: {
-    badge: "badge-success",
-    card: "border-l-4 border-success bg-success/10",
-    dot: "bg-success",
-  },
-  EMU: {
-    badge: "badge-neutral",
-    card: "border-l-4 border-neutral bg-neutral/10",
-    dot: "bg-neutral",
-  },
-  OON: {
-    badge: "badge-info",
-    card: "border-l-4 border-info bg-info/10",
-    dot: "bg-info",
-  },
-  OSS: {
-    badge: "badge-info",
-    card: "border-l-4 border-info bg-info/10",
-    dot: "bg-info",
-  },
-  TXA: {
-    badge: "badge-error",
-    card: "border-l-4 border-error bg-error/10",
-    dot: "bg-error",
-  },
-  EMA: {
-    badge: "badge-error",
-    card: "border-l-4 border-error/70 bg-error/5",
-    dot: "bg-error/70",
-  },
-};
+// ─── ROOM COLORS — har xona o'z rangida ───────────────────────
+const ROOM_PALETTES = [
+  { bg: "bg-emerald-500", text: "text-white",    sub: "text-white/75"  },
+  { bg: "bg-zinc-800",    text: "text-white",    sub: "text-white/65"  },
+  { bg: "bg-cyan-600",    text: "text-white",    sub: "text-white/75"  },
+  { bg: "bg-red-500",     text: "text-white",    sub: "text-white/75"  },
+  { bg: "bg-blue-500",    text: "text-white",    sub: "text-white/75"  },
+  { bg: "bg-violet-600",  text: "text-white",    sub: "text-white/75"  },
+  { bg: "bg-amber-400",   text: "text-zinc-900", sub: "text-zinc-700"  },
+  { bg: "bg-rose-700",    text: "text-white",    sub: "text-white/65"  },
+  { bg: "bg-teal-600",    text: "text-white",    sub: "text-white/75"  },
+  { bg: "bg-indigo-600",  text: "text-white",    sub: "text-white/75"  },
+  { bg: "bg-orange-500",  text: "text-white",    sub: "text-white/75"  },
+  { bg: "bg-pink-600",    text: "text-white",    sub: "text-white/75"  },
+];
 
-const getGroupColor = (groupName = "") => {
-  const prefix = Object.keys(GROUP_COLORS).find((k) =>
-    groupName.startsWith(k),
-  );
-  return (
-    GROUP_COLORS[prefix] ?? {
-      badge: "badge-warning",
-      card: "border-l-4 border-warning bg-warning/10",
-      dot: "bg-warning",
-    }
-  );
+const getRoomColor = (roomId, rooms) => {
+  const idx = rooms.findIndex((r) => (r._id || r.id) === roomId);
+  return ROOM_PALETTES[(idx >= 0 ? idx : rooms.length) % ROOM_PALETTES.length];
 };
 
 const getStatus = (fromHour, toHour) => {
@@ -128,12 +113,14 @@ const getStatus = (fromHour, toHour) => {
 };
 
 import { useAuth } from "../../context/AuthContext";
-import { useHasPage } from "../../utils/permissions";
+import { useHasPage, formatPhone } from "../../utils/permissions";
+import { useLang } from "../../context/LangContext";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { t } = useLang();
   const isManager = user?.role?.toLowerCase()?.trim() === "manager";
   const hasStudents = useHasPage("students");
   const hasTeachers = useHasPage("teachers");
@@ -141,7 +128,7 @@ export default function Dashboard() {
   const hasPayments = useHasPage("payments");
   const hasReports = useHasPage("reports");
 
-  const [selectedDay, setSelectedDay] = useState("Sha");
+  const [selectedDay, setSelectedDay] = useState(getTodayKey);
   const [viewMode, setViewMode] = useState("room");
   const [activeSection, setActiveSection] = useState("schedule");
   const [data, setData] = useState({
@@ -152,7 +139,6 @@ export default function Dashboard() {
   });
   const [attendanceData, setAttendanceData] = useState([]);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
-  const [absentStudents, setAbsentStudents] = useState([]);
   const [ratingsData, setRatingsData] = useState([]);
   const [loadingRatings, setLoadingRatings] = useState(false);
   const [paymentsData, setPaymentsData] = useState([]);
@@ -199,64 +185,175 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (hasGroups) loadTodayAttendance();
+    if (hasGroups && data.groups.length > 0) loadTodayAttendance();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!hasGroups) return;
-    const interval = setInterval(() => {
-      loadTodayAttendance();
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [data.groups]);
 
   const loadTodayAttendance = async () => {
+    if (!data.groups.length) return;
     setLoadingAttendance(true);
     try {
-      const res = await getAllAttendances({ limit: 1000 });
-      const allAttendance = res.data?.data || res.data || [];
-      const today = new Date().toISOString().split("T")[0];
-      const todayAttendance = allAttendance.filter((a) => a.date === today);
-      setAttendanceData(todayAttendance);
-    } catch (err) {
-      console.error("Attendance yuklashda xatolik:", err);
+      const today   = new Date();
+      const year    = today.getFullYear();
+      const month   = today.getMonth() + 1;
+      const todayStr = today.toISOString().split("T")[0];
+      const todayDay = today.getDate();
+      const nowMin   = today.getHours() * 60 + today.getMinutes();
+      const aliases  = TODAY_DAY_ALIASES[today.getDay()] ?? [];
+
+      // Faqat bugun darsi bor va vaqti boshlangan guruhlarni so'raymiz
+      const todayStartedGroups = data.groups.filter((g) =>
+        g.schedule?.days?.some((d) => aliases.includes(d)) &&
+        timeToMinutes(g.schedule?.fromHour) <= nowMin
+      );
+
+      // Birinchi yuklashda (loadingAttendance hali false edi) — hamma guruh
+      const groupsToFetch = todayStartedGroups.length > 0 ? todayStartedGroups : data.groups;
+
+      const results = await Promise.allSettled(
+        groupsToFetch.map((g) => getGroupAttendanceCalendar(g._id || g.id, { year, month }))
+      );
+
+      const allToday = [];
+      results.forEach((r, i) => {
+        if (r.status !== "fulfilled") return;
+        const group = groupsToFetch[i];
+        const gId = group._id || group.id;
+        const res = r.value.data?.data || r.value.data;
+        if (!res) return;
+
+        // Format C: { days:[{d,l}], students:[{id, attendance:{"6": true/false}}] }
+        if (Array.isArray(res.days) && res.days[0]?.d !== undefined && Array.isArray(res.students)) {
+          res.students.forEach((s) => {
+            const status = s.attendance?.[String(todayDay)];
+            if (status === undefined) return;
+            allToday.push({
+              studentId: s.id || s._id,
+              groupId: gId,
+              date: todayStr,
+              status: status === true ? "present" : status === false ? "absent" : (status || "present"),
+            });
+          });
+        }
+        // Format A: { days:[{date, records:[{studentId, status}]}] }
+        else if (Array.isArray(res.days) && res.days[0]?.date !== undefined) {
+          const dayObj = res.days.find((d) => d.date?.slice(0, 10) === todayStr);
+          dayObj?.records?.forEach((rec) => {
+            allToday.push({ studentId: rec.studentId, groupId: gId, date: todayStr, status: rec.status || "present" });
+          });
+        }
+        // Format B: { calendar:{ "YYYY-MM-DD":{ studentId: status } } }
+        else if (res.calendar) {
+          Object.entries(res.calendar[todayStr] || {}).forEach(([studentId, status]) => {
+            allToday.push({ studentId, groupId: gId, date: todayStr, status: status === true ? "present" : status === false ? "absent" : (status || "present") });
+          });
+        }
+        // Raw array
+        else {
+          (Array.isArray(res) ? res : [])
+            .filter((a) => a.date?.slice(0, 10) === todayStr)
+            .forEach((a) => allToday.push({ studentId: a.studentId, groupId: a.groupId || gId, date: todayStr, status: a.status || "present" }));
+        }
+      });
+
+      setAttendanceData(allToday);
+    } catch {
       setAttendanceData([]);
     } finally {
       setLoadingAttendance(false);
     }
   };
 
-  const absentStudentsCount = useMemo(() => {
-    return attendanceData.filter((a) => a.status === "absent").length;
-  }, [attendanceData]);
+  const absentStudents = useMemo(() => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    return attendanceData
+      .filter((a) => a.status === "absent" && a.date === todayStr)
+      .map((a) => {
+        const student = data.students.find((s) => (s._id || s.id) === a.studentId);
+        const group = data.groups.find((g) => (g._id || g.id) === a.groupId);
+        const teacher = data.teachers.find((t) => (t._id || t.id) === group?.teacherId);
+        return {
+          ...a,
+          studentName: student?.name || "Noma'lum",
+          studentPhone: formatPhone(student?.phone),
+          parentPhone: formatPhone(student?.parentPhone || student?.parent?.phone || student?.parentContact),
+          groupName: group?.name || "—",
+          teacherName: teacher?.name || "Noma'lum",
+          balance: student?.balance || 0,
+        };
+      });
+  }, [attendanceData, data.students, data.groups, data.teachers]);
 
-  const getAbsentStudents = () => {
-    const absent = attendanceData.filter((a) => a.status === "absent");
-    return absent.map((a) => {
-      const student = data.students.find(
-        (s) => (s._id || s.id) === a.studentId,
-      );
-      const group = data.groups.find((g) => (g._id || g.id) === a.groupId);
-      const teacher = data.teachers.find(
-        (t) => (t._id || t.id) === group?.teacherId,
-      );
-      return {
-        ...a,
-        studentName: student?.name || "Noma'lum",
-        studentSurname: student?.surname || "",
-        studentPhone: student?.phone || student?.parentPhone || "—",
-        groupName: group?.name || "—",
-        teacherName: teacher?.name || "Noma'lum",
-        balance: student?.balance || 0,
-      };
+  const absentStudentsCount = absentStudents.length;
+
+  // ── Baho qo'yilmagan guruhlar ──
+  const noPriceGroups = useMemo(() => {
+    const myId      = user?._id || user?.id;
+    const isTeacher = user?.role?.toLowerCase()?.trim() === "teacher";
+    return data.groups.filter((g) => {
+      if (isTeacher && g.teacherId !== myId) return false;
+      return !g.monthlyFeePerStudent || Number(g.monthlyFeePerStudent) <= 0;
     });
-  };
+  }, [data.groups, user]);
+
+  // ── Davomat qilmagan teacherlar (darsi boshlangan, lekin attendance yo'q) ──
+  const teachersWithoutAttendance = useMemo(() => {
+    if (!data.groups.length) return [];
+    const now     = new Date();
+    const nowMin  = now.getHours() * 60 + now.getMinutes();
+    const todayStr = now.toISOString().split("T")[0];
+    const aliases  = TODAY_DAY_ALIASES[now.getDay()] ?? [];
+    const myId    = user?._id || user?.id;
+    const isTeacher = user?.role?.toLowerCase()?.trim() === "teacher";
+
+    return data.groups
+      .filter((g) => {
+        // Teacher bo'lsa faqat o'z guruhlarini ko'rsin
+        if (isTeacher && g.teacherId !== myId) return false;
+        // 1. Bugun darsi bor
+        if (!g.schedule?.days?.some((d) => aliases.includes(d))) return false;
+        if (nowMin < timeToMinutes(g.schedule.fromHour)) return false;
+        // 2. Bu guruh uchun bugun attendance yo'q
+        const gId = g._id || g.id;
+        return !attendanceData.some((a) => a.groupId === gId && a.date === todayStr);
+      })
+      .map((g) => {
+        const teacher = data.teachers.find((t) => (t._id || t.id) === g.teacherId);
+        return {
+          groupId:     g._id || g.id,
+          groupName:   g.name,
+          fromHour:    g.schedule.fromHour,
+          toHour:      g.schedule.toHour,
+          teacherName: teacher?.name || g.teacherName || "Noma'lum",
+          teacherPhone: formatPhone(teacher?.phone),
+        };
+      });
+  }, [data.groups, data.teachers, attendanceData, user]);
+
+  // ── Attendance polling (server yuki minimal) ──
+  useEffect(() => {
+    if (!hasGroups || !data.groups.length) return;
+
+    const tick = () => {
+      // 1. Hozir ish vaqti emas (07:00 – 22:00) — polling yo'q
+      const h = new Date().getHours();
+      if (h < 7 || h >= 22) return;
+
+      // 2. Sahifa yashirilgan — polling yo'q
+      if (document.hidden) return;
+
+      // 3. Hamma davomat qilgan — polling to'xtatiladi (interval tozalanadi)
+      if (teachersWithoutAttendance.length === 0) return;
+
+      loadTodayAttendance();
+    };
+
+    const id = setInterval(tick, 90_000); // 90 soniya
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.groups, hasGroups, teachersWithoutAttendance.length]);
 
   const handleShowAbsent = () => {
-    const absent = getAbsentStudents();
-    setAbsentStudents(absent);
     setActiveSection("absent");
   };
 
@@ -292,20 +389,20 @@ export default function Dashboard() {
     }
 
     const totalIncome = paymentsData
-      .filter((p) => p.type?.dk === "credit")
+      .filter((p) => getDk(p) === "credit")
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const totalExpense = paymentsData
-      .filter((p) => p.type?.dk === "debit")
+      .filter((p) => getDk(p) === "debit")
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const netBalance = totalIncome - totalExpense;
 
     const today = new Date().toISOString().split("T")[0];
     const todayPayments = paymentsData.filter((p) => p.date === today);
     const todayIncome = todayPayments
-      .filter((p) => p.type?.dk === "credit")
+      .filter((p) => getDk(p) === "credit")
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const todayExpense = todayPayments
-      .filter((p) => p.type?.dk === "debit")
+      .filter((p) => getDk(p) === "debit")
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     const currentMonth = new Date().toISOString().slice(0, 7);
@@ -313,10 +410,10 @@ export default function Dashboard() {
       p.month?.startsWith(currentMonth),
     );
     const monthIncome = monthPayments
-      .filter((p) => p.type?.dk === "credit")
+      .filter((p) => getDk(p) === "credit")
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const monthExpense = monthPayments
-      .filter((p) => p.type?.dk === "debit")
+      .filter((p) => getDk(p) === "debit")
       .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     return {
@@ -331,27 +428,85 @@ export default function Dashboard() {
   }, [paymentsData]);
 
   useEffect(() => {
-    if (hasReports) loadRatings();
+    if (hasReports && data.groups.length > 0) loadRatings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!hasReports) return;
-    const interval = setInterval(() => {
-      loadRatings();
-    }, 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [data.groups]);
 
   const loadRatings = async () => {
+    if (!data.groups.length) return;
     setLoadingRatings(true);
     try {
-      const res = await getAllRatings();
-      const allRatings = res.data?.data || res.data || [];
-      setRatingsData(allRatings);
-    } catch (err) {
-      console.error("Baho yuklashda xatolik:", err);
+      const today = new Date();
+
+      // So'nggi 6 oy uchun { year, month } ro'yxati
+      const months = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        return { year: d.getFullYear(), month: d.getMonth() + 1 };
+      });
+
+      const results = await Promise.allSettled(
+        data.groups.flatMap((g) =>
+          months.map((m) => getGroupRatingCalendar(g._id || g.id, m))
+        )
+      );
+
+      // results indeksini group bilan moslashtirish
+      const groupOf = (idx) => data.groups[Math.floor(idx / months.length)];
+
+      // studentId → { studentId, studentName, groupId, score } — oylik yig'indi
+      const studentMap = {};
+
+      results.forEach((r, i) => {
+        if (r.status !== "fulfilled") return;
+        const group = groupOf(i);
+        const gId   = group._id || group.id;
+        const res   = r.value.data?.data || r.value.data;
+        if (!res) return;
+
+        // Format C: { students:[{id, name, ratings:{"1":8,"5":7,...}}] }
+        if (Array.isArray(res.students)) {
+          res.students.forEach((s) => {
+            const sid    = String(s.id || s._id);
+            const scores = s.ratings ?? s.scores ?? {};
+            const total  = Object.values(scores)
+              .reduce((acc, v) => acc + (Number(v) || 0), 0);
+            if (total === 0) return;
+            if (!studentMap[sid]) {
+              studentMap[sid] = { studentId: sid, studentName: s.name, groupId: gId, score: 0 };
+            }
+            studentMap[sid].score += total;
+          });
+        }
+        // Format A: { days:[{date, records:[{studentId, score}]}] }
+        else if (Array.isArray(res.days) && res.days[0]?.date !== undefined) {
+          res.days.forEach((day) => {
+            day?.records?.forEach((rec) => {
+              if (!rec.score) return;
+              const sid = String(rec.studentId);
+              if (!studentMap[sid]) {
+                studentMap[sid] = { studentId: sid, studentName: rec.studentName, groupId: gId, score: 0 };
+              }
+              studentMap[sid].score += Number(rec.score);
+            });
+          });
+        }
+        // Format B: { calendar:{ "YYYY-MM-DD":{ studentId: score } } }
+        else if (res.calendar) {
+          Object.values(res.calendar).forEach((dayObj) => {
+            Object.entries(dayObj || {}).forEach(([studentId, score]) => {
+              if (!score) return;
+              const sid = String(studentId);
+              if (!studentMap[sid]) {
+                studentMap[sid] = { studentId: sid, groupId: gId, score: 0 };
+              }
+              studentMap[sid].score += Number(score);
+            });
+          });
+        }
+      });
+
+      setRatingsData(Object.values(studentMap));
+    } catch {
       setRatingsData([]);
     } finally {
       setLoadingRatings(false);
@@ -384,8 +539,7 @@ export default function Dashboard() {
         }
       }
       setGroupsStudentsData(groupsStudentsMap);
-    } catch (err) {
-      console.error("Guruh o'quvchilarini yuklashda xatolik:", err);
+    } catch {
       setGroupsStudentsData({});
     } finally {
       setLoadingGroupsStudents(false);
@@ -416,7 +570,6 @@ export default function Dashboard() {
       }
       await loadPayments();
     } catch (err) {
-      console.error("Payment action failed:", err);
       showToast(
         "Amalga o'tkazildi: " + err.response?.data?.message ||
           "Xatolik yuz berdi",
@@ -430,13 +583,8 @@ export default function Dashboard() {
     if (hasGroups && data.groups.length > 0) {
       loadGroupsStudents();
     }
-  }, [hasGroups, data.groups]);
-
-  useEffect(() => {
-    if (hasGroups && data.groups.length > 0) {
-      loadGroupsStudents();
-    }
-  }, [hasGroups, selectedDay]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasGroups, data.groups, selectedDay]);
 
   const loadPayments = async () => {
     setLoadingPayments(true);
@@ -447,8 +595,7 @@ export default function Dashboard() {
       const allPayments =
         res.data?.payments || res.data?.data || res.data || [];
       setPaymentsData(Array.isArray(allPayments) ? allPayments : []);
-    } catch (err) {
-      console.error("To'lovlar yuklashda xatolik:", err);
+    } catch {
       setPaymentsData([]);
     } finally {
       setLoadingPayments(false);
@@ -456,56 +603,35 @@ export default function Dashboard() {
   };
 
   const studentRatings = useMemo(() => {
-    if (!Array.isArray(ratingsData) || !Array.isArray(data.students)) return [];
+    if (!Array.isArray(ratingsData)) return [];
 
-    const studentScoreMap = {};
-    ratingsData.forEach((rating) => {
-      const studentId = rating.studentId || rating._id;
-      if (!studentId) return;
-      if (!studentScoreMap[studentId]) {
-        studentScoreMap[studentId] = {
-          studentId,
-          totalScore: 0,
-          ratingCount: 0,
-          teacherIds: new Set(),
+    const result = ratingsData
+      .map((r) => {
+        const student = data.students.find((s) => String(s._id || s.id) === String(r.studentId));
+        const group   = data.groups.find((g) => String(g._id || g.id) === String(r.groupId));
+        const teacher = data.teachers.find((t) => (t._id || t.id) === group?.teacherId);
+        return {
+          studentId:   r.studentId,
+          totalScore:  r.score,
+          ratingCount: 1,
+          studentName: student?.name || r.studentName || "Noma'lum",
+          studentSurname: student?.surname || "",
+          studentPhone: formatPhone(student?.phone),
+          groupName:   group?.name || "—",
+          teacherName: teacher?.name || "Noma'lum",
+          averageScore: String(r.score),
         };
-      }
-      studentScoreMap[studentId].totalScore += Number(rating.score) || 0;
-      studentScoreMap[studentId].ratingCount += 1;
-      if (rating.teacherId) {
-        studentScoreMap[studentId].teacherIds.add(rating.teacherId);
-      }
-    });
+      })
+      .sort((a, b) => b.totalScore - a.totalScore);
 
-    const result = data.students.map((student) => {
-      const studentId = student._id || student.id;
-      const sr = studentScoreMap[studentId];
-      const group = data.groups.find(
-        (g) => (g._id || g.id) === student?.groupId,
-      );
-      const teacherId =
-        sr && sr.teacherIds.size > 0
-          ? Array.from(sr.teacherIds)[0]
-          : group?.teacherId;
-      const teacher = data.teachers.find((t) => (t._id || t.id) === teacherId);
-      return {
-        studentId,
-        totalScore: sr?.totalScore || 0,
-        ratingCount: sr?.ratingCount || 0,
-        studentName: student?.name || "Noma'lum",
-        studentSurname: student?.surname || "",
-        studentPhone: student?.phone || "—",
-        groupName: group?.name || "—",
-        teacherName: teacher?.name || "Noma'lum",
-        averageScore:
-          sr?.ratingCount > 0
-            ? (sr.totalScore / sr.ratingCount).toFixed(2)
-            : "0",
-      };
-    });
-
-    return result.sort((a, b) => b.totalScore - a.totalScore);
+    return result;
   }, [ratingsData, data.students, data.groups, data.teachers]);
+
+  // Bugungi kun DAYS kaliti
+  const todayDayKey = useMemo(() => {
+    const aliases = TODAY_DAY_ALIASES[new Date().getDay()] ?? [];
+    return DAYS.find((d) => aliases.includes(d.key))?.key ?? null;
+  }, []);
 
   const columns = useMemo(
     () => (viewMode === "room" ? data.rooms : data.teachers),
@@ -521,9 +647,9 @@ export default function Dashboard() {
       {/* ── HEADER ── */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-base-content">
-          {hasGroups ? "Dars jadvali" : "Boshqaruv paneli"}
+          {hasGroups ? t('dash_title_schedule') : t('dash_title_panel')}
         </h1>
-        <p className="text-sm text-base-content/50 mt-1">CRM tizimi</p>
+        <p className="text-sm text-base-content/50 mt-1">{t('dash_crm')}</p>
       </div>
 
       {/* ── STATS GRID ── */}
@@ -536,7 +662,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
-                  O'quvchilar
+                  {t('nav_students')}
                 </p>
                 <h4 className="text-lg font-bold">{data.students.length}</h4>
               </div>
@@ -552,7 +678,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
-                  O'qituvchilar
+                  {t('nav_teachers')}
                 </p>
                 <h4 className="text-lg font-bold">{data.teachers.length}</h4>
               </div>
@@ -579,7 +705,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
-                  Kelmaganlar
+                  {t('dash_absent')}
                 </p>
                 <h4 className="text-lg font-bold text-error">
                   {absentStudentsCount}
@@ -608,7 +734,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
-                  Reyting
+                  {t('dash_rating')}
                 </p>
                 <h4 className="text-lg font-bold text-warning">
                   {studentRatings.length}
@@ -637,7 +763,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-[9px] font-bold text-base-content/50 uppercase leading-none mb-1">
-                  To'lovlar
+                  {t('nav_payments')}
                 </p>
                 <h4 className="text-lg font-bold text-success">
                   {paymentsData.length}
@@ -648,41 +774,159 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* ── BAHO QOYILMAGAN GURUHLAR ── */}
+      {hasGroups && noPriceGroups.length > 0 && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-blue-200 bg-blue-100/60">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
+              <p className="text-sm font-bold text-blue-800">
+                Baho belgilanmagan guruhlar —{" "}
+                <span className="text-blue-600">{noPriceGroups.length} ta</span>
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/admin/groups")}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline underline-offset-2"
+            >
+              Guruhlar →
+            </button>
+          </div>
+          <div className="divide-y divide-blue-100">
+            {noPriceGroups.slice(0, 5).map((g) => {
+              const teacher = data.teachers.find((t) => (t._id || t.id) === g.teacherId);
+              return (
+                <div
+                  key={g._id || g.id}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-blue-100/40 transition-colors cursor-pointer"
+                  onClick={() => navigate(`/admin/groups?groupId=${g._id || g.id}`)}
+                >
+                  <div className="w-9 h-9 rounded-xl bg-blue-200 text-blue-800 flex items-center justify-center text-xs font-black shrink-0">
+                    {g.name?.slice(0, 2).toUpperCase() || "G"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{g.name}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {teacher?.name || g.teacherName || "O'qituvchi belgilanmagan"}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="inline-block px-2 py-0.5 bg-blue-200 text-blue-800 text-xs font-bold rounded-lg">
+                      0 UZS / oy
+                    </span>
+                    {g.schedule?.fromHour && (
+                      <p className="text-[11px] text-gray-400 mt-0.5 tabular-nums">
+                        {g.schedule.fromHour} – {g.schedule.toHour}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {noPriceGroups.length > 5 && (
+              <div className="px-4 py-2 text-center text-xs text-blue-500 font-medium">
+                + {noPriceGroups.length - 5} ta guruh yana
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── DAVOMAT QILMAGAN TEACHERLAR ── */}
+      {hasGroups && teachersWithoutAttendance.length > 0 && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-amber-200 bg-amber-100/60">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <p className="text-sm font-bold text-amber-800">
+              Davomat qilinmagan darslar —{" "}
+              <span className="text-amber-600">{teachersWithoutAttendance.length} ta</span>
+            </p>
+          </div>
+          <div className="divide-y divide-amber-100">
+            {teachersWithoutAttendance.map((item) => (
+              <div
+                key={item.groupId}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-100/40 transition-colors"
+              >
+                {/* Avatar */}
+                <div className="w-9 h-9 rounded-xl bg-amber-200 text-amber-800 flex items-center justify-center text-xs font-black shrink-0">
+                  {item.teacherName.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "T"}
+                </div>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{item.teacherName}</p>
+                  <p className="text-xs text-gray-500 font-mono">{item.teacherPhone || "—"}</p>
+                </div>
+                {/* Group + time */}
+                <div className="text-right shrink-0">
+                  <span className="inline-block px-2 py-0.5 bg-amber-200 text-amber-800 text-xs font-bold rounded-lg">
+                    {item.groupName}
+                  </span>
+                  <p className="text-[11px] text-gray-400 mt-0.5 tabular-nums">
+                    {item.fromHour} – {item.toHour}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── CONTROLS (schedule section) ── */}
       {activeSection === "schedule" && hasGroups && (
         <div className="card bg-base-100 border border-base-200 shadow-sm mb-4">
           <div className="card-body p-3 flex-row justify-between items-center flex-wrap gap-2">
+            {/* Kun pillalari */}
             <div className="flex gap-1 flex-wrap">
-              {DAYS.map((d) => (
-                <button
-                  key={d.key}
-                  onClick={() => setSelectedDay(d.key)}
-                  className={`btn btn-sm ${selectedDay === d.key ? "btn-primary" : "btn-ghost"}`}
-                >
-                  {d.label}
-                </button>
-              ))}
+              {DAYS.map((d) => {
+                const cnt     = data.groups.filter((g) => g.schedule?.days?.includes(d.key)).length;
+                const isSel   = selectedDay === d.key;
+                const isToday = todayDayKey === d.key;
+                return (
+                  <button
+                    key={d.key}
+                    onClick={() => setSelectedDay(d.key)}
+                    className={`relative btn btn-sm gap-1 ${
+                      isSel
+                        ? "btn-primary"
+                        : isToday
+                          ? "btn-ghost border border-primary/40 text-primary"
+                          : "btn-ghost"
+                    }`}
+                  >
+                    {d.label}
+                    {cnt > 0 && (
+                      <span className={`text-[10px] font-black tabular-nums ${isSel ? "opacity-70" : "opacity-40"}`}>
+                        {cnt}
+                      </span>
+                    )}
+                    {isToday && !isSel && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-primary rounded-full border-2 border-base-100" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
+
+            {/* View mode + guruhlar soni */}
             <div className="flex items-center gap-3">
               <div className="join">
                 <button
                   onClick={() => setViewMode("room")}
                   className={`btn btn-sm join-item ${viewMode === "room" ? "btn-primary" : "btn-ghost"}`}
                 >
-                  Xona
+                  {t('dash_room')}
                 </button>
                 <button
                   onClick={() => setViewMode("teacher")}
                   className={`btn btn-sm join-item ${viewMode === "teacher" ? "btn-primary" : "btn-ghost"}`}
                 >
-                  Ustoz
+                  {t('dash_teacher')}
                 </button>
               </div>
-              <div className="flex gap-2 border-l border-base-300 pl-3">
-                <LayoutGrid className="w-4 h-4 text-primary" />
-                <List className="w-4 h-4 text-base-content/40" />
-                <Maximize2 className="w-4 h-4 text-primary" />
-              </div>
+              <span className="text-xs font-bold text-base-content/40 border-l border-base-300 pl-3">
+                {dayGroups.length} ta
+              </span>
             </div>
           </div>
         </div>
@@ -705,16 +949,16 @@ export default function Dashboard() {
                 <div>
                   <h2 className="text-lg font-bold">
                     {activeSection === "absent"
-                      ? "Kelmagan O'quvchilar"
+                      ? t('dash_absent_students')
                       : activeSection === "rating"
-                        ? "O'quvchilar Reytingi"
-                        : "To'lovlar Haqida"}
+                        ? t('dash_student_rating')
+                        : t('dash_payments_info')}
                   </h2>
                   <p className="text-xs text-base-content/50">
                     {activeSection === "absent"
                       ? `${new Date().toLocaleDateString("uz-UZ")}`
                       : activeSection === "rating"
-                        ? `Baholangan o'quvchilar (${studentRatings.length} ta)`
+                        ? `So'nggi 6 oy reytingi (${studentRatings.length} ta)`
                         : `Bugungi va oylik to'lovlar (${paymentsData.length} ta)`}
                   </p>
                 </div>
@@ -729,10 +973,10 @@ export default function Dashboard() {
                 }`}
               >
                 {activeSection === "absent"
-                  ? `${absentStudents.length} ta kelmagan`
+                  ? `${absentStudents.length} ${t('dash_absent_short')}`
                   : activeSection === "rating"
-                    ? `${studentRatings.length} ta o'quvchi`
-                    : `${paymentsData.length} ta to'lov`}
+                    ? `${studentRatings.length} ${t('nav_students')}`
+                    : `${paymentsData.length} ${t('nav_payments')}`}
               </div>
             </div>
           </div>
@@ -746,7 +990,7 @@ export default function Dashboard() {
               <thead className="bg-base-200">
                 <tr>
                   <th className="p-3 border-r border-b border-base-300 w-24 sticky left-0 bg-base-200 z-30 text-xs font-bold text-base-content/60 uppercase text-center">
-                    Vaqt
+                    {t('dash_time')}
                   </th>
                   {columns.map((col) => (
                     <th
@@ -765,23 +1009,19 @@ export default function Dashboard() {
                       {slot}
                     </td>
                     {columns.map((col) => {
-                      const colId = col._id || col.id;
+                      const colId    = col._id || col.id;
                       const slotTime = slotStartMinutes(slot);
 
                       const group = dayGroups.find(
                         (g) =>
-                          (viewMode === "room"
-                            ? g.roomId === colId
-                            : g.teacherId === colId) &&
+                          (viewMode === "room" ? g.roomId === colId : g.teacherId === colId) &&
                           g.schedule?.fromHour &&
                           slotTime === timeToMinutes(g.schedule.fromHour),
                       );
 
                       const isOccupied = dayGroups.some(
                         (g) =>
-                          (viewMode === "room"
-                            ? g.roomId === colId
-                            : g.teacherId === colId) &&
+                          (viewMode === "room" ? g.roomId === colId : g.teacherId === colId) &&
                           g.schedule?.fromHour &&
                           g.schedule?.toHour &&
                           slotTime > timeToMinutes(g.schedule.fromHour) &&
@@ -791,168 +1031,87 @@ export default function Dashboard() {
                       if (isOccupied) return null;
 
                       if (group && group.schedule?.toHour) {
-                        const fromMinutes = timeToMinutes(
-                          group.schedule.fromHour,
-                        );
-                        const toMinutes = timeToMinutes(group.schedule.toHour);
-                        const span = Math.max(
-                          1,
-                          (toMinutes - fromMinutes) / 30,
-                        );
+                        const fromMinutes = timeToMinutes(group.schedule.fromHour);
+                        const toMinutes   = timeToMinutes(group.schedule.toHour);
+                        const span        = Math.max(1, (toMinutes - fromMinutes) / 30);
 
-                        const groupStudents =
-                          groupsStudentsData[group._id || group.id] || [];
-                        const currentStudentsCount =
-                          groupStudents.length || group.currentStudents || 0;
-                        const maxStudents = group.maxStudents || 12;
+                        const teacher     = data.teachers.find((t) => (t._id || t.id) === group.teacherId);
+                        const teacherName = teacher?.name || group.teacherName || "Noma'lum";
 
-                        const teacher = data.teachers.find(
-                          (t) => (t._id || t.id) === group.teacherId,
-                        );
-                        const teacherName =
-                          teacher?.name || group.teacherName || "Noma'lum";
+                        const gStudents        = groupsStudentsData[group._id || group.id] || [];
+                        const studentCount     = gStudents.length || group.currentStudents || 0;
+                        const maxStudents      = group.maxStudents || 12;
 
-                        const today = new Date().toISOString().split("T")[0];
-                        const groupAttendance = attendanceData.filter(
-                          (a) =>
-                            (a.groupId === group._id ||
-                              a.groupId === group.id) &&
-                            a.date === today,
+                        const todayStr         = new Date().toISOString().split("T")[0];
+                        const groupAttendance  = attendanceData.filter(
+                          (a) => (a.groupId === group._id || a.groupId === group.id) && a.date === todayStr,
                         );
-                        const presentCount = groupAttendance.filter(
-                          (a) => a.status === "present",
-                        ).length;
-                        const absentCount = groupAttendance.filter(
-                          (a) => a.status === "absent",
-                        ).length;
+                        const presentCount = groupAttendance.filter((a) => a.status === "present").length;
+                        const absentCount  = groupAttendance.filter((a) => a.status === "absent").length;
 
-                        const colors = getGroupColor(group.name);
-                        const status = getStatus(
-                          group.schedule.fromHour,
-                          group.schedule.toHour,
-                        );
+                        const curMonth      = new Date().toISOString().slice(0, 7);
+                        const gStudentIds   = new Set(gStudents.map((s) => s._id || s.id));
+                        const paidThisMonth = hasPayments
+                          ? paymentsData
+                              .filter((p) =>
+                                p.month?.startsWith(curMonth) &&
+                                getDk(p) === "credit" &&
+                                gStudentIds.has(p.toWho?._id || p.toWho?.id || p.toWho)
+                              )
+                              .reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                          : 0;
+                        const expectedThisMonth = (group.monthlyFeePerStudent || 0) * studentCount;
+                        const fmtK = (n) => Math.round(n / 1000);
+
+                        const colors = getRoomColor(group.roomId, data.rooms);
+                        const status = getStatus(group.schedule.fromHour, group.schedule.toHour);
+                        const isActive = status.label === "Darsda";
 
                         return (
                           <td
                             key={`${colId}-${slotIdx}`}
                             rowSpan={span}
-                            className="p-1.5 align-top border border-base-200"
+                            className="p-1 align-top border border-base-200"
                             style={{ minWidth: "180px" }}
-                            onClick={() =>
-                              navigate(
-                                `/admin/groups?groupId=${group._id || group.id}`,
-                              )
-                            }
+                            onClick={() => navigate(`/admin/groups?groupId=${group._id || group.id}`)}
                           >
-                            {/* ── DaisyUI Card ── */}
-                            <div
-                              className={`card card-compact w-full h-full cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 rounded-xl bg-base-100 ${colors.card}`}
-                            >
-                              <div className="card-body gap-1.5 p-3">
-                                {/* Header: nom + status */}
+                            <div className={`w-full h-full cursor-pointer rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 ${colors.bg}`}>
+                              <div className="p-2.5 flex flex-col gap-1 h-full">
+
+                                {/* Line 1: Name + time + active dot */}
                                 <div className="flex items-start justify-between gap-1">
-                                  <span className="font-black text-sm leading-tight text-base-content">
-                                    {group.name}
+                                  <span className={`font-extrabold text-[11px] leading-tight truncate ${colors.text}`}>
+                                    {group.name} / {group.schedule.fromHour}-{group.schedule.toHour}
                                   </span>
-                                  <span
-                                    className={`badge badge-sm ${status.cls} shrink-0`}
-                                  >
-                                    <span
-                                      className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${status.dot}`}
-                                    />
-                                    {status.label}
-                                  </span>
+                                  <span className={`w-2 h-2 rounded-full shrink-0 mt-0.5 bg-white/80 ${isActive ? "animate-pulse" : "opacity-40"}`} />
                                 </div>
 
-                                {/* Vaqt */}
-                                <div className="flex items-center gap-1 text-xs text-base-content/60 font-semibold">
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="w-3.5 h-3.5"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <circle cx="12" cy="12" r="10" />
-                                    <polyline points="12 6 12 12 16 14" />
-                                  </svg>
-                                  {group.schedule.fromHour} –{" "}
-                                  {group.schedule.toHour}
-                                </div>
+                                {/* Teacher */}
+                                <p className={`text-[11px] truncate font-semibold ${colors.sub}`}>
+                                  {teacherName}
+                                </p>
 
-                                <div className="divider my-0 h-px" />
+                                {/* Room */}
+                                <p className={`text-[10px] font-medium ${colors.sub}`}>
+                                  Xona: {group.roomName || "—"}
+                                </p>
 
-                                {/* O'qituvchi */}
-                                <div className="flex items-center gap-1.5 text-xs text-base-content/80">
-                                  <div className="avatar placeholder">
-                                    <div className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[9px] font-bold flex items-center justify-center">
-                                      {teacherName?.charAt(0)?.toUpperCase() ||
-                                        "?"}
-                                    </div>
-                                  </div>
-                                  <span className="truncate font-medium">
-                                    {teacherName}
+                                {/* Stats row */}
+                                <div className={`flex items-center gap-2.5 pt-1.5 mt-auto border-t border-white/20 text-[10px] font-bold ${colors.text}`}>
+                                  <span className="flex items-center gap-0.5 opacity-90">
+                                    <LayoutGrid className="w-2.5 h-2.5 shrink-0" />
+                                    {fmtK(paidThisMonth)}/{fmtK(expectedThisMonth)}
+                                  </span>
+                                  <span className="flex items-center gap-0.5 opacity-90">
+                                    <Users className="w-2.5 h-2.5 shrink-0" />
+                                    {studentCount}/{maxStudents}
+                                  </span>
+                                  <span className="flex items-center gap-0.5 opacity-90">
+                                    <UserMinus className="w-2.5 h-2.5 shrink-0" />
+                                    {absentCount}
                                   </span>
                                 </div>
 
-                                {/* Xona */}
-                                <div className="flex items-center gap-1 text-xs text-base-content/50">
-                                  <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="w-3.5 h-3.5"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                  >
-                                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                                    <polyline points="9 22 9 12 15 12 15 22" />
-                                  </svg>
-                                  {group.roomName}
-                                </div>
-
-                                {/* Stats badges */}
-                                <div className="flex items-center gap-1.5 pt-1 mt-auto flex-wrap">
-                                  <div
-                                    className="tooltip tooltip-bottom"
-                                    data-tip="Kelganlar / Jami"
-                                  >
-                                    <div className="badge badge-sm badge-success gap-1 font-bold">
-                                      ✅ {presentCount}/{currentStudentsCount}
-                                    </div>
-                                  </div>
-                                  <div
-                                    className="tooltip tooltip-bottom"
-                                    data-tip="O'quvchi / Sig'im"
-                                  >
-                                    <div className="badge badge-sm badge-info gap-1 font-bold">
-                                      👥 {currentStudentsCount}/{maxStudents}
-                                    </div>
-                                  </div>
-                                  <div
-                                    className="tooltip tooltip-bottom"
-                                    data-tip="Kelmaganlar"
-                                  >
-                                    <div
-                                      className={`badge badge-sm gap-1 font-bold ${absentCount > 0 ? "badge-error" : "badge-ghost"}`}
-                                    >
-                                      ❌ {absentCount}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Progress bar */}
-                                <div
-                                  className="tooltip tooltip-bottom w-full"
-                                  data-tip={`${currentStudentsCount} / ${maxStudents} o'quvchi`}
-                                >
-                                  <progress
-                                    className="progress progress-primary w-full h-1.5"
-                                    value={currentStudentsCount}
-                                    max={maxStudents}
-                                  />
-                                </div>
                               </div>
                             </div>
                           </td>
@@ -985,12 +1144,12 @@ export default function Dashboard() {
               <thead>
                 <tr className="bg-error/10">
                   <th>#</th>
-                  <th>Ism</th>
-                  <th>Familiya</th>
-                  <th>Telefon</th>
-                  <th>Guruh</th>
-                  <th>Ustoz</th>
-                  <th className="text-right">Balans</th>
+                  <th>{t('first_name')}</th>
+                  <th>{t('phone')}</th>
+                  <th>Ota-onasi tel</th>
+                  <th>{t('group')}</th>
+                  <th>{t('dash_teacher')}</th>
+                  <th className="text-right">{t('balance')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1006,7 +1165,7 @@ export default function Dashboard() {
                       <div className="flex flex-col items-center gap-2 text-base-content/40">
                         <UserCheck className="w-16 h-16" />
                         <p className="text-sm font-medium">
-                          Bugun hamma keldi!
+                          {t('dash_all_came')}
                         </p>
                       </div>
                     </td>
@@ -1034,10 +1193,8 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </td>
-                      <td className="text-sm">
-                        {student.studentSurname || "—"}
-                      </td>
                       <td className="text-sm">{student.studentPhone}</td>
+                      <td className="text-sm">{student.parentPhone}</td>
                       <td>
                         <span className="badge badge-error badge-sm font-bold">
                           {student.groupName}
@@ -1068,29 +1225,26 @@ export default function Dashboard() {
               <thead>
                 <tr className="bg-warning/10">
                   <th className="text-center">#</th>
-                  <th>Ism</th>
-                  <th>Familiya</th>
-                  <th>Telefon</th>
-                  <th>Guruh</th>
-                  <th>Ustoz</th>
-                  <th className="text-center">Baholar soni</th>
-                  <th className="text-center">O'rtacha</th>
-                  <th className="text-center">Jami</th>
+                  <th>{t('first_name')}</th>
+                  <th>{t('phone')}</th>
+                  <th>{t('group')}</th>
+                  <th>{t('dash_teacher')}</th>
+                  <th className="text-center">{t('dash_total')}</th>
                 </tr>
               </thead>
               <tbody>
                 {loadingRatings ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-12">
+                    <td colSpan={6} className="text-center py-12">
                       <span className="loading loading-spinner loading-lg text-warning" />
                     </td>
                   </tr>
                 ) : studentRatings.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-12">
+                    <td colSpan={6} className="text-center py-12">
                       <div className="flex flex-col items-center gap-2 text-base-content/40">
                         <Users className="w-16 h-16" />
-                        <p className="text-sm">O'quvchilar topilmadi</p>
+                        <p className="text-sm">{t('dash_no_students')}</p>
                       </div>
                     </td>
                   </tr>
@@ -1139,9 +1293,6 @@ export default function Dashboard() {
                           </span>
                         </div>
                       </td>
-                      <td className="text-sm">
-                        {student.studentSurname || "—"}
-                      </td>
                       <td className="text-sm">{student.studentPhone}</td>
                       <td>
                         <span className="badge badge-warning badge-sm font-bold">
@@ -1150,24 +1301,11 @@ export default function Dashboard() {
                       </td>
                       <td className="text-sm">{student.teacherName}</td>
                       <td className="text-center">
-                        <span className="badge badge-info badge-sm font-bold">
-                          {student.ratingCount}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <TrendingUp className="w-4 h-4 text-warning" />
-                          <span className="font-bold text-warning">
-                            {student.averageScore}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-center">
                         <span
                           className={`badge font-bold ${
-                            student.totalScore >= 50
+                            student.totalScore >= 8
                               ? "badge-success"
-                              : student.totalScore >= 30
+                              : student.totalScore >= 5
                                 ? "badge-warning"
                                 : "badge-error"
                           }`}
@@ -1202,7 +1340,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="text-xs text-base-content/50 font-medium">
-                        Bugungi Kirim
+                        {t('dash_today_income')}
                       </p>
                       <p className="text-xl font-bold text-success">
                         +{paymentStats.todayIncome.toLocaleString()}
@@ -1218,7 +1356,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="text-xs text-base-content/50 font-medium">
-                        Bugungi Chiqim
+                        {t('dash_today_expense')}
                       </p>
                       <p className="text-xl font-bold text-error">
                         -{paymentStats.todayExpense.toLocaleString()}
@@ -1234,7 +1372,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="text-xs text-base-content/50 font-medium">
-                        Oylik Kirim
+                        {t('dash_monthly_income')}
                       </p>
                       <p className="text-xl font-bold text-info">
                         +{paymentStats.monthIncome.toLocaleString()}
@@ -1250,7 +1388,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="text-xs text-base-content/50 font-medium">
-                        Oylik Chiqim
+                        {t('dash_monthly_expense')}
                       </p>
                       <p className="text-xl font-bold text-secondary">
                         -{paymentStats.monthExpense.toLocaleString()}
@@ -1268,7 +1406,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-base-content/50 font-medium">
-                        Sof Balans
+                        {t('dash_net_balance')}
                       </p>
                       <p
                         className={`text-3xl font-bold ${paymentStats.netBalance >= 0 ? "text-success" : "text-error"}`}
@@ -1287,7 +1425,7 @@ export default function Dashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center">
                       <p className="text-xs text-base-content/50">
-                        Jami Kirim
+                        {t('dash_total_income')}
                       </p>
                       <p className="text-lg font-bold text-success">
                         +{paymentStats.totalIncome.toLocaleString()}
@@ -1295,7 +1433,7 @@ export default function Dashboard() {
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-base-content/50">
-                        Jami Chiqim
+                        {t('dash_total_expense')}
                       </p>
                       <p className="text-lg font-bold text-error">
                         -{paymentStats.totalExpense.toLocaleString()}
@@ -1311,11 +1449,11 @@ export default function Dashboard() {
                   <table className="table table-zebra w-full">
                     <thead>
                       <tr className="bg-base-200">
-                        <th>Sana</th>
-                        <th>Turi</th>
-                        <th>Kim uchun</th>
-                        <th>Oy</th>
-                        <th className="text-right">Summa</th>
+                        <th>{t('date')}</th>
+                        <th>{t('pay_type')}</th>
+                        <th>{t('pay_for_whom')}</th>
+                        <th>{t('month')}</th>
+                        <th className="text-right">{t('amount')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1324,7 +1462,7 @@ export default function Dashboard() {
                           <td colSpan={5} className="text-center py-12">
                             <div className="flex flex-col items-center gap-2 text-base-content/40">
                               <Wallet className="w-16 h-16" />
-                              <p className="text-sm">To'lovlar yo'q</p>
+                              <p className="text-sm">{t('dash_no_payments')}</p>
                             </div>
                           </td>
                         </tr>
@@ -1341,12 +1479,12 @@ export default function Dashboard() {
                             <td>
                               <span
                                 className={`badge badge-sm gap-1 font-medium ${
-                                  payment.type?.dk === "credit"
+                                  getDk(payment) === "credit"
                                     ? "badge-success"
                                     : "badge-error"
                                 }`}
                               >
-                                {payment.type?.dk === "credit" ? (
+                                {getDk(payment) === "credit" ? (
                                   <ArrowUpCircle className="w-3 h-3" />
                                 ) : (
                                   <ArrowDownCircle className="w-3 h-3" />
@@ -1364,12 +1502,12 @@ export default function Dashboard() {
                             <td className="text-sm">{payment.month || "—"}</td>
                             <td
                               className={`text-sm font-semibold text-right ${
-                                payment.type?.dk === "credit"
+                                getDk(payment) === "credit"
                                   ? "text-success"
                                   : "text-error"
                               }`}
                             >
-                              {payment.type?.dk === "credit" ? "+" : "-"}
+                              {getDk(payment) === "credit" ? "+" : "-"}
                               {Number(payment.amount || 0).toLocaleString()} UZS
                             </td>
                           </tr>
@@ -1380,8 +1518,7 @@ export default function Dashboard() {
                 </div>
                 {paymentsData.length > 20 && (
                   <div className="px-6 py-4 bg-base-200 border-t border-base-300 text-center text-sm text-base-content/50">
-                    Oxirgi 20 ta to'lov ko'rsatilgan. Barchasi uchun To'lovlar
-                    sahifasiga o'ting.
+                    {t('dash_last20')}
                   </div>
                 )}
               </div>

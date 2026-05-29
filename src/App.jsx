@@ -11,6 +11,7 @@ import ManagerDashboard from "./pages/manager/Dashboard";
 import ManagerMyGroups from "./pages/manager/MyGroups";
 import GroupDetail from "./pages/manager/GroupDetail";
 import TeacherProfile from "./pages/manager/MyProfile";
+import TeacherPayments from "./pages/teacher/Payments";
 import UserDashboard from "./pages/user/Dashboard";
 import StudentsPage from "./pages/admin/Students";
 import TeachersPage from "./pages/admin/teachers/index.jsx";
@@ -22,7 +23,6 @@ import ReportsPage from "./pages/admin/reports/index.jsx";
 import PaymentReportsPage from "./pages/admin/payment-reports/index.jsx";
 import InventoryPage from "./pages/admin/inventory/index.jsx";
 import MyProfile from "./pages/student/MyProfile";
-import MyGroups from "./pages/student/MyGroups";
 import HomeworkPage from "./pages/student/Homework";
 import Attendance from "./pages/student/Attendance";
 import Payments from "./pages/student/Payments";
@@ -34,11 +34,18 @@ const PAGE_COMPONENTS = {
   students:          StudentsPage,
   teachers:          TeachersPage,
   payments:          PaymentsPage,
+  payment:           PaymentsPage,   // API alias
   groups:            GroupsPage,
   courses:           CoursesPage,
   inventory:         InventoryPage,
   reports:           ReportsPage,
   "payment-reports": PaymentReportsPage,
+  staff:             StaffPage,
+};
+
+// API page name → URL path (when they differ)
+const PAGE_PATH = {
+  payment: "payments",
 };
 
 // useAuth ishlatish uchun AuthProvider ichida bo'lishi kerak
@@ -84,20 +91,20 @@ function AppRoutes() {
           <Route path="/teacher/dashboard"  element={<ManagerDashboard />} />
           <Route path="/teacher/groups"     element={<ManagerMyGroups />} />
           <Route path="/teacher/groups/:id" element={<GroupDetail />} />
-          <Route path="/teacher/profile"    element={<TeacherProfile />} />
+          <Route path="/teacher/profile"   element={<TeacherProfile />} />
+          <Route path="/teacher/payments" element={<TeacherPayments />} />
         </Route>
       </Route>
 
       {/* Student */}
       <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
         <Route element={<DashboardLayout />}>
-          <Route path="/student/dashboard"  element={<UserDashboard />} />
-          <Route path="/student/profile"    element={<MyProfile />} />
-          <Route path="/student/groups"     element={<MyGroups />} />
-          <Route path="/student/homework"   element={<HomeworkPage />} />
-          <Route path="/student/attendance" element={<Attendance />} />
-          <Route path="/student/payments"   element={<Payments />} />
-          <Route path="/student/ratings"    element={<Ratings />} />
+          <Route path="/student/dashboard"    element={<UserDashboard />} />
+          <Route path="/student/profile"      element={<MyProfile />} />
+          <Route path="/student/homework"     element={<HomeworkPage />} />
+          <Route path="/student/attendance"   element={<Attendance />} />
+          <Route path="/student/payments"     element={<Payments />} />
+          <Route path="/student/ratings"      element={<Ratings />} />
         </Route>
       </Route>
 
@@ -110,8 +117,9 @@ function AppRoutes() {
             {pages.map((page) => {
               const Component = PAGE_COMPONENTS[page];
               if (!Component) return null;
+              const urlPath = PAGE_PATH[page] || page;
               return (
-                <Route key={page} path={`/${role}/${page}`} element={<Component />} />
+                <Route key={page} path={`/${role}/${urlPath}`} element={<Component />} />
               );
             })}
           </Route>

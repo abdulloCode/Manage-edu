@@ -6,6 +6,7 @@ import { getGroupById } from '../../api/groups'
 import { getGroupAttendance, getGroupAttendanceCalendar, updateDayAttendance } from '../../api/attendance'
 import { getGroupRatingCalendar, upsertDayRating } from '../../api/ratings'
 import { LoadingState, ErrorState } from '../../components/PageShell'
+import { ChevronLeft, ChevronRight, CalendarCheck, Star, ChevronDown } from 'lucide-react'
 
 const STATUS_COLORS = {
   present: 'bg-success/15 text-success hover:bg-success/25',
@@ -13,7 +14,7 @@ const STATUS_COLORS = {
   late:    'bg-warning/15 text-warning hover:bg-warning/25',
 }
 
-const STATUS_LABELS = { present: 'P', absent: 'A', late: 'L' }
+const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr']
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Helper: parse calendar response into flat map keyed "studentId-YYYY-MM-DD"
@@ -120,40 +121,35 @@ function extractScheduledDays(res) {
   return null
 }
 
-function extractCalendarStudents(res) {
-  if (!res || !Array.isArray(res.students)) return null
-  return res.students.map((s) => ({
-    id: s.id,
-    name: s.name,
-    color: s.color,
-  }))
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
-// Attendance Tab — Monthly Calendar
+// Attendance Tab
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function AttendanceTab({ groupId, students: studentsProp }) {
-  const { showToast } = useToast();
+  const { showToast } = useToast()
   const [viewDate, setViewDate] = useState(new Date())
-  const [data, setData] = useState({})      // { "studentId-YYYY-MM-DD": "present" }
+  const [data, setData] = useState({})
   const [original, setOriginal] = useState({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [scheduledDays, setScheduledDays] = useState(null)
+  const [showCalendar, setShowCalendar] = useState(false)
 
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+  const todayDay = today.getDate()
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth() + 1
   const daysInMonth = new Date(year, month, 0).getDate()
-  const monthLabel = viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })
+  const monthLabel = `${UZ_MONTHS[viewDate.getMonth()]} ${year}`
+  const isCurMonth = year === today.getFullYear() && month === (today.getMonth() + 1)
 
   const daysToRender = useMemo(() => {
     if (scheduledDays) return scheduledDays
     return Array.from({ length: daysInMonth }, (_, i) => ({ d: i + 1 }))
   }, [scheduledDays, daysInMonth])
 
-  // Fetch monthly calendar
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -188,18 +184,34 @@ function AttendanceTab({ groupId, students: studentsProp }) {
         const parts = key.split('-')
         const studentId = parts[0]
         const date = parts.slice(1).join('-')
-        changes.push({ studentId, date, status: value })
+        if (date === todayStr) changes.push({ studentId, date, status: value })
       }
     })
+    if (changes.length === 0) {
+      setSaving(false)
+      showToast("⚠️ Bugungi kun uchun hech qanday o'zgarish yo'q", 'error', 3000)
+      return
+    }
     try {
-      await Promise.all(changes.map((c) => updateDayAttendance(groupId, c)))
-      setOriginal({ ...data })
+      const results = await Promise.allSettled(changes.map((c) => updateDayAttendance(groupId, c)))
+      const succeeded = results.filter((r) => r.status === 'fulfilled')
+      const failed = results.filter((r) => r.status === 'rejected' && r.reason?.response?.status !== 400)
+      const newOriginal = { ...original }
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          const c = changes[i]
+          newOriginal[`${c.studentId}-${c.date}`] = c.status
+        }
+      })
+      setOriginal(newOriginal)
       setHasChanges(false)
-    } catch (err) {
-      console.error(err)
-      if (err?.response?.status !== 404) {
-        showToast('Failed to save some attendance records', 'error', 5000);
+      if (failed.length > 0) {
+        showToast(`⚠️ ${succeeded.length} ta saqlandi, ${failed.length} ta xatolik`, 'error', 5000)
+      } else {
+        showToast(`✅ Davomat saqlandi (${succeeded.length} ta)`, 'success', 3000)
       }
+    } catch {
+      showToast("❌ Davomatni saqlashda xatolik yuz berdi", 'error', 5000)
     } finally {
       setSaving(false)
     }
@@ -212,39 +224,172 @@ function AttendanceTab({ groupId, students: studentsProp }) {
 
   if (loading) return <LoadingState />
   if (students.length === 0) {
-    return <div className="py-12 text-center text-base-content/60 text-sm rounded-2xl bg-base-100 border border-base-200">No students in this group</div>
+    return (
+      <div className="py-12 text-center text-base-content/60 text-sm rounded-2xl bg-base-100 border border-base-200">
+        Bu guruhda o'quvchilar yo'q
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Month selector */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button onClick={prevMonth} className="btn btn-sm btn-ghost btn-square">←</button>
-          <span className="text-base font-semibold min-w-[160px] text-center text-base-content">{monthLabel}</span>
-          <button onClick={nextMonth} className="btn btn-sm btn-ghost btn-square">→</button>
+
+      {/* ── Month selector + Save ── */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <button onClick={prevMonth} className="btn btn-ghost btn-sm btn-square">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-bold min-w-[130px] text-center">{monthLabel}</span>
+          <button onClick={nextMonth} className="btn btn-ghost btn-sm btn-square">
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
         <button
           onClick={save}
           disabled={saving || !hasChanges}
-          className="btn btn-primary btn-sm px-5"
+          className="btn btn-primary btn-sm gap-1.5"
         >
-          {saving ? <span className="loading loading-spinner loading-xs" /> : 'Save Attendance'}
+          {saving ? <span className="loading loading-spinner loading-xs" /> : (
+            <>
+              <CalendarCheck className="w-3.5 h-3.5" />
+              Saqlash
+            </>
+          )}
         </button>
       </div>
 
-      {/* Calendar table */}
-      <div className="overflow-x-auto rounded-2xl border border-base-200 bg-base-100 shadow-sm">
+      {/* ── MOBILE: Today's cards ── */}
+      {isCurMonth && (
+        <div className="lg:hidden flex flex-col gap-2">
+          <div className="flex items-center gap-2 pb-0.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-base-content/40">Bugungi davomat</span>
+            {hasChanges && (
+              <span className="text-[9px] font-black bg-primary/15 text-primary px-2 py-0.5 rounded-full">
+                O'zgartirildi
+              </span>
+            )}
+          </div>
+
+          {students.map((s) => {
+            const status = data[`${s.id}-${todayStr}`] ?? 'present'
+            const changed = data[`${s.id}-${todayStr}`] !== original[`${s.id}-${todayStr}`]
+            return (
+              <div
+                key={s.id}
+                className={`rounded-2xl p-3.5 border transition-all ${
+                  changed ? 'border-primary/40 bg-primary/5' : 'border-base-200 bg-base-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-base-200 flex items-center justify-center text-sm font-black text-base-content shrink-0">
+                    {s.name?.[0]?.toUpperCase()}
+                  </div>
+                  <span className="font-bold text-sm text-base-content flex-1 min-w-0">{s.name}</span>
+                  {changed && (
+                    <span className="text-[9px] font-black bg-primary/15 text-primary px-2 py-0.5 rounded-full shrink-0">
+                      yangi
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: 'present', label: 'Keldi',   activeClass: 'bg-success text-white shadow-lg shadow-success/25' },
+                    { value: 'absent',  label: 'Kelmadi', activeClass: 'bg-error text-white shadow-lg shadow-error/25' },
+                    { value: 'late',    label: 'Kech',    activeClass: 'bg-warning text-white shadow-lg shadow-warning/25' },
+                  ].map(({ value, label, activeClass }) => (
+                    <button
+                      key={value}
+                      onClick={() => setStatus(s.id, todayDay, value)}
+                      className={`py-3 rounded-xl text-xs font-black transition-all ${
+                        status === value
+                          ? activeClass
+                          : 'bg-base-200 text-base-content/50 active:bg-base-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── MOBILE: History toggle ── */}
+      <div className="lg:hidden">
+        <button
+          onClick={() => setShowCalendar((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-bold text-base-content/50 hover:text-base-content transition-colors py-1"
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showCalendar ? 'rotate-180' : ''}`} />
+          Oylik jadval
+        </button>
+        {showCalendar && (
+          <div className="overflow-x-auto rounded-2xl border border-base-200 bg-base-100 shadow-sm mt-2">
+            <table className="table table-xs w-full">
+              <thead>
+                <tr className="bg-base-200/60">
+                  <th className="sticky left-0 bg-base-200/60 z-10 min-w-[110px] text-left text-[10px] font-bold uppercase tracking-wide">
+                    O'quvchi
+                  </th>
+                  {daysToRender.map((dayObj) => (
+                    <th key={dayObj.d} className="text-center min-w-[26px] text-[10px] font-semibold text-base-content/60">
+                      {dayObj.d}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((s) => (
+                  <tr key={s.id} className="hover:bg-base-200/20">
+                    <td className="sticky left-0 bg-base-100 z-10 font-medium text-xs py-1.5 text-base-content truncate max-w-[110px]">
+                      {s.name}
+                    </td>
+                    {daysToRender.map((dayObj) => {
+                      const date = `${year}-${String(month).padStart(2, '0')}-${String(dayObj.d).padStart(2, '0')}`
+                      const status = data[`${s.id}-${date}`] ?? 'present'
+                      const isToday = date === todayStr
+                      return (
+                        <td key={dayObj.d} className="p-0.5 text-center">
+                          <div
+                            className={`w-5 h-5 text-[8px] font-black rounded flex items-center justify-center mx-auto
+                              ${status === 'present' ? 'bg-success/20 text-success' : status === 'absent' ? 'bg-error/20 text-error' : 'bg-warning/20 text-warning'}
+                              ${isToday ? 'ring-1 ring-primary/50' : 'opacity-60'}`}
+                          >
+                            {status === 'present' ? 'K' : status === 'absent' ? 'Y' : '!'}
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── DESKTOP: Full calendar table ── */}
+      <div className="hidden lg:block overflow-x-auto rounded-2xl border border-base-200 bg-base-100 shadow-sm">
         <table className="table table-xs w-full">
           <thead>
             <tr className="bg-base-200/60">
-              <th className="sticky left-0 bg-base-200/60 z-10 min-w-[150px] text-left text-xs font-bold uppercase tracking-wider text-base-content">Student</th>
+              <th className="sticky left-0 bg-base-200/60 z-10 min-w-[150px] text-left text-xs font-bold uppercase tracking-wider text-base-content">
+                O'quvchi
+              </th>
               {daysToRender.map((dayObj) => {
                 const day = dayObj.d
                 const label = dayObj.l
-                const isWeekend = label ? (label === 'Ya' || label === 'Sh') : (new Date(year, month - 1, day).getDay() === 0 || new Date(year, month - 1, day).getDay() === 6)
+                const isWeekend = label
+                  ? (label === 'Ya' || label === 'Sh')
+                  : (new Date(year, month - 1, day).getDay() === 0 || new Date(year, month - 1, day).getDay() === 6)
                 return (
-                  <th key={day} className={`text-center min-w-[40px] text-[11px] font-semibold ${isWeekend ? 'text-error' : 'text-base-content/70'}`}>
+                  <th
+                    key={day}
+                    className={`text-center min-w-[40px] text-[11px] font-semibold ${isWeekend ? 'text-error' : 'text-base-content/70'}`}
+                  >
                     <div className="leading-tight">
                       {label && <div className="text-[9px]">{label}</div>}
                       <div>{day}</div>
@@ -263,18 +408,26 @@ function AttendanceTab({ groupId, students: studentsProp }) {
                   const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
                   const status = data[`${s.id}-${date}`] ?? 'present'
                   const changed = data[`${s.id}-${date}`] !== original[`${s.id}-${date}`]
+                  const isToday = date === todayStr
                   return (
                     <td key={day} className="p-0.5">
-                      <select
-                        value={status}
-                        onChange={(e) => setStatus(s.id, day, e.target.value)}
-                        className={`w-full h-7 text-[11px] font-bold text-center border-0 outline-none cursor-pointer appearance-none rounded transition-colors ${STATUS_COLORS[status]} ${changed ? 'ring-1 ring-primary/40' : ''}`}
-                        title={`${s.name} — ${date}: ${status}`}
-                      >
-                        <option value="present">P</option>
-                        <option value="absent">A</option>
-                        <option value="late">L</option>
-                      </select>
+                      {isToday ? (
+                        <select
+                          value={status}
+                          onChange={(e) => setStatus(s.id, day, e.target.value)}
+                          className={`w-full h-7 text-[11px] font-bold text-center border-0 outline-none cursor-pointer appearance-none rounded transition-colors ring-1 ring-primary/60 ${STATUS_COLORS[status]} ${changed ? 'ring-primary' : ''}`}
+                        >
+                          <option value="present">K</option>
+                          <option value="absent">Y</option>
+                          <option value="late">K!</option>
+                        </select>
+                      ) : (
+                        <div
+                          className={`w-full h-7 text-[11px] font-bold text-center rounded flex items-center justify-center opacity-50 cursor-not-allowed select-none ${STATUS_COLORS[status]}`}
+                        >
+                          {status === 'present' ? 'K' : status === 'absent' ? 'Y' : 'K!'}
+                        </div>
+                      )}
                     </td>
                   )
                 })}
@@ -284,35 +437,48 @@ function AttendanceTab({ groupId, students: studentsProp }) {
         </table>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-base-content/70">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-success/15 text-success font-bold text-[10px] flex items-center justify-center">P</span> Present</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-error/15 text-error font-bold text-[10px] flex items-center justify-center">A</span> Absent</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-warning/15 text-warning font-bold text-[10px] flex items-center justify-center">L</span> Late</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded ring-1 ring-primary/40" /> Changed</span>
+      {/* ── Legend ── */}
+      <div className="flex items-center flex-wrap gap-3 text-xs text-base-content/60">
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded bg-success text-white font-bold text-[9px] flex items-center justify-center">K</span>
+          Keldi
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded bg-error text-white font-bold text-[9px] flex items-center justify-center">Y</span>
+          Kelmadi
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded bg-warning text-white font-bold text-[9px] flex items-center justify-center">!</span>
+          Kech keldi
+        </span>
       </div>
     </div>
   )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Ratings Tab — Monthly Calendar
+// Ratings Tab
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function RatingsTab({ groupId, students: studentsProp }) {
-  const { showToast } = useToast();
+  const { showToast } = useToast()
   const [viewDate, setViewDate] = useState(new Date())
-  const [data, setData] = useState({})      // { "studentId-YYYY-MM-DD": "85" }
+  const [data, setData] = useState({})
   const [original, setOriginal] = useState({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [scheduledDays, setScheduledDays] = useState(null)
+  const [showCalendar, setShowCalendar] = useState(false)
 
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+  const todayDay = today.getDate()
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth() + 1
   const daysInMonth = new Date(year, month, 0).getDate()
-  const monthLabel = viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })
+  const monthLabel = `${UZ_MONTHS[viewDate.getMonth()]} ${year}`
+  const isCurMonth = year === today.getFullYear() && month === (today.getMonth() + 1)
 
   const daysToRender = useMemo(() => {
     if (scheduledDays) return scheduledDays
@@ -338,7 +504,6 @@ function RatingsTab({ groupId, students: studentsProp }) {
     return map
   }, [studentsProp, daysToRender, data, year, month])
 
-  // Fetch monthly calendar
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -357,79 +522,64 @@ function RatingsTab({ groupId, students: studentsProp }) {
   }, [groupId, year, month])
 
   const setScore = (studentId, day, val) => {
-    const num = val.replace(/[^0-9]/g, '').slice(0, 2)
-    if (num !== '' && Number(num) > 10) return
     const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     setData((prev) => {
-      const next = { ...prev, [`${studentId}-${date}`]: num }
+      const next = { ...prev, [`${studentId}-${date}`]: val }
       setHasChanges(true)
       return next
     })
   }
 
-  const handleRatingKeyDown = (e) => {
-    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return
-    e.preventDefault()
-
-    const input = e.target
-    const td = input.closest('td')
-    const tr = td.closest('tr')
-    const table = tr.closest('table')
-    const rows = table.querySelectorAll('tbody tr')
-    const rowIndex = Array.from(rows).indexOf(tr)
-    const colIndex = Array.from(tr.children).indexOf(td)
-
-    let targetInput = null
-
-    if (e.key === 'ArrowLeft') {
-      for (let i = colIndex - 1; i >= 0; i--) {
-        const inp = tr.children[i]?.querySelector('input')
-        if (inp) { targetInput = inp; break }
-      }
-    } else if (e.key === 'ArrowRight') {
-      for (let i = colIndex + 1; i < tr.children.length; i++) {
-        const inp = tr.children[i]?.querySelector('input')
-        if (inp) { targetInput = inp; break }
-      }
-    } else if (e.key === 'ArrowUp') {
-      for (let i = rowIndex - 1; i >= 0; i--) {
-        const inp = rows[i].children[colIndex]?.querySelector('input')
-        if (inp) { targetInput = inp; break }
-      }
-    } else if (e.key === 'ArrowDown') {
-      for (let i = rowIndex + 1; i < rows.length; i++) {
-        const inp = rows[i].children[colIndex]?.querySelector('input')
-        if (inp) { targetInput = inp; break }
-      }
-    }
-
-    if (targetInput) {
-      targetInput.focus()
-      targetInput.select()
-    }
-  }
-
   const save = async () => {
     setSaving(true)
+
+    const unrated = students.filter((s) => {
+      const score = data[`${s.id}-${todayStr}`]
+      return score === undefined || score === ''
+    })
+    if (unrated.length > 0) {
+      setSaving(false)
+      showToast(`⚠️ ${unrated.map((s) => s.name).join(', ')} — baho kiritilmagan`, 'error', 4000)
+      return
+    }
+
     const changes = []
     Object.entries(data).forEach(([key, value]) => {
       if (value !== original[key] && value !== '') {
         const parts = key.split('-')
         const studentId = parts[0]
         const dateStr = parts.slice(1).join('-')
+        if (dateStr !== todayStr) return
         const [y, m, d] = dateStr.split('-').map(Number)
         changes.push({ studentId, day: d, month: m, year: y, score: Number(value) })
       }
     })
+    if (changes.length === 0) {
+      setSaving(false)
+      showToast("⚠️ Bugungi kun uchun hech qanday o'zgarish yo'q", 'error', 3000)
+      return
+    }
     try {
-      await Promise.all(changes.map((c) => upsertDayRating(groupId, c)))
-      setOriginal({ ...data })
+      const results = await Promise.allSettled(changes.map((c) => upsertDayRating(groupId, c)))
+      const succeeded = results.filter((r) => r.status === 'fulfilled')
+      const failed = results.filter((r) => r.status === 'rejected' && r.reason?.response?.status !== 400)
+      const newOriginal = { ...original }
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          const c = changes[i]
+          const date = `${c.year}-${String(c.month).padStart(2, '0')}-${String(c.day).padStart(2, '0')}`
+          newOriginal[`${c.studentId}-${date}`] = String(c.score)
+        }
+      })
+      setOriginal(newOriginal)
       setHasChanges(false)
-    } catch (err) {
-      console.error(err)
-      if (err?.response?.status !== 404) {
-        showToast('Failed to save some ratings', 'error', 5000);
+      if (failed.length > 0) {
+        showToast(`⚠️ ${succeeded.length} ta saqlandi, ${failed.length} ta xatolik`, 'error', 5000)
+      } else {
+        showToast(`✅ Baholar saqlandi (${succeeded.length} ta)`, 'success', 3000)
       }
+    } catch {
+      showToast("❌ Baholarni saqlashda xatolik yuz berdi", 'error', 5000)
     } finally {
       setSaving(false)
     }
@@ -442,39 +592,186 @@ function RatingsTab({ groupId, students: studentsProp }) {
 
   if (loading) return <LoadingState />
   if (students.length === 0) {
-    return <div className="py-12 text-center text-base-content/60 text-sm rounded-2xl bg-base-100 border border-base-200">No students in this group</div>
+    return (
+      <div className="py-12 text-center text-base-content/60 text-sm rounded-2xl bg-base-100 border border-base-200">
+        Bu guruhda o'quvchilar yo'q
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Month selector */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button onClick={prevMonth} className="btn btn-sm btn-ghost btn-square">←</button>
-          <span className="text-base font-semibold min-w-[160px] text-center text-base-content">{monthLabel}</span>
-          <button onClick={nextMonth} className="btn btn-sm btn-ghost btn-square">→</button>
+
+      {/* ── Month selector + Save ── */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <button onClick={prevMonth} className="btn btn-ghost btn-sm btn-square">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-bold min-w-[130px] text-center">{monthLabel}</span>
+          <button onClick={nextMonth} className="btn btn-ghost btn-sm btn-square">
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
         <button
           onClick={save}
           disabled={saving || !hasChanges}
-          className="btn btn-primary btn-sm px-5"
+          className="btn btn-primary btn-sm gap-1.5"
         >
-          {saving ? <span className="loading loading-spinner loading-xs" /> : 'Save Ratings'}
+          {saving ? <span className="loading loading-spinner loading-xs" /> : (
+            <>
+              <Star className="w-3.5 h-3.5" />
+              Saqlash
+            </>
+          )}
         </button>
       </div>
 
-      {/* Calendar table */}
-      <div className="overflow-x-auto rounded-2xl border border-base-200 bg-base-100 shadow-sm">
+      {/* ── MOBILE: Today's rating cards ── */}
+      {isCurMonth && (
+        <div className="lg:hidden flex flex-col gap-2">
+          <div className="flex items-center gap-2 pb-0.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-base-content/40">Bugungi baholar</span>
+            {hasChanges && (
+              <span className="text-[9px] font-black bg-primary/15 text-primary px-2 py-0.5 rounded-full">
+                O'zgartirildi
+              </span>
+            )}
+          </div>
+
+          {students.map((s) => {
+            const score = data[`${s.id}-${todayStr}`] ?? ''
+            const avg = monthlyAverages[s.id]
+            const num = score !== '' ? Number(score) : null
+            return (
+              <div key={s.id} className="bg-base-100 rounded-2xl p-3.5 border border-base-200 shadow-sm">
+                {/* Student header */}
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-base-200 flex items-center justify-center text-sm font-black text-base-content shrink-0">
+                    {s.name?.[0]?.toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-base-content leading-tight">{s.name}</div>
+                    {avg !== null && (
+                      <div className={`text-xs font-bold leading-tight ${avg >= 8 ? 'text-success' : avg >= 5 ? 'text-warning' : 'text-error'}`}>
+                        O'rtacha: {avg.toFixed(1)}
+                      </div>
+                    )}
+                  </div>
+                  {num !== null && (
+                    <span className={`text-2xl font-black tabular-nums leading-none ${num >= 8 ? 'text-success' : num >= 5 ? 'text-warning' : 'text-error'}`}>
+                      {score}
+                    </span>
+                  )}
+                </div>
+
+                {/* 1–10 grid */}
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[1,2,3,4,5,6,7,8,9,10].map((n) => {
+                    const isSelected = score === String(n)
+                    return (
+                      <button
+                        key={n}
+                        onClick={() => setScore(s.id, todayDay, String(n))}
+                        className={`h-11 rounded-xl text-sm font-black transition-all select-none active:scale-95 ${
+                          isSelected
+                            ? n >= 8
+                              ? 'bg-success text-white shadow-md shadow-success/30'
+                              : n >= 5
+                              ? 'bg-warning text-white shadow-md shadow-warning/30'
+                              : 'bg-error text-white shadow-md shadow-error/30'
+                            : 'bg-base-200 text-base-content/50 active:bg-base-300'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── MOBILE: History toggle ── */}
+      <div className="lg:hidden">
+        <button
+          onClick={() => setShowCalendar((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-bold text-base-content/50 hover:text-base-content transition-colors py-1"
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showCalendar ? 'rotate-180' : ''}`} />
+          Oylik jadval
+        </button>
+        {showCalendar && (
+          <div className="overflow-x-auto rounded-2xl border border-base-200 bg-base-100 shadow-sm mt-2">
+            <table className="table table-xs w-full">
+              <thead>
+                <tr className="bg-base-200/60">
+                  <th className="sticky left-0 bg-base-200/60 z-10 min-w-[110px] text-left text-[10px] font-bold uppercase tracking-wide">
+                    O'quvchi
+                  </th>
+                  {daysToRender.map((dayObj) => (
+                    <th key={dayObj.d} className="text-center min-w-[26px] text-[10px] font-semibold text-base-content/60">
+                      {dayObj.d}
+                    </th>
+                  ))}
+                  <th className="text-center min-w-[40px] text-[10px] font-bold bg-base-200/80">O'rt.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((s) => (
+                  <tr key={s.id} className="hover:bg-base-200/20">
+                    <td className="sticky left-0 bg-base-100 z-10 font-medium text-xs py-1.5 text-base-content truncate max-w-[110px]">
+                      {s.name}
+                    </td>
+                    {daysToRender.map((dayObj) => {
+                      const date = `${year}-${String(month).padStart(2, '0')}-${String(dayObj.d).padStart(2, '0')}`
+                      const score = data[`${s.id}-${date}`] ?? ''
+                      const num = score !== '' ? Number(score) : null
+                      const color = num === null ? 'text-base-content/20' : num >= 8 ? 'text-success' : num >= 5 ? 'text-warning' : 'text-error'
+                      return (
+                        <td key={dayObj.d} className="p-0.5 text-center">
+                          <span className={`text-[9px] font-bold ${color}`}>{score || '—'}</span>
+                        </td>
+                      )
+                    })}
+                    <td className="text-center font-bold text-xs bg-base-200/30">
+                      {monthlyAverages[s.id] === null ? (
+                        <span className="text-base-content/40">-</span>
+                      ) : (
+                        <span className={monthlyAverages[s.id] >= 8 ? 'text-success' : monthlyAverages[s.id] >= 5 ? 'text-warning' : 'text-error'}>
+                          {monthlyAverages[s.id].toFixed(1)}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── DESKTOP: Full calendar table ── */}
+      <div className="hidden lg:block overflow-x-auto rounded-2xl border border-base-200 bg-base-100 shadow-sm">
         <table className="table table-xs w-full">
           <thead>
             <tr className="bg-base-200/60">
-              <th className="sticky left-0 bg-base-200/60 z-10 min-w-[150px] text-left text-xs font-bold uppercase tracking-wider text-base-content">Student</th>
+              <th className="sticky left-0 bg-base-200/60 z-10 min-w-[150px] text-left text-xs font-bold uppercase tracking-wider text-base-content">
+                O'quvchi
+              </th>
               {daysToRender.map((dayObj) => {
                 const day = dayObj.d
                 const label = dayObj.l
-                const isWeekend = label ? (label === 'Ya' || label === 'Sh') : (new Date(year, month - 1, day).getDay() === 0 || new Date(year, month - 1, day).getDay() === 6)
+                const isWeekend = label
+                  ? (label === 'Ya' || label === 'Sh')
+                  : (new Date(year, month - 1, day).getDay() === 0 || new Date(year, month - 1, day).getDay() === 6)
                 return (
-                  <th key={day} className={`text-center min-w-[44px] text-[11px] font-semibold ${isWeekend ? 'text-error' : 'text-base-content/70'}`}>
+                  <th
+                    key={day}
+                    className={`text-center min-w-[44px] text-[11px] font-semibold ${isWeekend ? 'text-error' : 'text-base-content/70'}`}
+                  >
                     <div className="leading-tight">
                       {label && <div className="text-[9px]">{label}</div>}
                       <div>{day}</div>
@@ -482,7 +779,9 @@ function RatingsTab({ groupId, students: studentsProp }) {
                   </th>
                 )
               })}
-              <th className="text-center min-w-[60px] text-[11px] font-bold bg-base-200/80 uppercase tracking-wider text-base-content">Monthly</th>
+              <th className="text-center min-w-[60px] text-[11px] font-bold bg-base-200/80 uppercase tracking-wider text-base-content">
+                O'rtacha
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -496,22 +795,33 @@ function RatingsTab({ groupId, students: studentsProp }) {
                   const changed = data[`${s.id}-${date}`] !== original[`${s.id}-${date}`]
                   const num = score !== '' ? Number(score) : null
                   const color = num === null ? '' : num >= 8 ? 'text-success' : num >= 5 ? 'text-warning' : 'text-error'
+                  const isToday = date === todayStr
                   return (
                     <td key={day} className="p-0.5">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder=""
-                        value={score}
-                        onChange={(e) => setScore(s.id, day, e.target.value)}
-                        onKeyDown={handleRatingKeyDown}
-                        className={`w-full h-7 text-[11px] font-bold text-center border border-base-200 outline-none bg-base-100 focus:bg-base-200/50 rounded transition-colors ${color} ${changed ? 'ring-1 ring-primary/40' : ''}`}
-                        title={`${s.name} — ${date}${score !== '' ? `: ${score}` : ''}`}
-                      />
+                      {isToday ? (
+                        <select
+                          value={score}
+                          onChange={(e) => setScore(s.id, day, e.target.value)}
+                          className={`w-full h-7 text-[11px] font-bold text-center border border-primary/40 outline-none bg-base-100 cursor-pointer rounded transition-colors ${color} ${changed ? 'ring-1 ring-primary' : ''}`}
+                          title={`${s.name} — ${date}${score !== '' ? `: ${score}` : ''}`}
+                        >
+                          <option value="">—</option>
+                          {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((v) => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div
+                          className={`w-full h-7 text-[11px] font-bold text-center rounded flex items-center justify-center opacity-50 cursor-not-allowed bg-base-200/30 ${color}`}
+                          title={`${date} — faqat bugun o'zgartiriladi`}
+                        >
+                          {score !== '' ? score : <span className="text-base-content/20">—</span>}
+                        </div>
+                      )}
                     </td>
                   )
                 })}
-                <td className="text-center font-bold text-sm bg-base-200/30 min-w-[60px] text-base-content">
+                <td className="text-center font-bold text-sm bg-base-200/30 min-w-[60px]">
                   {monthlyAverages[s.id] === null ? (
                     <span className="text-base-content/60">-</span>
                   ) : (
@@ -526,12 +836,20 @@ function RatingsTab({ groupId, students: studentsProp }) {
         </table>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-base-content/70">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded text-success font-bold text-[10px] flex items-center justify-center">8+</span> Excellent</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded text-warning font-bold text-[10px] flex items-center justify-center">5+</span> Good</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded text-error font-bold text-[10px] flex items-center justify-center">&lt;5</span> Needs work</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded ring-1 ring-primary/40" /> Changed</span>
+      {/* ── Legend ── */}
+      <div className="flex items-center flex-wrap gap-3 text-xs text-base-content/60">
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded text-success font-bold flex items-center justify-center text-[10px]">8+</span>
+          A'lo
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded text-warning font-bold flex items-center justify-center text-[10px]">5+</span>
+          Yaxshi
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-4 rounded text-error font-bold flex items-center justify-center text-[10px]">&lt;5</span>
+          Past
+        </span>
       </div>
     </div>
   )
@@ -547,10 +865,13 @@ export default function GroupDetail() {
   const [activeTab, setActiveTab] = useState('attendance')
 
   const fetchGroup = useCallback(() => getGroupById(id), [id])
-  const { data: group, loading, error } = useFetch(fetchGroup, [id])
+  const { data: rawGroup, loading, error } = useFetch(fetchGroup, [id])
+  const group = rawGroup?.data || rawGroup
 
-  // Fetch attendance to get student roster (group API doesn't return students)
-  const fetchAttendanceForRoster = useCallback(() => getGroupAttendance(id, new Date().toISOString().split('T')[0]), [id])
+  const fetchAttendanceForRoster = useCallback(
+    () => getGroupAttendance(id, new Date().toISOString().split('T')[0]),
+    [id]
+  )
   const { data: attendanceRoster } = useFetch(fetchAttendanceForRoster, [id])
 
   const students = useMemo(() => {
@@ -563,80 +884,72 @@ export default function GroupDetail() {
     return Object.values(map)
   }, [group, attendanceRoster])
 
-  if (loading) return (
-    <div className="flex flex-col gap-6">
-      <LoadingState />
-    </div>
-  )
-  if (error) return (
-    <div className="flex flex-col gap-6">
-      <ErrorState message={error} />
-    </div>
-  )
+  if (loading) return <div className="flex flex-col gap-6"><LoadingState /></div>
+  if (error) return <div className="flex flex-col gap-6"><ErrorState message={error} /></div>
+
+  const TABS = [
+    { key: 'attendance', label: 'Davomat', icon: <CalendarCheck className="w-3.5 h-3.5" /> },
+    { key: 'ratings',    label: 'Baholar', icon: <Star className="w-3.5 h-3.5" /> },
+  ]
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 md:gap-6">
 
-      {/* Header */}
-      <div className="flex items-start gap-4">
+      {/* ── Header ── */}
+      <div className="flex items-start gap-3">
         <button
-          onClick={() => navigate('/teacher/groups')}
-          className="btn btn-ghost btn-sm btn-square mt-0.5"
+          onClick={() => navigate(-1)}
+          className="btn btn-ghost btn-sm btn-square mt-0.5 shrink-0"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
+          <ChevronLeft className="w-4 h-4" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-base-content">{group?.name ?? 'Group'}</h1>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+          <h1 className="text-xl md:text-2xl font-bold text-base-content leading-tight">
+            {group?.name ?? 'Guruh'}
+          </h1>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
             {group?.course && (
-              <span className="text-sm text-base-content/70">
+              <span className="text-sm text-base-content/60">
                 {group.course.title ?? group.course.name}
               </span>
             )}
             {group?.schedule && (
               <>
-                <span className="text-base-content/70">·</span>
-                <span className="text-sm text-base-content/70">
+                <span className="text-base-content/30">·</span>
+                <span className="text-sm text-base-content/60">
                   {Array.isArray(group.schedule.days) ? group.schedule.days.join(', ') : group.schedule.days}
-                  {group.schedule.fromHour && group.schedule.toHour && ` · ${group.schedule.fromHour}–${group.schedule.toHour}`}
+                  {group.schedule.fromHour && group.schedule.toHour &&
+                    ` · ${group.schedule.fromHour}–${group.schedule.toHour}`}
                 </span>
               </>
             )}
-            <span className="text-base-content/70">·</span>
-            <span className="text-sm text-base-content/70">{students.length} students</span>
+            <span className="text-base-content/30">·</span>
+            <span className="text-sm text-base-content/60">{students.length} o'quvchi</span>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <div className="flex gap-1 p-1 bg-base-200/60 rounded-xl w-fit">
-        {[
-          { key: 'attendance', label: 'Attendance' },
-          { key: 'ratings',    label: 'Ratings' },
-        ].map(({ key, label }) => (
+        {TABS.map(({ key, label, icon }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === key
                 ? 'bg-base-100 text-base-content shadow-sm'
-                : 'text-base-content/70 hover:text-base-content'
+                : 'text-base-content/60 hover:text-base-content'
             }`}
           >
+            {icon}
             {label}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
-      {activeTab === 'attendance' && (
-        <AttendanceTab groupId={id} students={students} />
-      )}
-      {activeTab === 'ratings' && (
-        <RatingsTab groupId={id} students={students} />
-      )}
+      {/* ── Tab content ── */}
+      {activeTab === 'attendance' && <AttendanceTab groupId={id} students={students} />}
+      {activeTab === 'ratings'    && <RatingsTab    groupId={id} students={students} />}
     </div>
   )
 }

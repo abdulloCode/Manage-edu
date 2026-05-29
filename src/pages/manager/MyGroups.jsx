@@ -1,6 +1,9 @@
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useFetch } from "../../hooks/useFetch";
 import { getMyTeacherGroups } from "../../api/teachers";
+import { getGroupById } from "../../api/groups";
+import { useInfiniteScroll } from "../../hooks/useInfiniteScroll";
 import {
   PageShell,
   LoadingState,
@@ -20,8 +23,34 @@ const STATUS_STYLE = {
 
 export default function MyGroups() {
   const { data, loading, error } = useFetch(getMyTeacherGroups);
-  const groups = Array.isArray(data) ? data : [];
+  const groups = Array.isArray(data) ? data
+               : Array.isArray(data?.data) ? data.data : [];
   const navigate = useNavigate();
+  const { visible: visibleGroups, sentinelRef, hasMore, shown } = useInfiniteScroll(groups, 20);
+
+  // Guruhlar ro'yxatida schedule bo'lmasa, alohida yuklash
+  const [scheduleMap, setScheduleMap] = useState({});
+  useEffect(() => {
+    if (!groups.length) return;
+    const noSched = groups.filter(g => !g.schedule);
+    if (!noSched.length) return;
+    Promise.allSettled(
+      noSched.slice(0, 30).map(g => {
+        const gid = g.id ?? g._id;
+        return getGroupById(gid)
+          .then(r => ({ id: gid, schedule: (r.data?.data || r.data)?.schedule ?? null }))
+          .catch(() => ({ id: gid, schedule: null }));
+      })
+    ).then(results => {
+      const map = {};
+      results.forEach(r => {
+        if (r.status === 'fulfilled' && r.value.schedule) {
+          map[r.value.id] = r.value.schedule;
+        }
+      });
+      setScheduleMap(map);
+    });
+  }, [groups.length]); // eslint-disable-line
 
   return (
     <PageShell
@@ -41,13 +70,14 @@ export default function MyGroups() {
 
       {!loading && !error && groups.length > 0 && (
         <div className="flex flex-col gap-3 p-4">
-          {groups.map((g) => {
+          {visibleGroups.map((g) => {
             const s = STATUS_STYLE[g.status] ?? STATUS_STYLE.active;
             const used = g.currentStudents ?? g.students?.length ?? 0;
             const max = g.maxStudents ?? g.capacity ?? 0;
             const pct = max > 0 ? Math.round((used / max) * 100) : 0;
             const barColor =
               pct >= 90 ? "bg-error" : pct >= 70 ? "bg-warning" : "bg-success";
+            const schedule = g.schedule ?? scheduleMap[g.id ?? g._id] ?? null;
 
             return (
               <button
@@ -97,15 +127,16 @@ export default function MyGroups() {
                           {g.course.duration ? ` · ${g.course.duration}` : ""}
                         </p>
                       )}
-                      {g.schedule && (
-                        <p className="text-xs text-base-content/40 mt-0.5">
-                          {Array.isArray(g.schedule.days)
-                            ? g.schedule.days.join(", ")
-                            : g.schedule.days}
-                          {g.schedule.fromHour &&
-                            g.schedule.toHour &&
-                            ` · ${g.schedule.fromHour}–${g.schedule.toHour}`}
+                      {schedule ? (
+                        <p className="text-xs text-base-content/40 mt-0.5 flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          {Array.isArray(schedule.days) ? schedule.days.join(", ") : (schedule.days ?? "")}
+                          {schedule.fromHour && schedule.toHour
+                            ? ` · ${schedule.fromHour}–${schedule.toHour}`
+                            : ""}
                         </p>
+                      ) : (
+                        <p className="text-xs text-base-content/30 mt-0.5 italic">Jadval belgilanmagan</p>
                       )}
                     </div>
                   </div>
@@ -144,6 +175,11 @@ export default function MyGroups() {
               </button>
             );
           })}
+          <div className="flex items-center justify-between px-2 py-2 border-t border-base-200 mt-1">
+            <span className="text-xs text-base-content/40">{shown} / {groups.length} ta</span>
+            {hasMore && <span className="text-xs text-primary animate-pulse">Yuklanmoqda…</span>}
+          </div>
+          <div ref={sentinelRef} className="h-1" />
         </div>
       )}
     </PageShell>
