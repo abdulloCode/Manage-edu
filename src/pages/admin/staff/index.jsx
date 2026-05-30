@@ -175,7 +175,7 @@ export default function StaffPage() {
       const id = getId(selectedStaff);
       const payload = {
         name:          staffForm.name.trim(),
-        phone:         staffForm.phone.length === 9 ? "+998" + staffForm.phone : staffForm.phone,
+        phone:         staffForm.phone.length === 9 ? staffForm.phone : null,
         role:          staffForm.role,
         pagesToAccess: staffForm.pagesToAccess,
       };
