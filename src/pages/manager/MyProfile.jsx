@@ -73,6 +73,7 @@ function EditModal({ user, onClose, onSaved }) {
             { label: t('prof_new_password'), key: 'password', type: 'password', placeholder: t('prof_blank_pass') },
           ].map(({ label, key, type, placeholder }) => (
             <div key={key}>
+            <p></p>
               <p className="text-xs text-base-content/70 font-medium uppercase tracking-wider mb-1.5">{label}</p>
               <input
                 type={type}
