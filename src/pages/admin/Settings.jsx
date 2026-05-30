@@ -14,7 +14,7 @@ const parseJSON = async (res, label) => {
 }
 
 const api = {
-  const a=2
+
   get: async (path) => {
     const res = await fetch(`/api${path}`, {
       headers: { 'Content-Type': 'application/json' },
