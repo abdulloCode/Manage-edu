@@ -167,7 +167,7 @@ function StatCard({ label, value, sub, iconBg, icon: Icon, wave, valueColor, onC
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
           <Icon className="w-5 h-5" />
         </div>
-        <ChevronRight className="w-4 h-4 text-gray-200 ml-1 mt-0.5" />
+        <ChevronRight className="w-5 h-4 text-gray-200 ml-1 mt-0.5" />
       </div>
       <div className="mt-auto">
         <Wave color={wave.color} opacity={wave.opacity} />
