@@ -3,7 +3,7 @@ import { getMyPayments, getUserPayments } from '../../api/payments'
 import { getMyTeacherPayments, getTeacherPayments } from '../../api/teachers'
 import { useAuth } from '../../context/AuthContext'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
-import { ArrowDownLeft, ArrowUpRight, Wallet } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Wallet, TrendingUp, TrendingDown, BadgeDollarSign, Scale, Users, BookOpen } from 'lucide-react'
 
 /* ── helpers ── */
 const fmt  = (n) => Number(n ?? 0).toLocaleString('uz-UZ')
@@ -82,11 +82,11 @@ export default function TeacherPayments() {
   const getDk = (r) => r.dk ?? r.type?.dk ?? null
 
   const totalPaid = useMemo(
-    () => records.filter(r => getDk(r) === 'credit').reduce((s, r) => s + Number(r.amount ?? 0), 0),
+    () => records.filter(r => getDk(r) === 'debit').reduce((s, r) => s + Number(r.amount ?? 0), 0),
     [records],
   )
   const totalDebt = useMemo(
-    () => records.filter(r => getDk(r) === 'debit').reduce((s, r) => s + Number(r.amount ?? 0), 0),
+    () => records.filter(r => getDk(r) === 'credit').reduce((s, r) => s + Number(r.amount ?? 0), 0),
     [records],
   )
 
@@ -103,7 +103,7 @@ export default function TeacherPayments() {
         key,
         label: monthLabel(key),
         items,
-        total: items.filter(r => getDk(r) === 'credit').reduce((s, r) => s + Number(r.amount ?? 0), 0),
+        total: items.filter(r => getDk(r) === 'debit').reduce((s, r) => s + Number(r.amount ?? 0), 0),
       }))
   }, [records])
 
@@ -114,6 +114,9 @@ export default function TeacherPayments() {
 
   const { visible, sentinelRef, hasMore, shown } = useInfiniteScroll(flat, 40)
 
+  const bal = user?.balance ?? {}
+  const hasBalance = bal.kutilganMaosh != null || bal.tolangan != null
+
   return (
     <div className="space-y-6">
       {/* header */}
@@ -121,6 +124,91 @@ export default function TeacherPayments() {
         <h1 className="text-2xl font-bold text-gray-900">To'lovlar</h1>
         <p className="text-sm text-gray-400 mt-0.5">Admin tomonidan o'tkazilgan to'lovlar tarixi</p>
       </div>
+
+      {/* ── Maosh Balansi ── */}
+      {hasBalance && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider px-0.5">Maosh Balansi</h2>
+
+          {/* 4 stat cards */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              {
+                label: 'Kutilgan maosh',
+                value: fmtK(bal.kutilganMaosh),
+                full: fmt(bal.kutilganMaosh),
+                icon: <TrendingUp className="w-4 h-4 text-violet-500" />,
+                bg: 'bg-violet-50',
+                text: 'text-violet-600',
+              },
+              {
+                label: "To'langan",
+                value: fmtK(bal.tolangan),
+                full: fmt(bal.tolangan),
+                icon: <BadgeDollarSign className="w-4 h-4 text-emerald-500" />,
+                bg: 'bg-emerald-50',
+                text: 'text-emerald-600',
+              },
+              {
+                label: 'Ushlab qolindi',
+                value: fmtK(bal.ushlaQolindi),
+                full: fmt(bal.ushlaQolindi),
+                icon: <TrendingDown className="w-4 h-4 text-rose-400" />,
+                bg: 'bg-rose-50',
+                text: 'text-rose-500',
+              },
+              {
+                label: 'Sof balans',
+                value: fmtK(bal.sofBalans),
+                full: fmt(bal.sofBalans),
+                icon: <Scale className="w-4 h-4 text-amber-500" />,
+                bg: Number(bal.sofBalans) >= 0 ? 'bg-emerald-50' : 'bg-rose-50',
+                text: Number(bal.sofBalans) >= 0 ? 'text-emerald-600' : 'text-rose-500',
+              },
+            ].map(s => (
+              <div key={s.label} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-7 h-7 rounded-lg ${s.bg} flex items-center justify-center`}>{s.icon}</div>
+                  <span className="text-xs text-gray-400 font-medium leading-tight">{s.label}</span>
+                </div>
+                <p className={`text-xl font-black tabular-nums ${s.text}`} title={s.full + ' UZS'}>{s.value}</p>
+                <p className="text-xs text-gray-400 mt-0.5">UZS</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Group breakdown */}
+          {Array.isArray(bal.groupBreakdown) && bal.groupBreakdown.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-bold text-gray-700">Guruhlar bo'yicha</span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {bal.groupBreakdown.map(g => (
+                  <div key={g.groupId} className="flex items-center gap-3 px-4 py-3">
+                    <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center shrink-0">
+                      <Users className="w-4 h-4 text-violet-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{g.groupName}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {g.studentCount} talaba · {g.lessonsTaught} dars
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-emerald-600 tabular-nums">
+                        +{fmtK(g.expectedSalary)}
+                      </p>
+                      <p className="text-[10px] text-gray-400">UZS</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* loading */}
       {loading && (
@@ -191,7 +279,7 @@ export default function TeacherPayments() {
             }
 
             const r        = item
-            const isCredit = getDk(r) === 'credit'
+            const isCredit = getDk(r) === 'debit'
             const label    = r.type?.name ?? (isCredit ? 'Maosh' : 'Ushlab qolish')
             const prev     = visible[idx - 1]
             const next     = visible[idx + 1]

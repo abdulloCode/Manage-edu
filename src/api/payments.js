@@ -9,6 +9,10 @@ export const createPayment   = (data)       => api.post('/payments', data)
 // data: { toWho, amount, dk: 'debit' | 'credit', date?, type?, comment? }
 // ⚠️ dk is now REQUIRED. type is optional (auto-detected by user role if omitted)
 
+export const createExpense   = (data)       => api.post('/expenses', data)
+// data: { type, amount, dk: 'debit' | 'credit', month?, date?, comment? }
+// expense = payment with no toWho (no user)
+
 export const updatePayment   = (id, data)   => api.put(`/payments/${id}`, data)
 // data: { type?, amount?, dk?: 'debit' | 'credit', date?, month?, toWho?, comment? }
 

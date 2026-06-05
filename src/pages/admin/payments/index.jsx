@@ -26,6 +26,7 @@ import {
   savePaymentType,
   removePaymentType,
 } from "./hooks";
+import { createExpense } from "../../../api/payments";
 import { getAllTeachers } from "../../../api/teacher";
 import { getStudents } from "../../../api/students";
 import { getAllGroups, getGroupById } from "../../../api/groups";
@@ -75,6 +76,10 @@ export default function PaymentsPage() {
   const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [showRecipientDropdown, setShowRecipientDropdown] = useState(false);
   const recipientDropdownRef = useRef(null);
+
+  const [typeSearch, setTypeSearch] = useState("");
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const typeDropdownRef = useRef(null);
   const [recipientDebtInfo, setRecipientDebtInfo] = useState({
     debt: 0,
     salary: 0,
@@ -112,7 +117,7 @@ export default function PaymentsPage() {
 
   const [paymentForm, setPaymentForm] = useState({
     type: "",
-    dk: "credit", // Added dk field with default value
+    dk: "debit",
     amount: "",
     month: new Date().toISOString().slice(0, 7),
     toWho: "",
@@ -123,7 +128,6 @@ export default function PaymentsPage() {
   const [typeForm, setTypeForm] = useState({
     name: "",
     code: "",
-    dk: "credit",
     description: "",
   });
 
@@ -236,11 +240,11 @@ export default function PaymentsPage() {
   };
 
   const totalIncome = payments
-    .filter((p) => getDk(p) === "credit")
+    .filter((p) => getDk(p) === "debit")
     .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
   const totalExpense = payments
-    .filter((p) => getDk(p) === "debit")
+    .filter((p) => getDk(p) === "credit")
     .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
   const netBalance = totalIncome - totalExpense;
@@ -296,7 +300,7 @@ export default function PaymentsPage() {
   const resetPaymentModal = () => {
     setPaymentForm({
       type: "",
-      dk: "credit",
+      dk: "debit",
       amount: "",
       month: new Date().toISOString().slice(0, 7),
       toWho: "",
@@ -310,13 +314,18 @@ export default function PaymentsPage() {
     setRecipientSearch("");
     setSelectedRecipient(null);
     setRecipientDebtInfo({ debt: 0, salary: 0, paid: 0, lastPayment: 0 });
+    setTypeSearch("");
+    setShowTypeDropdown(false);
   };
 
-  // ── Click outside to close recipient dropdown ──
+  // ── Click outside to close dropdowns ──
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (recipientDropdownRef.current && !recipientDropdownRef.current.contains(e.target)) {
         setShowRecipientDropdown(false);
+      }
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target)) {
+        setShowTypeDropdown(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -329,7 +338,8 @@ export default function PaymentsPage() {
     if (!paymentForm.type) errors.type = t('pay_select_type_err');
     if (!paymentForm.amount || Number(paymentForm.amount) <= 0)
       errors.amount = t('pay_amount_err');
-    if (!paymentForm.toWho) errors.toWho = "Kim uchun to'lov qilinishini tanlang";
+    if (!paymentForm.toWho && recipientCategory !== "expense")
+      errors.toWho = "Kim uchun to'lov qilinishini tanlang";
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -338,32 +348,30 @@ export default function PaymentsPage() {
     setFormErrors({});
     setIsSubmitting(true);
     try {
-      // Type ID bo'lishi kerak, agar string bo'lsa, ID ga o'tkazish
-      let typeId = paymentForm.type;
-      if (typeof typeId === "string" && typeId.length > 20) {
-        // Bu ID bo'lishi kerak
-      } else if (typeof typeId === "string") {
-        // Bu name bo'lishi mumkin, ID topish kerak
-        let typeObj = paymentTypes.find(
-          (t) => t._id === typeId || t.id === typeId,
-        );
-        if (!typeObj) {
-          typeObj = paymentTypes.find((t) => t.name === typeId);
-        }
-        if (typeObj) {
-          typeId = typeObj._id || typeObj.id;
-        }
+      let success = false;
+      if (!editingPayment && recipientCategory === "expense") {
+        // New expense — no toWho, use /expenses endpoint
+        try {
+          await createExpense({
+            type: paymentForm.type,
+            amount: Number(paymentForm.amount),
+            dk: paymentForm.dk,
+            date: paymentForm.date || undefined,
+            comment: paymentForm.comment || undefined,
+          });
+          success = true;
+        } catch {}
+      } else {
+        success = await savePayment(editingPayment, {
+          type: paymentForm.type,
+          amount: Number(paymentForm.amount),
+          month: paymentForm.month,
+          toWho: paymentForm.toWho,
+          date: paymentForm.date,
+          comment: paymentForm.comment,
+          dk: paymentForm.dk,
+        });
       }
-
-      const success = await savePayment(editingPayment, {
-        type: paymentForm.type,
-        amount: Number(paymentForm.amount),
-        month: paymentForm.month,
-        toWho: paymentForm.toWho,
-        date: paymentForm.date,
-        comment: paymentForm.comment,
-        dk: paymentForm.dk, // Use user-selected dk value
-      });
       if (success) {
         setShowPaymentModal(false);
         resetPaymentModal();
@@ -387,7 +395,7 @@ export default function PaymentsPage() {
       const result = await savePaymentType(editingType, typeForm);
       if (result.success) {
         setShowTypeModal(false);
-        setTypeForm({ name: "", code: "", dk: "credit", description: "" });
+        setTypeForm({ name: "", code: "", description: "" });
         setEditingType(null);
         loadPaymentTypes();
       }
@@ -414,8 +422,10 @@ export default function PaymentsPage() {
           const newId = result.newType._id || result.newType.id;
           if (newId) setPaymentForm((prev) => ({ ...prev, type: newId }));
         }
+        setTypeSearch("");
+        setShowTypeDropdown(false);
         setShowNestedTypeModal(false);
-        setTypeForm({ name: "", code: "", dk: "credit", description: "" });
+        setTypeForm({ name: "", code: "", description: "" });
       }
     } finally {
       setIsSubmittingType(false);
@@ -430,7 +440,7 @@ export default function PaymentsPage() {
   const getRecipientType = (payment) => {
     const recipientId =
       payment.toWho?._id || payment.toWho?.id || payment.toWho;
-    if (!recipientId) return "unknown";
+    if (!recipientId) return "expense";
 
     // Check if it's a teacher
     if (teachers.some((t) => (t._id || t.id) === recipientId)) return "teacher";
@@ -511,6 +521,9 @@ export default function PaymentsPage() {
               </option>
               <option value="staff">
                 {t('pay_staff_label')} ({payments.filter((p) => getRecipientType(p) === "staff").length})
+              </option>
+              <option value="expense">
+                Xarajatlar ({payments.filter((p) => getRecipientType(p) === "expense").length})
               </option>
             </select>
           </div>
@@ -680,12 +693,12 @@ export default function PaymentsPage() {
                                     <td className="px-4 py-3">
                                       <span
                                         className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 w-fit ${
-                                          getDk(payment) === "credit"
+                                          getDk(payment) === "debit"
                                             ? "bg-success/20 text-success"
                                             : "bg-error/20 text-error"
                                         }`}
                                       >
-                                        {getDk(payment) === "credit" ? (
+                                        {getDk(payment) === "debit" ? (
                                           <ArrowUpCircle className="w-3 h-3" />
                                         ) : (
                                           <ArrowDownCircle className="w-3 h-3" />
@@ -710,7 +723,9 @@ export default function PaymentsPage() {
                                                 ? "bg-secondary/20 text-secondary"
                                                 : recipientType === "staff"
                                                   ? "bg-warning/20 text-warning"
-                                                  : "bg-neutral/20 text-neutral"
+                                                  : recipientType === "expense"
+                                                    ? "bg-error/20 text-error"
+                                                    : "bg-neutral/20 text-neutral"
                                           }`}
                                         >
                                           {recipientType === "student"
@@ -719,7 +734,9 @@ export default function PaymentsPage() {
                                               ? t('pay_for_teacher')
                                               : recipientType === "staff"
                                                 ? t('pay_for_staff')
-                                                : t('not_found')}
+                                                : recipientType === "expense"
+                                                  ? "Xarajat"
+                                                  : t('not_found')}
                                         </span>
                                       </td>
                                     )}
@@ -728,12 +745,12 @@ export default function PaymentsPage() {
                                     </td>
                                     <td
                                       className={`px-4 py-3 text-sm font-bold text-right ${
-                                        getDk(payment) === "credit"
+                                        getDk(payment) === "debit"
                                           ? "text-success"
                                           : "text-error"
                                       }`}
                                     >
-                                      {getDk(payment) === "credit" ? "+" : "-"}
+                                      {getDk(payment) === "debit" ? "+" : "-"}
                                       {Number(payment.amount || 0).toLocaleString()}{" "}
                                       UZS
                                     </td>
@@ -752,7 +769,7 @@ export default function PaymentsPage() {
                                                 payment.type?.id ||
                                                 payment.type ||
                                                 "",
-                                              dk: payment.dk || "credit",
+                                              dk: payment.dk || "debit",
                                               amount: amount,
                                               month:
                                                 payment.month ||
@@ -779,6 +796,8 @@ export default function PaymentsPage() {
                                             setRecipientSearch("");
                                             setSelectedRecipient(null);
                                             setRecipientDebtInfo({ debt: 0, salary: 0, paid: 0, lastPayment: 0 });
+                                            setTypeSearch("");
+                                            setShowTypeDropdown(false);
                                             setShowPaymentModal(true);
                                           }}
                                           className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors"
@@ -872,84 +891,22 @@ export default function PaymentsPage() {
 
                 <div className="p-5 space-y-4 overflow-y-auto flex-1">
 
-                  {/* 1. Kirim / Chiqim */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { val: "credit", label: t('pay_credit'),  Icon: ArrowUpCircle,   on: "border-success bg-success/10 text-success",  off: "border-base-300 text-base-content/40 hover:bg-base-200" },
-                      { val: "debit",  label: t('pay_debit'), Icon: ArrowDownCircle, on: "border-error bg-error/10 text-error",         off: "border-base-300 text-base-content/40 hover:bg-base-200" },
-                    ].map(({ val, label, Icon, on, off }) => (
-                      <button key={val} type="button" disabled={isSubmitting}
-                        onClick={() => setPaymentForm({ ...paymentForm, dk: val })}
-                        className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-bold transition-all text-sm ${paymentForm.dk === val ? on : off}`}>
-                        <Icon className="w-4 h-4" /> {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* 2. To'lov turi */}
-                  <div>
-                    <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">{t('pay_type')} *</label>
-                    <div className="flex gap-2">
-                      <select value={paymentForm.type}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, type: e.target.value })}
-                        disabled={isSubmitting}
-                        className={`select select-bordered select-sm flex-1 h-10 ${formErrors.type ? "select-error" : ""}`}>
-                        <option value="">{t('pay_select_type')}</option>
-                        {paymentTypes.map((t) => (
-                          <option key={t._id || t.id} value={t._id || t.id}>{t.name}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => setShowNestedTypeModal(true)} disabled={isSubmitting}
-                        className="btn btn-success btn-sm btn-square h-10 w-10" title="Yangi tur qo'shish">
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                    {formErrors.type && <p className="mt-1 text-xs text-error font-medium">{formErrors.type}</p>}
-                  </div>
-
-                  {/* 3. Summa */}
-                  <div>
-                    <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">Summa (UZS) *</label>
-                    <input type="text" value={amountInput} onChange={handleAmountChange}
-                      disabled={isSubmitting}
-                      className={`w-full px-4 py-2.5 border rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 ${formErrors.amount ? "border-error bg-error/10" : "border-base-300"}`}
-                      placeholder="1 000 000" />
-                    {formErrors.amount && <p className="mt-1 text-xs text-error font-medium">{formErrors.amount}</p>}
-                  </div>
-
-                  {/* 4. Oy + Sana */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">Oy</label>
-                      <input type="month" value={paymentForm.month}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, month: e.target.value })}
-                        disabled={isSubmitting}
-                        className="w-full px-3 py-2.5 border border-base-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">Sana</label>
-                      <input type="date" value={paymentForm.date}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
-                        disabled={isSubmitting}
-                        className="w-full px-3 py-2.5 border border-base-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50" />
-                    </div>
-                  </div>
-
-                  {/* 5. Kim uchun */}
+                  {/* 1. To'lov kimga? */}
                   <div>
                     <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">
-                      {t('pay_for_whom')} <span className="text-error">*</span>
+                      To'lov kimga? <span className="text-error">*</span>
                     </label>
                     {formErrors.toWho && (
                       <div className="flex items-center gap-1.5 mb-2 text-xs text-error font-semibold">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />{formErrors.toWho}
                       </div>
                     )}
-                    <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="grid grid-cols-4 gap-2 mb-3">
                       {[
                         { value: "teacher", label: t('pay_for_teacher'), Icon: GraduationCap },
                         { value: "staff",   label: t('pay_for_staff'),   Icon: Building2 },
                         { value: "student", label: t('pay_for_student'), Icon: UserPlus },
+                        { value: "expense", label: "Xarajat",            Icon: Wallet },
                       ].map(({ value, label, Icon }) => (
                         <button key={value} type="button" disabled={isSubmitting}
                           onClick={() => {
@@ -973,7 +930,7 @@ export default function PaymentsPage() {
                     </div>
 
                     {/* Guruh filter (faqat student uchun) */}
-                    {recipientCategory === "student" && (
+                    {recipientCategory !== "expense" && recipientCategory === "student" && (
                       <select value={selectedGroup?._id || selectedGroup?.id || ""}
                         onChange={(e) => setSelectedGroup(groups.find(g => (g._id || g.id) === e.target.value) || null)}
                         disabled={isSubmitting}
@@ -988,7 +945,7 @@ export default function PaymentsPage() {
                     )}
 
                     {/* Recipient qidiruv */}
-                    {recipientCategory && (
+                    {recipientCategory && recipientCategory !== "expense" && (
                       <div ref={recipientDropdownRef} className="relative">
                         <div className="relative">
                           <Search className="w-4 h-4 text-base-content/40 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1046,7 +1003,7 @@ export default function PaymentsPage() {
                     )}
 
                     {/* Tanlangan recipient — to'liq ma'lumotlar */}
-                    {selectedRecipient && (
+                    {selectedRecipient && recipientCategory !== "expense" && (
                       <div className="mt-2 rounded-xl border border-primary/20 bg-primary/5 overflow-hidden">
                         {/* Avatar + ism */}
                         <div className="flex items-center gap-3 px-3 py-3 border-b border-primary/10">
@@ -1156,6 +1113,118 @@ export default function PaymentsPage() {
                     )}
                   </div>
 
+                  {/* 2. Kirim / Chiqim */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { val: "debit",  label: t('pay_credit'),  Icon: ArrowUpCircle,   on: "border-success bg-success/10 text-success",  off: "border-base-300 text-base-content/40 hover:bg-base-200" },
+                      { val: "credit", label: t('pay_debit'), Icon: ArrowDownCircle, on: "border-error bg-error/10 text-error",         off: "border-base-300 text-base-content/40 hover:bg-base-200" },
+                    ].map(({ val, label, Icon, on, off }) => (
+                      <button key={val} type="button" disabled={isSubmitting}
+                        onClick={() => setPaymentForm({ ...paymentForm, dk: val })}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-bold transition-all text-sm ${paymentForm.dk === val ? on : off}`}>
+                        <Icon className="w-4 h-4" /> {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 3. To'lov turi */}
+                  <div>
+                    <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">{t('pay_type')} *</label>
+                    <div className="flex gap-2">
+                      <div ref={typeDropdownRef} className="relative flex-1">
+                        <div className="relative">
+                          <Search className="w-4 h-4 text-base-content/40 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type="text"
+                            placeholder={t('pay_select_type')}
+                            value={
+                              paymentForm.type
+                                ? (typeSearch || paymentTypes.find(pt => (pt._id || pt.id) === paymentForm.type)?.name || "")
+                                : typeSearch
+                            }
+                            onChange={(e) => {
+                              setTypeSearch(e.target.value);
+                              setShowTypeDropdown(true);
+                              if (paymentForm.type) setPaymentForm({ ...paymentForm, type: "" });
+                            }}
+                            onFocus={() => setShowTypeDropdown(true)}
+                            disabled={isSubmitting}
+                            className={`w-full pl-9 pr-8 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 ${formErrors.type ? "border-error bg-error/10" : "border-base-300"}`}
+                          />
+                          {paymentForm.type && (
+                            <button type="button"
+                              onClick={() => { setPaymentForm({ ...paymentForm, type: "" }); setTypeSearch(""); }}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-base-content/30 hover:text-base-content/70">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        {showTypeDropdown && (
+                          <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-base-100 border border-base-300 rounded-xl shadow-lg max-h-44 overflow-y-auto">
+                            {(() => {
+                              const filtered = paymentTypes.filter(pt =>
+                                pt.name?.toLowerCase().includes(typeSearch.toLowerCase()) ||
+                                pt.code?.toLowerCase().includes(typeSearch.toLowerCase())
+                              );
+                              if (filtered.length === 0)
+                                return <p className="p-3 text-center text-xs text-base-content/40">{t('not_found')}</p>;
+                              return filtered.map((pt) => {
+                                const pid = pt._id || pt.id;
+                                return (
+                                  <button key={pid} type="button" disabled={isSubmitting}
+                                    onClick={() => {
+                                      setPaymentForm({ ...paymentForm, type: pid });
+                                      setTypeSearch("");
+                                      setShowTypeDropdown(false);
+                                    }}
+                                    className={`w-full flex items-center gap-2 px-3 py-2.5 hover:bg-base-200 transition-colors border-b border-base-200 last:border-0 text-left ${paymentForm.type === pid ? "bg-primary/10" : ""}`}>
+                                    <span className="text-sm font-medium text-base-content">{pt.name}</span>
+                                    {pt.code && <span className="text-xs text-base-content/40 ml-auto">{pt.code}</span>}
+                                  </button>
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => setShowNestedTypeModal(true)} disabled={isSubmitting}
+                        className="btn btn-success btn-sm btn-square h-10 w-10 shrink-0" title="Yangi tur qo'shish">
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {formErrors.type && <p className="mt-1 text-xs text-error font-medium">{formErrors.type}</p>}
+                  </div>
+
+                  {/* 4. Summa */}
+                  <div>
+                    <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">Summa (UZS) *</label>
+                    <input type="text" value={amountInput} onChange={handleAmountChange}
+                      disabled={isSubmitting}
+                      className={`w-full px-4 py-2.5 border rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50 ${formErrors.amount ? "border-error bg-error/10" : "border-base-300"}`}
+                      placeholder="1 000 000" />
+                    {formErrors.amount && <p className="mt-1 text-xs text-error font-medium">{formErrors.amount}</p>}
+                  </div>
+
+                  {/* 5. Oy + Sana */}
+                  <div className={`grid gap-3 ${recipientCategory === "expense" ? "grid-cols-1" : "grid-cols-2"}`}>
+                    {recipientCategory !== "expense" && (
+                      <div>
+                        <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">Oy</label>
+                        <input type="month" value={paymentForm.month}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, month: e.target.value })}
+                          disabled={isSubmitting}
+                          className="w-full px-3 py-2.5 border border-base-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">Sana</label>
+                      <input type="date" value={paymentForm.date}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
+                        disabled={isSubmitting}
+                        className="w-full px-3 py-2.5 border border-base-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50" />
+                    </div>
+                  </div>
+
                   {/* 6. Izoh */}
                   <div>
                     <label className="block text-xs font-bold text-base-content/60 uppercase tracking-wide mb-1.5">{t('comment')}</label>
@@ -1263,31 +1332,6 @@ export default function PaymentsPage() {
                       className="w-full px-4 py-2.5 border border-base-300 rounded-xl focus:outline-none disabled:opacity-50"
                       placeholder="salary_payment"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-base-content/80 mb-2">
-                      Turi *
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTypeForm({ ...typeForm, dk: "credit" })
-                        }
-                        className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${typeForm.dk === "credit" ? "border-success bg-success/10 text-success" : "border-base-300 text-base-content/50"}`}
-                      >
-                        <ArrowUpCircle className="w-5 h-5" /> {t('pay_credit')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTypeForm({ ...typeForm, dk: "debit" })
-                        }
-                        className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${typeForm.dk === "debit" ? "border-error bg-error/10 text-error" : "border-base-300 text-base-content/50"}`}
-                      >
-                        <ArrowDownCircle className="w-5 h-5" /> {t('pay_debit')}
-                      </button>
-                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-base-content/80 mb-2">

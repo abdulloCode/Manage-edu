@@ -47,9 +47,9 @@ export default function Payments() {
   }, [data, uid])
 
   const totalPaid = useMemo(
-    () => records.filter(r => r.dk==='credit').reduce((s,r) => s+Number(r.amount??0), 0), [records])
-  const totalDebt = useMemo(
     () => records.filter(r => r.dk==='debit').reduce((s,r) => s+Number(r.amount??0), 0), [records])
+  const totalDebt = useMemo(
+    () => records.filter(r => r.dk==='credit').reduce((s,r) => s+Number(r.amount??0), 0), [records])
 
   const grouped = useMemo(() => {
     const map = {}
@@ -62,7 +62,7 @@ export default function Payments() {
       .sort((a,b) => b[0].localeCompare(a[0]))
       .map(([key, items]) => ({
         key, label: monthLabel(key), items,
-        total: items.filter(r=>r.dk==='credit').reduce((s,r)=>s+Number(r.amount??0),0),
+        total: items.filter(r=>r.dk==='debit').reduce((s,r)=>s+Number(r.amount??0),0),
       }))
   }, [records])
 
@@ -139,7 +139,7 @@ export default function Payments() {
             }
 
             const r        = item
-            const isCredit = r.dk === 'credit'
+            const isCredit = r.dk === 'debit'
             const label    = r.type?.name ?? (isCredit ? "To'lov" : 'Qarzdorlik')
             const prev     = visible[idx-1]; const next = visible[idx+1]
             const isFirst  = !prev || prev.__header

@@ -120,7 +120,6 @@ export function usePaymentForm() {
   const defaultTypeFormData = {
     name: '',
     code: '',
-    dk: 'credit',
     description: '',
     isActive: true
   }
@@ -158,7 +157,6 @@ export function usePaymentForm() {
     setTypeFormData({
       name: type.name || '',
       code: type.code || '',
-      dk: type.dk || 'credit',
       description: type.description || '',
       isActive: type.isActive ?? true
     })
