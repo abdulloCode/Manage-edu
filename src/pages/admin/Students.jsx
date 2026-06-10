@@ -636,7 +636,7 @@ function DetailModal({ student, courses, onClose }) {
         {/* Info grid */}
         <div className="grid grid-cols-2 gap-2">
           {[
-            ["Balans", <span className={`font-bold ${balance < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(balance)} UZS</span>],
+            ["Balans", <span key="balans" className={`font-bold ${balance < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(balance)} UZS</span>],
             ["Ota-ona tel.", student.parentPhone || "—"],
             ["Kurs", course?.name || student.courseName || "—"],
             ["Qo'shilgan", student.createdAt ? new Date(student.createdAt).toLocaleDateString("uz-UZ") : "—"],

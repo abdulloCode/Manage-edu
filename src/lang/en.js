@@ -15,6 +15,8 @@ const en = {
   nav_homework: "Homework",
   nav_ratings: "Ratings",
   nav_logout: "Sign out",
+  logout_confirm_title: "Confirm sign out",
+  logout_confirm_desc: "Are you sure you want to sign out? You'll need your login and password to sign back in.",
   // Common
   loading: "Loading...",
   search: "Search...",

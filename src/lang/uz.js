@@ -15,6 +15,8 @@ const uz = {
   nav_homework: "Vazifalar",
   nav_ratings: "Reytinglar",
   nav_logout: "Chiqish",
+  logout_confirm_title: "Chiqishni tasdiqlang",
+  logout_confirm_desc: "Hisobdan chiqishni xohlaysizmi? Qayta kirish uchun login va parolingiz kerak bo'ladi.",
   // Common
   loading: "Yuklanmoqda...",
   search: "Qidirish...",

@@ -460,7 +460,7 @@ export default function PaymentsPage() {
       (p.type?.name || p.type?.code || "")
         .toLowerCase()
         .includes(searchQuery.toLowerCase()) ||
-      (typeof p.toWho === "object" ? p.toWho?.name : p.toWho || "")
+      (typeof p.toWho === "object" ? p.toWho?.name ?? "" : p.toWho || "")
         .toLowerCase()
         .includes(searchQuery.toLowerCase()) ||
       (p.comment || "").toLowerCase().includes(searchQuery.toLowerCase());

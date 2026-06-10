@@ -1,32 +1,36 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ToastProvider } from "./components/Toast";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
-import Login from "./pages/Login";
-import Unauthorized from "./pages/Unauthorized";
-import AdminDashboard from "./pages/admin/Dashboard";
-import ManagerDashboard from "./pages/manager/Dashboard";
-import ManagerMyGroups from "./pages/manager/MyGroups";
-import GroupDetail from "./pages/manager/GroupDetail";
-import TeacherProfile from "./pages/manager/MyProfile";
-import TeacherPayments from "./pages/teacher/Payments";
-import UserDashboard from "./pages/user/Dashboard";
-import StudentsPage from "./pages/admin/Students";
-import TeachersPage from "./pages/admin/teachers/index.jsx";
-import PaymentsPage from "./pages/admin/payments/index.jsx";
-import GroupsPage from "./pages/admin/groups/index.jsx";
-import CoursesPage from "./pages/admin/courses/index.jsx";
-import StaffPage from "./pages/admin/staff/index.jsx";
-import ReportsPage from "./pages/admin/reports/index.jsx";
-import PaymentReportsPage from "./pages/admin/payment-reports/index.jsx";
-import InventoryPage from "./pages/admin/inventory/index.jsx";
-import MyProfile from "./pages/student/MyProfile";
-import HomeworkPage from "./pages/student/Homework";
-import Attendance from "./pages/student/Attendance";
-import Payments from "./pages/student/Payments";
-import Ratings from "./pages/student/Ratings";
+
+
+
+const Login = lazy(() => import("./pages/Login"));
+const Unauthorized = lazy(() => import("./pages/Unauthorized"));
+const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
+const ManagerDashboard = lazy(() => import("./pages/manager/Dashboard"));
+const ManagerMyGroups = lazy(() => import("./pages/manager/MyGroups"));
+const GroupDetail = lazy(() => import("./pages/manager/GroupDetail"));
+const TeacherProfile = lazy(() => import("./pages/manager/MyProfile"));
+const TeacherPayments = lazy(() => import("./pages/teacher/Payments"));
+const UserDashboard = lazy(() => import("./pages/user/Dashboard"));
+const StudentsPage = lazy(() => import("./pages/admin/Students"));
+const TeachersPage = lazy(() => import("./pages/admin/teachers/index.jsx"));
+const PaymentsPage = lazy(() => import("./pages/admin/payments/index.jsx"));
+const GroupsPage = lazy(() => import("./pages/admin/groups/index.jsx"));
+const CoursesPage = lazy(() => import("./pages/admin/courses/index.jsx"));
+const StaffPage = lazy(() => import("./pages/admin/staff/index.jsx"));
+const ReportsPage = lazy(() => import("./pages/admin/reports/index.jsx"));
+const PaymentReportsPage = lazy(() => import("./pages/admin/payment-reports/index.jsx"));
+const InventoryPage = lazy(() => import("./pages/admin/inventory/index.jsx"));
+const MyProfile = lazy(() => import("./pages/student/MyProfile"));
+const HomeworkPage = lazy(() => import("./pages/student/Homework"));
+const Attendance = lazy(() => import("./pages/student/Attendance"));
+const Payments = lazy(() => import("./pages/student/Payments"));
+const Ratings = lazy(() => import("./pages/student/Ratings"));
 
 const DYNAMIC_ROLES = ["manager", "supporter", "assistant", "staff"];
 
@@ -64,6 +68,11 @@ function AppRoutes() {
   }
 
   return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-base-100">
+        <span className="loading loading-spinner loading-lg text-primary" />
+      </div>
+    }>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
@@ -129,6 +138,7 @@ function AppRoutes() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </Suspense>
   );
 }
 

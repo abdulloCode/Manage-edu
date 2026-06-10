@@ -1,12 +1,13 @@
 {
-  "name": "crm-dashboard",
+  "name": "manage-edu-crm",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings -1"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
@@ -26,6 +27,10 @@
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.19",
     "daisyui": "^4.12.10",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.26",
     "jimp": "^1.6.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",

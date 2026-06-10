@@ -248,7 +248,7 @@ export default function ({ collapsed, onToggle, onNavClick }) {
                 </div>
                 <div className="text-center">
                   <h3 className="text-lg font-bold text-base-content mb-1">{t('logout_confirm_title') || "Chiqishni tasdiqlang"}</h3>
-                  <p className="text-sm text-base-content/60">{t('logout_confirm_desc') || "Hisobdan chiqmoqchimisiz? Barcha saqlangan ma'lumotlar saqlanadi."}</p>
+                  <p className="text-sm text-base-content/60">{t('logout_confirm_desc') || "Hisobdan chiqishni xohlaysizmi? Qayta kirish uchun login va parolingiz kerak bo'ladi."}</p>
                 </div>
                 <div className="flex gap-3 w-full">
                   <button

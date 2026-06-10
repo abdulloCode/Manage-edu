@@ -151,15 +151,17 @@ function ActivityChart({ groups }) {
 
 /* ── Stat card ───────────────────────────────────────────── */
 function StatCard({ label, value, sub, iconBg, icon: Icon, wave, valueColor, onClick }) {
+  const isLong = String(value).replace(/[^0-9]/g, '').length >= 7;
+  const fontSize = isLong ? 'text-base' : String(value).replace(/[^0-9]/g, '').length >= 5 ? 'text-lg' : 'text-2xl';
   return (
     <button
       onClick={onClick}
       className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 flex flex-col"
     >
       <div className="px-4 pt-4 pb-2 flex items-start justify-between">
-        <div>
+        <div className="flex-1 min-w-0 pr-2">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{label}</p>
-          <p className={`text-2xl font-black tabular-nums leading-none ${valueColor ?? "text-gray-800"}`}>
+          <p className={`${fontSize} font-black tabular-nums leading-none truncate ${valueColor ?? "text-gray-800"}`}>
             {value}
           </p>
           <p className="text-[11px] text-gray-400 mt-1">{sub}</p>
@@ -219,11 +221,13 @@ export default function ManagerDashboard() {
   }, [groups.length]); // eslint-disable-line
 
   const bal            = teacher?.balance ?? teacher ?? {};
-  const salary         = Number(bal.expectedSalary  ?? teacher?.salary         ?? 0);
-  const balance        = Number(bal.balance         ?? 0);
-  const credit         = Number(bal.credit          ?? bal.actualPayments ?? teacher?.credit ?? 0);
-  const debit          = Number(bal.debit           ?? teacher?.debit           ?? 0);
-  const groupBreakdown = bal.groupBreakdown ?? [];
+  const userBal        = user?.balance ?? {};
+
+  const salary         = Number(bal.expectedSalary  ?? bal.kutilganMaosh  ?? userBal.kutilganMaosh  ?? teacher?.salary  ?? 0);
+  const balance        = Number(bal.balance         ?? bal.sofBalans      ?? userBal.sofBalans      ?? 0);
+  const credit         = Number(bal.credit          ?? bal.actualPayments ?? bal.ushlaQolindi       ?? userBal.ushlaQolindi ?? teacher?.credit ?? 0);
+  const debit          = Number(bal.debit           ?? bal.tolangan       ?? userBal.tolangan        ?? teacher?.debit   ?? 0);
+  const groupBreakdown = bal.groupBreakdown ?? userBal.groupBreakdown ?? [];
 
   const totalStudents = groups.reduce(
     (s, g) => s + (g.currentStudents ?? g.students?.length ?? 0), 0
@@ -317,7 +321,7 @@ export default function ManagerDashboard() {
           />
           <StatCard
             label="O'ylik Maosh"
-            value={fmtK(salary)}
+            value={fmt(salary)}
             sub="UZS"
             icon={Wallet}
             iconBg="bg-emerald-100 text-emerald-600"
@@ -325,7 +329,7 @@ export default function ManagerDashboard() {
           />
           <StatCard
             label="Balans"
-            value={`${balance >= 0 ? "+" : "−"}${fmtK(Math.abs(balance))}`}
+            value={`${balance >= 0 ? "+" : "−"}${fmt(Math.abs(balance))}`}
             sub="UZS"
             icon={balance >= 0 ? TrendingUp : TrendingDown}
             iconBg={balance >= 0 ? "bg-amber-100 text-amber-600" : "bg-rose-100 text-rose-500"}
@@ -374,8 +378,8 @@ export default function ManagerDashboard() {
                 ].map(({ label, val, color, bg, prefix = "" }) => (
                   <div key={label} className={`rounded-xl p-3 ${bg}`}>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
-                    <p className={`text-sm font-black tabular-nums ${color}`}>
-                      {prefix}{fmtK(val)}
+                    <p className={`text-xs font-black tabular-nums leading-tight ${color}`}>
+                      {prefix}{fmt(val)}
                       <span className="text-[10px] font-normal text-gray-400 ml-0.5">UZS</span>
                     </p>
                   </div>
