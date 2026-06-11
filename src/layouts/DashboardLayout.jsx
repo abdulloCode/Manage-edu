@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import BottomNav from "../components/BottomNav";
@@ -101,7 +101,13 @@ export default function DashboardLayout() {
         <main className={`flex-1 overflow-y-auto ${
           useBottomNav ? "pb-20 lg:pb-6 p-3 md:p-4" : "p-4 md:p-6"
         }`}>
-          <Outlet />
+          <Suspense fallback={
+            <div className="flex items-center justify-center py-24">
+              <span className="loading loading-spinner loading-lg text-primary" />
+            </div>
+          }>
+            <Outlet />
+          </Suspense>
         </main>
 
         {/* Bottom nav — faqat teacher/student, faqat mobil */}
