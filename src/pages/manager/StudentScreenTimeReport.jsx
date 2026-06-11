@@ -119,23 +119,23 @@ export default function StudentScreenTimeReport() {
     <div className="flex flex-col gap-4 md:gap-6">
 
       {/* Header */}
-      <div className="flex items-center gap-3 bg-base-100 rounded-2xl border border-base-200 shadow-sm px-4 py-3">
-        <button onClick={() => navigate(`/teacher/groups/${groupId}`)} className="btn btn-ghost btn-sm btn-square">
+      <div className="flex items-center gap-3 bg-base-100 rounded-3xl border border-base-200 shadow-sm px-4 py-3">
+        <button onClick={() => navigate(`/teacher/groups/${groupId}`)} className="btn btn-ghost btn-sm btn-square rounded-full">
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <div className="w-10 h-10 rounded-full bg-violet-100 text-violet-600 font-black text-sm flex items-center justify-center shrink-0">
+        <div className="w-11 h-11 rounded-2xl bg-violet-100 text-violet-600 font-black text-sm flex items-center justify-center shrink-0">
           {student?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() ?? '??'}
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-base-content truncate">{student?.name ?? "O'quvchi"}</p>
           <p className="text-xs text-base-content/50">Ekran vaqti tahlili</p>
         </div>
-        <div className="flex items-center gap-1 bg-base-200/50 rounded-2xl px-1 py-1 shrink-0">
-          <button onClick={prevMonth} className="btn btn-ghost btn-xs btn-square">
+        <div className="flex items-center gap-1 bg-violet-50 rounded-full px-1 py-1 shrink-0">
+          <button onClick={prevMonth} className="btn btn-ghost btn-xs btn-square rounded-full text-violet-600 hover:bg-violet-100">
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-          <span className="text-xs font-bold px-1 whitespace-nowrap">{monthLabel}</span>
-          <button onClick={nextMonth} className="btn btn-ghost btn-xs btn-square">
+          <span className="text-xs font-bold px-1.5 whitespace-nowrap text-violet-700">{monthLabel}</span>
+          <button onClick={nextMonth} className="btn btn-ghost btn-xs btn-square rounded-full text-violet-600 hover:bg-violet-100">
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -148,17 +148,17 @@ export default function StudentScreenTimeReport() {
       ) : (
         <>
           {/* Hero: Bugungi ekran vaqti + maqsad */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 to-violet-800 text-white p-6">
+          <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-violet-600 to-violet-800 text-white p-6 shadow-lg shadow-violet-600/20">
             <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white/10" />
             <div className="absolute -right-2 bottom-2 opacity-15">
               <Hourglass className="w-28 h-28" />
             </div>
-            <p className="text-xs font-semibold text-violet-200 mb-1">Bugun</p>
+            <p className="text-xs font-semibold text-violet-200 mb-1 tracking-wide uppercase">Bugun</p>
             <p className="text-3xl font-black mb-2">
               {Math.floor(todayMinutes / 60)} soat {todayMinutes % 60} daqiqa
             </p>
             {diffPct !== null && (
-              <div className="inline-flex items-center gap-1 bg-white/15 rounded-full px-3 py-1 text-xs font-bold mb-4">
+              <div className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold mb-4">
                 {diffPct >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                 {Math.abs(diffPct)}% kechagiga nisbatan
               </div>
@@ -169,13 +169,13 @@ export default function StudentScreenTimeReport() {
                 <span className="tabular-nums">{fmtMin(todayMinutes)} / {fmtMin(GOAL_MINUTES)}</span>
               </div>
               <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${reachedGoal ? 'bg-emerald-300' : 'bg-amber-300'}`} style={{ width: `${goalPct}%` }} />
+                <div className={`h-full rounded-full transition-all ${reachedGoal ? 'bg-emerald-300' : 'bg-amber-300'}`} style={{ width: `${goalPct}%` }} />
               </div>
             </div>
           </div>
 
           {/* Vaqt taqsimoti */}
-          <div className="bg-base-100 rounded-2xl border border-base-200 shadow-sm p-5">
+          <div className="bg-base-100 rounded-[28px] border border-base-200 shadow-sm p-5">
             <p className="text-sm font-bold text-base-content mb-4">Vaqt taqsimoti</p>
             {catTotals.length === 0 ? (
               <div className="py-6 text-center text-xs text-base-content/40">Ma'lumot yo'q</div>
@@ -212,11 +212,11 @@ export default function StudentScreenTimeReport() {
           </div>
 
           {/* Eng ko'p ishlatilgan ilovalar */}
-          <div className="bg-base-100 rounded-2xl border border-base-200 shadow-sm p-5">
+          <div className="bg-base-100 rounded-[28px] border border-base-200 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm font-bold text-base-content">Eng ko'p ishlatilgan ilovalar</p>
               {topApps.length > 6 && (
-                <button onClick={() => setShowAllApps(v => !v)} className="text-xs font-bold text-violet-600">
+                <button onClick={() => setShowAllApps(v => !v)} className="text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-full px-3 py-1 transition-colors">
                   {showAllApps ? 'Kamroq' : 'Barchasi'}
                 </button>
               )}
@@ -224,18 +224,18 @@ export default function StudentScreenTimeReport() {
             {topApps.length === 0 ? (
               <div className="py-8 text-center text-xs text-base-content/40">Ma'lumot yo'q</div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {visibleApps.map((app, i) => {
                   const pct = monthTotal > 0 ? ((app.minutes ?? 0) / monthTotal * 100) : 0
                   return (
-                    <div key={i} className="flex items-center gap-3">
+                    <div key={i} className="flex items-center gap-3 bg-base-200/40 rounded-2xl p-3 hover:bg-base-200/70 transition-colors">
                       <AppIcon app={app} />
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-sm font-semibold text-base-content truncate">{app.appName}</span>
                           <span className="text-xs font-bold text-base-content/70 tabular-nums ml-2 shrink-0">{fmtMin(app.minutes)}</span>
                         </div>
-                        <div className="h-1.5 bg-base-200 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-base-300/60 rounded-full overflow-hidden">
                           <div className="h-full rounded-full bg-violet-400" style={{ width: `${pct}%` }} />
                         </div>
                       </div>
@@ -247,7 +247,7 @@ export default function StudentScreenTimeReport() {
           </div>
 
           {/* Haftalik trend */}
-          <div className="bg-base-100 rounded-2xl border border-base-200 shadow-sm p-5">
+          <div className="bg-base-100 rounded-[28px] border border-base-200 shadow-sm p-5">
             <p className="text-sm font-bold text-base-content mb-4">Haftalik trend</p>
             <SmoothAreaChart values={weeklyValues} color="#7C3AED" height={140} />
             <div className="flex justify-between mt-2 px-3">
@@ -260,8 +260,8 @@ export default function StudentScreenTimeReport() {
           {/* Maqsad holati banneri */}
           {days.length > 0 && (
             reachedGoal ? (
-              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
-                <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-[28px] p-4">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-500 flex items-center justify-center shrink-0">
                   <PartyPopper className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -270,8 +270,8 @@ export default function StudentScreenTimeReport() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-4">
-                <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-[28px] p-4">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500 flex items-center justify-center shrink-0">
                   <Trophy className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -290,7 +290,9 @@ export default function StudentScreenTimeReport() {
 function StatCard({ icon: Icon, label, value }) {
   return (
     <div className="bg-base-200/40 rounded-2xl p-3.5">
-      <Icon className="w-4 h-4 text-violet-500 mb-2" />
+      <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center mb-2">
+        <Icon className="w-4 h-4 text-violet-600" />
+      </div>
       <p className="text-base font-black text-base-content">{value}</p>
       <p className="text-[10px] text-base-content/50">{label}</p>
     </div>
