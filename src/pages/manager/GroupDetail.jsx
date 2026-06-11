@@ -5,9 +5,9 @@ import { useFetch } from '../../hooks/useFetch'
 import { getGroupById } from '../../api/groups'
 import { getGroupAttendance, getGroupAttendanceCalendar, updateDayAttendance } from '../../api/attendance'
 import { getGroupRatingCalendar, upsertDayRating } from '../../api/ratings'
-import { getGroupScreenTimeSummary, getStudentMonthlyScreenTime } from '../../api/screenTime'
+import { getGroupScreenTimeSummary } from '../../api/screenTime'
 import { LoadingState, ErrorState } from '../../components/PageShell'
-import { ChevronLeft, ChevronRight, CalendarCheck, Star, ChevronDown, Monitor, Clock, Smartphone, X, BarChart2, Eye } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarCheck, Star, ChevronDown, Monitor, BarChart2 } from 'lucide-react'
 
 const STATUS_COLORS = {
   present: 'bg-success/15 text-success hover:bg-success/25',
@@ -15,8 +15,8 @@ const STATUS_COLORS = {
   late:    'bg-warning/15 text-warning hover:bg-warning/25',
 }
 
-const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr']
-const WEEKDAYS_UZ = ['Yak','Dush','Sesh','Chor','Pay','Jum','Shan']
+export const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr']
+export const WEEKDAYS_UZ = ['Yak','Dush','Sesh','Chor','Pay','Jum','Shan']
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Helper: parse calendar response into flat map keyed "studentId-YYYY-MM-DD"
@@ -861,7 +861,7 @@ function RatingsTab({ groupId, students: studentsProp }) {
 // Screen Time Tab
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CAT_CFG = {
+export const CAT_CFG = {
   entertainment: { label: 'Ko\'rinish',    color: 'bg-red-400',    text: 'text-red-500'    },
   social:        { label: 'Ijtimoiy',      color: 'bg-pink-400',   text: 'text-pink-500'   },
   education:     { label: 'Ta\'lim',       color: 'bg-emerald-400',text: 'text-emerald-600'},
@@ -871,14 +871,14 @@ const CAT_CFG = {
   other:         { label: 'Boshqa',        color: 'bg-gray-300',   text: 'text-gray-500'   },
 }
 
-function fmtMin(min) {
+export function fmtMin(min) {
   const m = Number(min ?? 0)
   if (m >= 60) return `${Math.floor(m / 60)}s ${m % 60}d`
   return `${m}d`
 }
 
 // StayFree uslubidagi silliq to'lqinsimon maydon grafigi (SVG)
-function SmoothAreaChart({ values, color = '#7C3AED', height = 130 }) {
+export function SmoothAreaChart({ values, color = '#7C3AED', height = 130 }) {
   const w = 600
   const h = height
   const pad = 14
@@ -929,213 +929,14 @@ function SmoothAreaChart({ values, color = '#7C3AED', height = 130 }) {
   )
 }
 
-function StudentDetailModal({ student, month, onClose }) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    getStudentMonthlyScreenTime(student.id, month)
-      .then(r => setData(r.data?.data ?? r.data ?? null))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false))
-  }, [student.id, month])
-
-  const topApps    = data?.topApps   ?? data?.apps   ?? []
-  const monthTotal = data?.totalMinutes ?? data?.total ?? 0
-  const dailyDataRaw = data?.dailyBreakdown ?? data?.days ?? []
-
-  // Kunlar sanasi bo'yicha tartiblangan ro'yxat + navigatsiya (StayFree "Today" uslubi)
-  const sortedDays = useMemo(() =>
-    [...dailyDataRaw].sort((a, b) => String(a.date ?? '').localeCompare(String(b.date ?? ''))),
-    [dailyDataRaw]
-  )
-  const [dayIdx, setDayIdx] = useState(-1) // -1 = oxirgi (bugungi) kun
-  useEffect(() => { setDayIdx(-1) }, [student.id, month])
-  const curIdx = dayIdx < 0 ? sortedDays.length - 1 : Math.min(dayIdx, sortedDays.length - 1)
-  const selectedDay = sortedDays[curIdx]
-  const dayLabel = useMemo(() => {
-    if (!selectedDay?.date) return 'Bugun'
-    const d = new Date(selectedDay.date)
-    if (isNaN(d.getTime())) return selectedDay.date
-    const today = new Date()
-    if (d.toDateString() === today.toDateString()) return 'Bugun'
-    return `${WEEKDAYS_UZ[d.getDay()]}, ${d.getDate()} ${UZ_MONTHS[d.getMonth()]}`
-  }, [selectedDay])
-
-  // Tanlangan kun ilovalari (agar backend kunlik apps qaytarmasa — oylik top ilovalarga tushadi)
-  const dayApps = (selectedDay?.apps ?? selectedDay?.topApps ?? (curIdx === sortedDays.length - 1 ? topApps : [])) || []
-
-  // Toifa filtri (StayFree "All Categories" dropdown)
-  const [catFilter, setCatFilter] = useState('all')
-  const filteredApps = catFilter === 'all' ? dayApps : dayApps.filter(a => (a.category ?? 'other') === catFilter)
-  const dayTotal = (selectedDay?.totalMinutes ?? selectedDay?.minutes) ??
-    filteredApps.reduce((s, a) => s + (a.minutes ?? 0), 0)
-  const filteredTotal = catFilter === 'all' ? dayTotal : filteredApps.reduce((s, a) => s + (a.minutes ?? 0), 0)
-
-  // Kategoriyalar bo'yicha yig'ish (legend uchun — tanlangan kun bo'yicha)
-  const catTotals = useMemo(() => {
-    const map = {}
-    dayApps.forEach(a => {
-      const cat = a.category ?? 'other'
-      map[cat] = (map[cat] ?? 0) + (a.minutes ?? 0)
-    })
-    return Object.entries(map).sort((a, b) => b[1] - a[1])
-  }, [dayApps])
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-base-100 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-
-        {/* Header */}
-        <div className="sticky top-0 bg-base-100 px-5 py-4 border-b border-base-200 flex items-center gap-3 z-10">
-          <div className="w-10 h-10 rounded-full bg-violet-100 text-violet-600 font-black text-sm flex items-center justify-center shrink-0">
-            {student.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-base-content truncate">{student.name}</p>
-            <p className="text-xs text-base-content/50">{UZ_MONTHS[Number(month.split('-')[1]) - 1]} {month.split('-')[0]}</p>
-          </div>
-          <button onClick={onClose} className="btn btn-ghost btn-sm btn-square">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <div className="w-8 h-8 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : !data ? (
-          <div className="py-16 text-center">
-            <Smartphone className="w-10 h-10 text-base-content/20 mx-auto mb-3" />
-            <p className="text-sm text-base-content/40">Ma'lumot yo'q</p>
-            <p className="text-xs text-base-content/30 mt-1">O'quvchi hali sync qilmagan</p>
-          </div>
-        ) : (
-          <div className="p-5 space-y-5">
-
-            {/* ── Top bar: < Bugun > + Toifa filtri (StayFree uslubi) ── */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setDayIdx(curIdx > 0 ? curIdx - 1 : 0)}
-                disabled={curIdx === 0}
-                className="btn btn-ghost btn-sm btn-square disabled:opacity-30"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className="flex items-center gap-1.5 bg-violet-50 text-violet-700 font-bold text-sm px-3.5 py-1.5 rounded-2xl">
-                <CalendarCheck className="w-3.5 h-3.5" />
-                {dayLabel}
-              </div>
-              <button
-                onClick={() => setDayIdx(curIdx < sortedDays.length - 1 ? curIdx + 1 : curIdx)}
-                disabled={curIdx >= sortedDays.length - 1}
-                className="btn btn-ghost btn-sm btn-square disabled:opacity-30"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              <select
-                value={catFilter}
-                onChange={e => setCatFilter(e.target.value)}
-                className="select select-sm select-bordered ml-auto text-xs font-semibold rounded-xl"
-              >
-                <option value="all">Barcha toifalar</option>
-                {Object.entries(CAT_CFG).map(([key, cfg]) => (
-                  <option key={key} value={key}>{cfg.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* ── Silliq to'lqinsimon grafik ── */}
-            <div className="bg-base-100 rounded-2xl border border-base-200 p-3">
-              <SmoothAreaChart values={filteredApps.slice(0, 8).map(a => a.minutes ?? 0)} />
-            </div>
-
-            {/* ── Kategoriya nuqta-legendasi ── */}
-            {catTotals.length > 0 && (
-              <div className="flex items-center justify-around bg-base-200/30 rounded-2xl py-3">
-                {catTotals.slice(0, 3).map(([cat, min]) => {
-                  const cfg = CAT_CFG[cat] ?? CAT_CFG.other
-                  return (
-                    <div key={cat} className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-2.5 h-2.5 rounded-full ${cfg.color}`} />
-                        <span className="text-xs text-base-content/60">{cfg.label}</span>
-                      </div>
-                      <span className="text-sm font-black text-base-content">{fmtMin(min)}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* ── Jami foydalanish ── */}
-            <div className="flex items-center gap-2 px-1">
-              <Eye className="w-4 h-4 text-base-content/30" />
-              <span className="ml-auto text-xs text-base-content/50">
-                {catFilter === 'all' ? 'Jami vaqt:' : `${(CAT_CFG[catFilter] ?? CAT_CFG.other).label}:`}
-              </span>
-              <span className="text-sm font-black text-violet-600">{fmtMin(filteredTotal)}</span>
-              <ChevronRight className="w-4 h-4 text-violet-600" />
-            </div>
-
-            {/* ── Ilovalar ro'yxati — progress-bar va foiz bilan ── */}
-            {filteredApps.length > 0 ? (
-              <div>
-                <p className="text-xs font-bold text-base-content/50 uppercase tracking-wider mb-3">Ilovalar</p>
-                <div className="space-y-3">
-                  {[...filteredApps].sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 10).map((app, i) => {
-                    const cfg = CAT_CFG[app.category ?? 'other'] ?? CAT_CFG.other
-                    const pct = filteredTotal > 0 ? (((app.minutes ?? 0) / filteredTotal) * 100) : 0
-                    return (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl ${cfg.color} bg-opacity-15 flex items-center justify-center shrink-0`}>
-                          <Smartphone className={`w-4 h-4 ${cfg.text}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-semibold text-base-content truncate">{app.appName}</span>
-                            <span className="text-xs font-bold text-base-content/70 tabular-nums ml-2 shrink-0">{fmtMin(app.minutes)}</span>
-                          </div>
-                          <div className="h-1.5 bg-base-200 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${cfg.color}`} style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                        <span className="text-xs font-bold text-base-content/40 tabular-nums w-12 text-right shrink-0">{pct.toFixed(1)}%</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="py-10 text-center">
-                <Smartphone className="w-9 h-9 text-base-content/15 mx-auto mb-2" />
-                <p className="text-xs text-base-content/40">Bu kun uchun ma'lumot yo'q</p>
-              </div>
-            )}
-
-            {/* Oylik jami — pastki ma'lumot */}
-            <div className="flex items-center justify-between bg-base-200/30 rounded-2xl px-4 py-3">
-              <span className="text-xs text-base-content/50">{UZ_MONTHS[Number(month.split('-')[1]) - 1]} oyi jami</span>
-              <span className="text-sm font-black text-base-content">{fmtMin(monthTotal)}</span>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 function ScreenTimeTab({ groupId, students }) {
+  const navigate = useNavigate()
   const now = new Date()
   const [month, setMonth] = useState(
     `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   )
   const [summary, setSummary] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -1212,7 +1013,7 @@ function ScreenTimeTab({ groupId, students }) {
               return (
                 <button
                   key={row.id}
-                  onClick={() => setSelected(row)}
+                  onClick={() => navigate(`/teacher/groups/${groupId}/students/${row.id}/screen-time`, { state: { student: row, month } })}
                   className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-base-200/40 transition-colors text-left"
                 >
                   {/* Rank */}
@@ -1261,14 +1062,6 @@ function ScreenTimeTab({ groupId, students }) {
         )}
       </div>
 
-      {/* O'quvchi detail modal */}
-      {selected && (
-        <StudentDetailModal
-          student={selected}
-          month={month}
-          onClose={() => setSelected(null)}
-        />
-      )}
     </div>
   )
 }

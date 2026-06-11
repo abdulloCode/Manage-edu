@@ -14,6 +14,7 @@ const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
 const ManagerDashboard = lazy(() => import("./pages/manager/Dashboard"));
 const ManagerMyGroups = lazy(() => import("./pages/manager/MyGroups"));
 const GroupDetail = lazy(() => import("./pages/manager/GroupDetail"));
+const StudentScreenTimeReport = lazy(() => import("./pages/manager/StudentScreenTimeReport"));
 const TeacherProfile = lazy(() => import("./pages/manager/MyProfile"));
 const TeacherPayments = lazy(() => import("./pages/teacher/Payments"));
 const UserDashboard = lazy(() => import("./pages/user/Dashboard"));
@@ -100,6 +101,7 @@ function AppRoutes() {
           <Route path="/teacher/dashboard"  element={<ManagerDashboard />} />
           <Route path="/teacher/groups"     element={<ManagerMyGroups />} />
           <Route path="/teacher/groups/:id" element={<GroupDetail />} />
+          <Route path="/teacher/groups/:id/students/:studentId/screen-time" element={<StudentScreenTimeReport />} />
           <Route path="/teacher/profile"   element={<TeacherProfile />} />
           <Route path="/teacher/payments" element={<TeacherPayments />} />
         </Route>
